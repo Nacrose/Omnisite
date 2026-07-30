@@ -19,19 +19,17 @@ export interface RemoteCursor {
   name: string
   initials: string
   color: string
-  x: number  // percentage 0-100
-  y: number  // percentage 0-100
+  x: number
+  y: number
   canvas?: string
 }
 
-// Current user identity — in production this would come from auth
 const CURRENT_USER = {
   name: 'Arjun Sharma',
   initials: 'AS',
-  color: '#f97316', // orange-500 (matches the avatar in the top bar)
+  color: '#f97316',
 }
 
-// Simulated collaborators — used as fallback when WebSocket is unavailable
 const SIMULATED_USERS: PresenceUser[] = [
   { id: 'sim-br', name: 'Bikash Rai', initials: 'BR', color: '#3b82f6', module: 'scheduler', hasCursor: false },
   { id: 'sim-sg', name: 'Sita Gurung', initials: 'SG', color: '#10b981', module: 'daily-ops', hasCursor: false },
@@ -43,17 +41,10 @@ const SIMULATED_CURSORS: RemoteCursor[] = [
   { id: 'sim-sg', name: 'Sita Gurung', initials: 'SG', color: '#10b981', x: 60, y: 50, canvas: 'gantt' },
 ]
 
-// Singleton socket — shared across all hook instances
 let socket: Socket | null = null
 let connectionCount = 0
-let fallbackActive = false // module-level so all hook instances share it
+let fallbackActive = false
 
-/**
- * usePresence — connects to the OmniSite presence WebSocket service.
- * Falls back to simulated collaborators if the WebSocket is unavailable
- * (e.g. in local dev where the browser can't reach the presence service).
- * Returns the list of online users, remote cursors, and the connection status.
- */
 export function usePresence() {
   const { activeModule } = useApp()
   const [users, setUsers] = useState<PresenceUser[]>([])
@@ -61,27 +52,23 @@ export function usePresence() {
   const [isConnected, setIsConnected] = useState(false)
   const [usingFallback, setUsingFallback] = useState(fallbackActive)
   const cursorThrottleRef = useRef<number>(0)
-  const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fallbackCursorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Connect once
   useEffect(() => {
     connectionCount++
-    let connectionFailed = false
 
-    if (!socket) {
+    if (!socket && !fallbackActive) {
       const isLocalDev = typeof window !== 'undefined'
         && window.location.hostname === 'localhost'
         && window.location.port === '3000'
-      // In production (Vercel, VPS, etc.), skip WebSocket connection entirely
-      // and use simulated fallback. The WebSocket service runs separately.
+
       const isProduction = typeof window !== 'undefined'
         && !isLocalDev
         && !window.location.hostname.includes('localhost')
 
       if (isProduction) {
-        // Immediately use fallback in production without a WebSocket service
-        connectionFailed = true
+        // Production (Vercel/VPS) — immediately use fallback
+        // WebSocket service runs separately; if not configured, use simulated presence
         fallbackActive = true
         setUsingFallback(true)
         setUsers(SIMULATED_USERS)
@@ -89,71 +76,77 @@ export function usePresence() {
           'sim-br': { ...SIMULATED_CURSORS[0] },
           'sim-sg': { ...SIMULATED_CURSORS[1] },
         })
-        console.info('[OmniSite Presence] Production mode — using simulated collaborators (WebSocket service not configured)')
-      } else {
-        // Local dev — try to connect to the local WebSocket service
-        const socketUrl = isLocalDev ? 'http://localhost:3003' : undefined
+        console.info('[OmniSite Presence] Production mode — simulated collaborators')
+      } else if (isLocalDev) {
+        // Local dev — try to connect to the local WebSocket service on port 3003
+        try {
+          socket = io('http://localhost:3003', {
+            path: '/socket.io/',
+            transports: ['polling', 'websocket'],
+            forceNew: true,
+            reconnection: true,
+            reconnectionAttempts: 3,
+            reconnectionDelay: 1000,
+            timeout: 5000,
+          })
 
-      socket = io(socketUrl ?? '/', {
-        path: isLocalDev ? '/socket.io/' : '/',
-        query: isLocalDev ? undefined : { XTransformPort: '3003' },
-        transports: ['polling', 'websocket'],
-        forceNew: true,
-        reconnection: true,
-        reconnectionAttempts: 3, // try 3 times, then fall back
-        reconnectionDelay: 1000,
-        timeout: 5000,
-      })
+          const fallbackTimer = setTimeout(() => {
+            if (!socket?.connected && !fallbackActive) {
+              fallbackActive = true
+              setUsingFallback(true)
+              setUsers(SIMULATED_USERS)
+              setCursors({
+                'sim-br': { ...SIMULATED_CURSORS[0] },
+                'sim-sg': { ...SIMULATED_CURSORS[1] },
+              })
+              console.warn('[OmniSite Presence] WebSocket unavailable — using simulated collaborators')
+            }
+          }, 8000)
 
-      // If connection fails after 3 attempts, switch to simulated fallback
-      const fallbackTimer = setTimeout(() => {
-        if (!socket?.connected) {
-          connectionFailed = true
+          socket.on('connect_error', () => {
+            // Will trigger fallback via the timer if it keeps failing
+          })
+
+          socket.on('connect', () => {
+            clearTimeout(fallbackTimer)
+            if (fallbackActive) return
+            setIsConnected(true)
+            setUsingFallback(false)
+            socket?.emit('presence:join', {
+              ...CURRENT_USER,
+              module: activeModule,
+            })
+          })
+
+          socket.on('disconnect', () => {
+            setIsConnected(false)
+          })
+        } catch (e) {
+          console.warn('[OmniSite Presence] Failed to create socket, using fallback', e)
           fallbackActive = true
           setUsingFallback(true)
           setUsers(SIMULATED_USERS)
-          // Seed initial cursors
           setCursors({
             'sim-br': { ...SIMULATED_CURSORS[0] },
             'sim-sg': { ...SIMULATED_CURSORS[1] },
           })
-          console.warn('[OmniSite Presence] WebSocket unavailable — using simulated collaborators')
         }
-      }, 8000) // give it 8 seconds to connect
+      }
+    }
 
-      socket.on('connect_error', () => {
-        // Will trigger fallback if it keeps failing
-      })
-
-      socket.on('connect', () => {
-        clearTimeout(fallbackTimer)
-        if (connectionFailed) return
-        setIsConnected(true)
-        setUsingFallback(false)
-        socket!.emit('presence:join', {
-          ...CURRENT_USER,
-          module: activeModule,
-        })
-      })
-
-      socket.on('disconnect', () => {
-        setIsConnected(false)
-      })
-      } // end else (local dev WebSocket)
-    } // end if (!socket)
-
-    const onPresenceList = (data: { users: PresenceUser[]; count: number }) => {
-      if (connectionFailed) return
+    // Event handlers for real WebSocket events (only active if connected)
+    const onPresenceList = (data: { users: PresenceUser[] }) => {
+      if (fallbackActive) return
       setUsers(data.users.filter(u => u.initials !== CURRENT_USER.initials))
     }
 
     const onPresenceJoin = (user: PresenceUser) => {
-      if (connectionFailed || user.initials === CURRENT_USER.initials) return
+      if (fallbackActive || user.initials === CURRENT_USER.initials) return
       setUsers(prev => prev.find(u => u.id === user.id) ? prev : [...prev, user])
     }
 
     const onPresenceLeave = (data: { id: string }) => {
-      if (connectionFailed) return
+      if (fallbackActive) return
       setUsers(prev => prev.filter(u => u.id !== data.id))
       setCursors(prev => {
         const next = { ...prev }
@@ -163,17 +156,17 @@ export function usePresence() {
     }
 
     const onPresenceModule = (data: { id: string; module: string }) => {
-      if (connectionFailed) return
+      if (fallbackActive) return
       setUsers(prev => prev.map(u => u.id === data.id ? { ...u, module: data.module } : u))
     }
 
     const onPresenceCursor = (cursor: RemoteCursor) => {
-      if (connectionFailed || cursor.initials === CURRENT_USER.initials) return
+      if (fallbackActive || cursor.initials === CURRENT_USER.initials) return
       setCursors(prev => ({ ...prev, [cursor.id]: cursor }))
     }
 
     const onPresenceCursorStop = (data: { id: string }) => {
-      if (connectionFailed) return
+      if (fallbackActive) return
       setCursors(prev => {
         const next = { ...prev }
         delete next[data.id]
@@ -181,26 +174,26 @@ export function usePresence() {
       })
     }
 
-    socket.on('presence:list', onPresenceList)
-    socket.on('presence:join', onPresenceJoin)
-    socket.on('presence:leave', onPresenceLeave)
-    socket.on('presence:module', onPresenceModule)
-    socket.on('presence:cursor', onPresenceCursor)
-    socket.on('presence:cursor-stop', onPresenceCursorStop)
+    if (socket && !fallbackActive) {
+      socket.on('presence:list', onPresenceList)
+      socket.on('presence:join', onPresenceJoin)
+      socket.on('presence:leave', onPresenceLeave)
+      socket.on('presence:module', onPresenceModule)
+      socket.on('presence:cursor', onPresenceCursor)
+      socket.on('presence:cursor-stop', onPresenceCursorStop)
+    }
 
     // Heartbeat
     const heartbeat = setInterval(() => {
       if (socket?.connected) socket.emit('presence:ping')
     }, 20000)
 
-    // Fallback: simulate cursor movement when not connected
-    // This runs in every hook instance so all see the cursors
+    // Fallback cursor simulation
     fallbackCursorIntervalRef.current = setInterval(() => {
       if (!fallbackActive) return
       setCursors(prev => {
         const next = { ...prev }
         for (const sc of SIMULATED_CURSORS) {
-          // Random walk — only update if this instance has the cursor
           const existing = next[sc.id] || sc
           next[sc.id] = {
             ...existing,
@@ -212,7 +205,7 @@ export function usePresence() {
       })
     }, 2000)
 
-    // If fallback is already active (set by another instance), seed users + cursors immediately
+    // If fallback is already active from another instance, seed immediately
     if (fallbackActive) {
       setUsers(SIMULATED_USERS)
       if (Object.keys(cursors).length === 0) {
@@ -225,12 +218,14 @@ export function usePresence() {
 
     return () => {
       connectionCount--
-      socket?.off('presence:list', onPresenceList)
-      socket?.off('presence:join', onPresenceJoin)
-      socket?.off('presence:leave', onPresenceLeave)
-      socket?.off('presence:module', onPresenceModule)
-      socket?.off('presence:cursor', onPresenceCursor)
-      socket?.off('presence:cursor-stop', onPresenceCursorStop)
+      if (socket && !fallbackActive) {
+        socket.off('presence:list', onPresenceList)
+        socket.off('presence:join', onPresenceJoin)
+        socket.off('presence:leave', onPresenceLeave)
+        socket.off('presence:module', onPresenceModule)
+        socket.off('presence:cursor', onPresenceCursor)
+        socket.off('presence:cursor-stop', onPresenceCursorStop)
+      }
       clearInterval(heartbeat)
       if (fallbackCursorIntervalRef.current) clearInterval(fallbackCursorIntervalRef.current)
       if (connectionCount === 0 && socket) {
@@ -240,16 +235,15 @@ export function usePresence() {
     }
   }, [])
 
-  // When the active module changes, notify the server (if connected)
+  // Notify server when active module changes (only if connected)
   useEffect(() => {
-    if (socket?.connected) {
+    if (socket?.connected && !fallbackActive) {
       socket.emit('presence:module', { module: activeModule })
     }
   }, [activeModule])
 
-  // Broadcast cursor position (throttled)
   const sendCursor = useCallback((x: number, y: number, canvas?: string) => {
-    if (fallbackActive) return // don't send in fallback mode
+    if (fallbackActive) return
     const now = Date.now()
     if (now - cursorThrottleRef.current < 50) return
     cursorThrottleRef.current = now
@@ -271,4 +265,3 @@ export function usePresence() {
     currentUser: CURRENT_USER,
   }
 }
-
