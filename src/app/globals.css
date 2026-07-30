@@ -1,0 +1,270 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============================================================
+   OmniSite Theme 1: OmniSite Classic (macOS-native aesthetic)
+   ============================================================ */
+:root,
+[data-theme="classic"] {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0.002 240);
+  --foreground: oklch(0.18 0.01 240);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 240);
+  --primary: oklch(0.55 0.18 245);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.95 0.005 240);
+  --secondary-foreground: oklch(0.25 0.01 240);
+  --muted: oklch(0.95 0.005 240);
+  --muted-foreground: oklch(0.5 0.01 240);
+  --accent: oklch(0.93 0.02 245);
+  --accent-foreground: oklch(0.25 0.05 245);
+  --destructive: oklch(0.6 0.24 27);
+  --border: oklch(0.9 0.005 240);
+  --input: oklch(0.93 0.005 240);
+  --ring: oklch(0.55 0.18 245);
+  --chart-1: oklch(0.55 0.18 245);
+  --chart-2: oklch(0.65 0.15 162);
+  --chart-3: oklch(0.7 0.18 70);
+  --chart-4: oklch(0.6 0.22 350);
+  --chart-5: oklch(0.55 0.12 200);
+  --sidebar: oklch(0.965 0.003 240);
+  --sidebar-foreground: oklch(0.2 0.01 240);
+  --sidebar-primary: oklch(0.55 0.18 245);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.93 0.02 245);
+  --sidebar-accent-foreground: oklch(0.25 0.05 245);
+  --sidebar-border: oklch(0.9 0.005 240);
+  --sidebar-ring: oklch(0.55 0.18 245);
+  --workspace-bg: oklch(0.965 0.003 240);
+  --pane-bg: oklch(1 0 0);
+  --pane-divider: oklch(0.9 0.005 240);
+  --row-hover: oklch(0.96 0.005 240);
+  --critical: oklch(0.62 0.24 25);
+  --success: oklch(0.62 0.16 145);
+  --warning: oklch(0.72 0.17 70);
+  --info: oklch(0.6 0.14 230);
+}
+
+/* ============================================================
+   OmniSite Theme 2: Procore High-Contrast (industrial bright)
+   ============================================================ */
+[data-theme="procore"] {
+  --radius: 0.375rem;
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.12 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.12 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.12 0 0);
+  --primary: oklch(0.45 0.2 25);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0 0);
+  --secondary-foreground: oklch(0.18 0 0);
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.4 0 0);
+  --accent: oklch(0.92 0.02 25);
+  --accent-foreground: oklch(0.2 0.05 25);
+  --destructive: oklch(0.55 0.25 25);
+  --border: oklch(0.82 0 0);
+  --input: oklch(0.88 0 0);
+  --ring: oklch(0.45 0.2 25);
+  --chart-1: oklch(0.45 0.2 25);
+  --chart-2: oklch(0.5 0.18 200);
+  --chart-3: oklch(0.55 0.2 145);
+  --chart-4: oklch(0.7 0.2 70);
+  --chart-5: oklch(0.5 0.2 290);
+  --sidebar: oklch(0.97 0 0);
+  --sidebar-foreground: oklch(0.15 0 0);
+  --sidebar-primary: oklch(0.45 0.2 25);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.92 0.02 25);
+  --sidebar-accent-foreground: oklch(0.2 0.05 25);
+  --sidebar-border: oklch(0.82 0 0);
+  --sidebar-ring: oklch(0.45 0.2 25);
+  --workspace-bg: oklch(0.97 0 0);
+  --pane-bg: oklch(1 0 0);
+  --pane-divider: oklch(0.82 0 0);
+  --row-hover: oklch(0.95 0.01 25);
+  --critical: oklch(0.55 0.25 25);
+  --success: oklch(0.5 0.2 145);
+  --warning: oklch(0.7 0.2 70);
+  --info: oklch(0.5 0.18 200);
+}
+
+/* ============================================================
+   OmniSite Theme 3: Dark Field Mode (engineering-grade dark)
+   ============================================================ */
+[data-theme="darkfield"] {
+  --radius: 0.5rem;
+  --background: oklch(0.16 0.005 240);
+  --foreground: oklch(0.92 0.005 240);
+  --card: oklch(0.21 0.006 240);
+  --card-foreground: oklch(0.92 0.005 240);
+  --popover: oklch(0.21 0.006 240);
+  --popover-foreground: oklch(0.92 0.005 240);
+  --primary: oklch(0.7 0.16 220);
+  --primary-foreground: oklch(0.12 0.005 240);
+  --secondary: oklch(0.26 0.006 240);
+  --secondary-foreground: oklch(0.92 0.005 240);
+  --muted: oklch(0.24 0.005 240);
+  --muted-foreground: oklch(0.65 0.005 240);
+  --accent: oklch(0.3 0.04 220);
+  --accent-foreground: oklch(0.9 0.02 220);
+  --destructive: oklch(0.65 0.22 25);
+  --border: oklch(0.32 0.005 240);
+  --input: oklch(0.28 0.005 240);
+  --ring: oklch(0.7 0.16 220);
+  --chart-1: oklch(0.7 0.16 220);
+  --chart-2: oklch(0.7 0.16 145);
+  --chart-3: oklch(0.78 0.18 70);
+  --chart-4: oklch(0.65 0.22 350);
+  --chart-5: oklch(0.6 0.14 200);
+  --sidebar: oklch(0.18 0.005 240);
+  --sidebar-foreground: oklch(0.9 0.005 240);
+  --sidebar-primary: oklch(0.7 0.16 220);
+  --sidebar-primary-foreground: oklch(0.12 0.005 240);
+  --sidebar-accent: oklch(0.28 0.02 220);
+  --sidebar-accent-foreground: oklch(0.9 0.02 220);
+  --sidebar-border: oklch(0.28 0.005 240);
+  --sidebar-ring: oklch(0.7 0.16 220);
+  --workspace-bg: oklch(0.18 0.005 240);
+  --pane-bg: oklch(0.21 0.006 240);
+  --pane-divider: oklch(0.3 0.005 240);
+  --row-hover: oklch(0.26 0.006 240);
+  --critical: oklch(0.7 0.24 25);
+  --success: oklch(0.7 0.18 145);
+  --warning: oklch(0.78 0.18 70);
+  --info: oklch(0.7 0.16 220);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  /* Custom scrollbar — OmniPlan style thin overlay */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 25%, transparent);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+  }
+}
+
+/* ============================================================
+   Workspace utility classes
+   ============================================================ */
+.pane {
+  background: var(--pane-bg);
+}
+.pane-divider {
+  background: var(--pane-divider);
+}
+.workspace-bg {
+  background: var(--workspace-bg);
+}
+.row-hover:hover {
+  background: var(--row-hover);
+}
+.grid-bg {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--border) 50%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--border) 50%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Subtle macOS-style vibrancy on toolbars */
+.vibrancy {
+  backdrop-filter: saturate(180%) blur(20px);
+  background: color-mix(in oklch, var(--pane-bg) 78%, transparent);
+}
+
+/* OmniPlan-style focus ring */
+.focus-ring:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 25%, transparent);
+}
+
+/* Gantt canvas grid */
+.gantt-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--border) 60%, transparent) 1px, transparent 1px);
+  background-size: var(--gantt-day-width, 32px) 100%;
+}
+
+/* Smooth transitions for theme switches */
+.theme-transition,
+.theme-transition * {
+  transition: background-color 200ms ease, border-color 200ms ease, color 150ms ease;
+}
+
+/* Pinch-zoom hint on mobile for 3-pane layouts */
+@media (max-width: 768px) {
+  .pane-mobile-peek {
+    flex: 0 0 60px !important;
+  }
+}
+
+/* Stripe for weekend shading in gantt */
+.gantt-weekend {
+  background: color-mix(in oklch, var(--muted-foreground) 8%, transparent);
+}
+
+/* KPI delta arrows */
+.delta-up { color: var(--success); }
+.delta-down { color: var(--critical); }

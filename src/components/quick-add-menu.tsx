@@ -1,0 +1,73 @@
+'use client'
+
+import { useApp } from '@/lib/app-store'
+import { X, ClipboardList, Mail, Landmark, Truck, FileStack, ShieldAlert, UserPlus } from 'lucide-react'
+import { toast } from 'sonner'
+import { Toaster } from '@/components/ui/sonner'
+
+const ACTIONS = [
+  { id: 'dsr', label: 'Daily Site Report', icon: ClipboardList, color: 'text-emerald-500', desc: 'Log today\'s progress' },
+  { id: 'rfi', label: 'RFI', icon: Mail, color: 'text-sky-500', desc: 'Request for Information' },
+  { id: 'expense', label: 'Quick Expense', icon: Landmark, color: 'text-amber-500', desc: 'Record indirect cost' },
+  { id: 'equipment', label: 'Equipment Log', icon: Truck, color: 'text-violet-500', desc: 'Update fleet status' },
+  { id: 'drawing', label: 'Upload Drawing', icon: FileStack, color: 'text-rose-500', desc: 'Add to register' },
+  { id: 'ncr', label: 'NCR / Incident', icon: ShieldAlert, color: 'text-red-500', desc: 'Quality/Safety issue' },
+  { id: 'worker', label: 'Add Worker', icon: UserPlus, color: 'text-cyan-500', desc: 'New staff on project' },
+]
+
+export function QuickAddMenu() {
+  const { quickAddOpen, setQuickAddOpen } = useApp()
+
+  return (
+    <>
+      <Toaster richColors position="top-center" />
+      {quickAddOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm flex items-start justify-center pt-[12vh]"
+          onClick={() => setQuickAddOpen(false)}
+        >
+          <div
+            className="w-full max-w-md pane border border-[var(--pane-divider)] rounded-xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 h-12 border-b border-[var(--pane-divider)]">
+              <div className="text-sm font-semibold">Quick Add</div>
+              <button
+                onClick={() => setQuickAddOpen(false)}
+                className="p-1 rounded hover:bg-accent text-muted-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 p-3">
+              {ACTIONS.map(a => {
+                const Icon = a.icon
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => {
+                      toast.success(`${a.label} draft created`, {
+                        description: a.desc,
+                      })
+                      setQuickAddOpen(false)
+                    }}
+                    className="flex flex-col items-start gap-1.5 p-3 rounded-lg border border-[var(--pane-divider)] hover:bg-accent hover:border-primary/30 transition-all text-left group"
+                  >
+                    <Icon className={`w-5 h-5 ${a.color}`} />
+                    <div>
+                      <div className="text-sm font-medium">{a.label}</div>
+                      <div className="text-xs text-muted-foreground">{a.desc}</div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="px-4 py-2 border-t border-[var(--pane-divider)] text-[11px] text-muted-foreground">
+              Tip: press <kbd className="px-1 py-0.5 rounded bg-secondary font-mono">⌘K</kbd> anywhere to open the command palette.
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
