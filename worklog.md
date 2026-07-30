@@ -217,3 +217,34 @@ Stage Summary:
 - Changes persisted to localStorage and undoable (part of the existing undo/redo stack).
 - Lint: 0 errors, 0 warnings.
 - Screenshot saved: omnisite-boq-drag-drop.png
+
+---
+Task ID: 11
+Agent: Super Z (main)
+Task: Complete Subcontractor module overhaul — composite BOQ with mapping, conditional items for tunneling, material reconciliation, consumables tracking, expanded deductibles, schedule linkage, performance dashboard.
+
+Work Log:
+- Complete rewrite of subcontractor.tsx: Replaced the old thin module with a comprehensive 6-tab inspector covering all the subcontractor management features discussed.
+- New data model: Subcontractor interface now includes: items (composite + conditional), materialIssues (MIN), materialReturns (MRN), consumables (with norm-based tracking), customDeductibles (TDS, equipment, penalty, electricity, insurance, material overuse), assignedTasks (schedule linkage), ncrCount, incidents, isTunneling flag, compliance fields (PAN, GST, insurance, labour license).
+- 3 demo SCs: (1) M/S Lama Constructions — drain construction with composite rate per rmt and full mapping to 7 main BOQ items; (2) Shrestha Steel Works — rebar fabrication; (3) Himal Tunneling Co. — tunneling with conditional support items (steel ribs, shotcrete 50mm/75mm, rock bolts) with rock class, design pattern, and variance detection.
+- Sub-BOQ Tab: Shows composite items with progress bars, earned value, and full mapping table (composite → main BOQ with coefficients and derived quantities). Shows conditional items separately with rock class badge, design pattern, actual vs design variance, over-support detection (amber alert), and "RFI required for consultant approval" notice.
+- Material Reconciliation Tab: Aggregates material issues and returns by material code. Shows reconciliation table with Theoretical (from mapping × RA coefficients), Issued, Returned, Net Used, and Variance % columns. Variance >5% is highlighted amber. Includes MIN register and MRN (returns) with credit amounts. Theoretical calculation: cement = 5.7 bags/rmt (PCC 0.40×4.5 + RCC 0.60×6.5), steel = 0.095 MT/rmt, etc.
+- Consumables Tab: Shows consumable issues with norm-based tracking. Each consumable has normPerUnit (e.g., 0.5 kg binding wire per MT steel), normBasis (total MT), and theoretical vs actual comparison. Over-norm consumption is charged back to SC at cost. Includes chargeback summary.
+- Running Bill Tab: Expanded deductibles beyond advance/retention/rework: TDS (1.5%), equipment charges, electricity, material over-use chargeback, consumable over-norm chargeback, and custom deductibles. Shows itemized deductions with icons, running total, and net payable (color-coded: emerald if positive, amber if SC owes project).
+- Schedule Linkage Tab: Shows assigned schedule tasks with progress bars and status (on-track/delayed). For tunneling SCs, shows a special "Hammock Task — Quantity-Driven" notice explaining that duration expands/contracts based on face log advance.
+- Performance Dashboard Tab: 4 KPI cards: On-Time Delivery (%), Quality (NCR count), Material Efficiency (%), Safety (incidents). Compliance section with PAN/GST/insurance/labour license tracking and expiry warnings. Financial summary with agreement value, earned, advance, net payable.
+- Tunneling conditional BOQ workflow: Conditional items have 0 planned quantity, activated by face log entries. Each has a rockClass and designPattern (expected qty per rm of advance). The system calculates design qty = designPattern × total rm advanced, compares against actual, and flags over-support with "RFI required for consultant approval before billing."
+- Browser-verified: Sub-BOQ tab shows composite items with mapping; tunneling SC shows conditional items with over-support detection and RFI requirement; Running Bill shows net payable; all 3 SCs render correctly; no errors.
+- Lint: 0 errors, 0 warnings.
+- Screenshot saved: omnisite-subcontractor-overhaul.png
+
+Stage Summary:
+- Complete subcontractor module with 6 tabs covering all discussed features.
+- Composite BOQ with mapping table (drain example: 1 rmt → 7 BOQ items with coefficients).
+- Conditional BOQ for tunneling (0 planned qty, design pattern, variance, auto-RFI).
+- Material reconciliation (theoretical from mapping × RA coeff vs issued − returned).
+- Consumables with norm-based chargeback.
+- Expanded deductibles (TDS, equipment, penalty, electricity, material/consumable overuse).
+- Schedule linkage with progress per task.
+- Performance dashboard with KPIs and compliance tracking.
+- All state persisted to localStorage.
