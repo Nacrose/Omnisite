@@ -23,26 +23,29 @@ export function DockNav() {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dockRef = useRef<HTMLDivElement>(null)
 
-  // Auto-hide: show dock when mouse is near the bottom 80px of screen, hide after 2s delay
+  // Auto-hide only on desktop (md+). On mobile, dock is always visible.
   useEffect(() => {
+    const isMobile = window.matchMedia('(max-width: 767px)').matches
+    if (isMobile) {
+      // Dock is already visible by default state on mobile
+      return
+    }
+
     const handleMouseMove = (e: MouseEvent) => {
       const triggerZone = window.innerHeight - 80
       if (e.clientY > triggerZone) {
-        // Mouse is near bottom — show dock
         if (hideTimerRef.current) {
           clearTimeout(hideTimerRef.current)
           hideTimerRef.current = null
         }
         setIsVisible(true)
       } else if (e.clientY < window.innerHeight - 120) {
-        // Mouse is well above the dock — start hide timer
         if (!hideTimerRef.current) {
           hideTimerRef.current = setTimeout(() => setIsVisible(false), 1500)
         }
       }
     }
 
-    // Also show dock when hovering over it directly
     const dock = dockRef.current
     if (dock) {
       dock.addEventListener('mouseenter', () => {
@@ -69,9 +72,9 @@ export function DockNav() {
 
   return (
     <>
-      {/* Invisible hover trigger zone at the bottom of the screen */}
+      {/* Invisible hover trigger zone — desktop only */}
       <div
-        className="fixed bottom-0 left-0 right-0 h-20 z-40"
+        className="fixed bottom-0 left-0 right-0 h-20 z-40 hidden md:block"
         onMouseEnter={() => setIsVisible(true)}
       />
 
@@ -84,41 +87,46 @@ export function DockNav() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30, mass: 0.5 }}
-            className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-1rem)]"
             onMouseLeave={() => {
-              hideTimerRef.current = setTimeout(() => setIsVisible(false), 1500)
+              const isMobile = window.matchMedia('(max-width: 767px)').matches
+              if (!isMobile) {
+                hideTimerRef.current = setTimeout(() => setIsVisible(false), 1500)
+              }
             }}
           >
-            <div className="flex items-end gap-1 px-3 py-2 rounded-2xl pane border border-[var(--pane-divider)] shadow-2xl vibrancy"
+            <div className="flex items-end gap-1 px-2 py-2 rounded-2xl pane border border-[var(--pane-divider)] shadow-2xl vibrancy overflow-x-auto dock-scroll"
               style={{ backdropFilter: 'saturate(180%) blur(30px)' }}
             >
-              {/* Brand */}
-              <div className="flex items-center gap-2 px-3 py-1 mr-1 border-r border-[var(--pane-divider)]">
+              {/* Brand — hidden on mobile to save space */}
+              <div className="hidden md:flex items-center gap-2 px-3 py-1 mr-1 border-r border-[var(--pane-divider)] flex-shrink-0">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent-foreground)] flex items-center justify-center shadow-sm">
                   <Building2 className="w-4 h-4 text-white" strokeWidth={2.2} />
                 </div>
               </div>
 
-              {/* Quick action buttons */}
-              <DockActionButton
-                icon={Search}
-                label="Search (⌘K)"
-                onClick={() => setCommandOpen(true)}
-              />
-              <DockActionButton
-                icon={Plus}
-                label="Quick Add (N)"
-                onClick={() => setQuickAddOpen(true)}
-                highlight
-              />
+              {/* Quick action buttons — hidden on mobile */}
+              <div className="hidden md:flex items-end gap-1 flex-shrink-0">
+                <DockActionButton
+                  icon={Search}
+                  label="Search (⌘K)"
+                  onClick={() => setCommandOpen(true)}
+                />
+                <DockActionButton
+                  icon={Plus}
+                  label="Quick Add (N)"
+                  onClick={() => setQuickAddOpen(true)}
+                  highlight
+                />
+              </div>
 
-              {/* Divider */}
-              <div className="w-px h-10 bg-[var(--pane-divider)] mx-1" />
+              {/* Divider — hidden on mobile */}
+              <div className="hidden md:block w-px h-10 bg-[var(--pane-divider)] mx-1 flex-shrink-0" />
 
               {/* Module groups with dividers between groups */}
               {grouped.map((g, gi) => (
-                <div key={g.group} className="flex items-end gap-0.5">
-                  {gi > 0 && <div className="w-px h-8 bg-[var(--pane-divider)] mx-0.5" />}
+                <div key={g.group} className="flex items-end gap-0.5 flex-shrink-0">
+                  {gi > 0 && <div className="hidden md:block w-px h-8 bg-[var(--pane-divider)] mx-0.5" />}
                   {g.items.map((item) => (
                     <DockIcon
                       key={item.id}
@@ -159,37 +167,50 @@ function DockIcon({ item, isActive, onClick }: {
   }
 
   // Magnification: icon grows based on proximity to cursor (macOS dock effect)
+  // On mobile (no mouse), icons stay fixed at 40px
   const distance = useTransform(mouseX, (val) => Math.abs(val))
   const sizeT = useTransform(distance, [0, 80], [52, 36])
   const size = useSpring(sizeT, { stiffness: 500, damping: 30, mass: 0.3 })
 
   return (
-    <motion.button
-      ref={ref}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={onClick}
-      style={{ width: size, height: size }}
-      className={cn(
-        'relative flex flex-col items-center justify-end rounded-xl transition-colors flex-shrink-0',
-        isActive
-          ? 'bg-primary text-primary-foreground'
-          : 'bg-secondary/40 hover:bg-accent text-foreground',
-      )}
-      title={item.name}
-    >
-      <motion.div style={{ width: size, height: size }} className="flex items-center justify-center">
-        <ModuleIcon name={item.icon} className="w-1/2 h-1/2" />
-      </motion.div>
+    <>
+      {/* Desktop: magnifying dock icon */}
+      <motion.button
+        ref={ref}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onClick={onClick}
+        style={{ width: size, height: size }}
+        className={cn(
+          'hidden md:flex relative flex-col items-center justify-end rounded-xl transition-colors flex-shrink-0',
+          isActive
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-secondary/40 hover:bg-accent text-foreground',
+        )}
+        title={item.name}
+      >
+        <motion.div style={{ width: size, height: size }} className="flex items-center justify-center">
+          <ModuleIcon name={item.icon} className="w-1/2 h-1/2" />
+        </motion.div>
+        {isActive && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />}
+        <DockLabel item={item} />
+      </motion.button>
 
-      {/* Active indicator dot */}
-      {isActive && (
-        <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
-      )}
-
-      {/* Label tooltip on hover */}
-      <DockLabel item={item} />
-    </motion.button>
+      {/* Mobile: fixed-size icon */}
+      <button
+        onClick={onClick}
+        className={cn(
+          'md:hidden w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors',
+          isActive
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-secondary/40 text-foreground',
+        )}
+        title={item.name}
+      >
+        <ModuleIcon name={item.icon} className="w-5 h-5" />
+        {isActive && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />}
+      </button>
+    </>
   )
 }
 

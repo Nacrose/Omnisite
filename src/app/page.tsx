@@ -54,49 +54,53 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden workspace-bg theme-transition">
-      {/* Top bar — now full width (no left sidebar) */}
-      <header className="h-14 flex-shrink-0 flex items-center gap-3 px-4 border-b border-[var(--pane-divider)] vibrancy">
-        {/* Brand (moved from sidebar to top bar) */}
-        <div className="flex items-center gap-2.5">
+      {/* Top bar — responsive */}
+      <header className="h-14 flex-shrink-0 flex items-center gap-2 sm:gap-3 px-2 sm:px-4 border-b border-[var(--pane-divider)] vibrancy">
+        {/* Brand — smaller on mobile */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent-foreground)] flex items-center justify-center shadow-sm">
             <Building2 className="w-4 h-4 text-white" strokeWidth={2.2} />
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[15px] font-bold tracking-tight">OmniSite</span>
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider hidden sm:block">Construction Cloud</span>
+          <div className="flex flex-col leading-tight hidden sm:block">
+            <span className="text-sm sm:text-[15px] font-bold tracking-tight">OmniSite</span>
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider hidden md:block">Construction Cloud</span>
           </div>
         </div>
 
-        <div className="w-px h-8 bg-[var(--pane-divider)] mx-1" />
+        <div className="w-px h-8 bg-[var(--pane-divider)] mx-0.5 hidden sm:block" />
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold">{active.name}</span>
-          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">·</span>
-          <ProjectSwitcher />
+        {/* Breadcrumb — module name only on mobile, full on desktop */}
+        <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial">
+          <span className="text-sm font-semibold truncate">{active.shortName}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hidden sm:block" />
+          <span className="text-sm text-muted-foreground hidden md:inline">·</span>
+          <div className="hidden md:block">
+            <ProjectSwitcher />
+          </div>
         </div>
 
-        <div className="flex-1" />
+        <div className="flex-1 hidden sm:block" />
 
-        {/* Right controls */}
-        <div className="flex items-center gap-1.5">
+        {/* Right controls — simplified on mobile */}
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+          {/* Search — icon only on mobile */}
           <button
             onClick={() => setCommandOpen(true)}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-md bg-secondary/60 hover:bg-secondary text-muted-foreground text-sm transition-colors"
+            className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 rounded-md bg-secondary/60 hover:bg-secondary text-muted-foreground text-sm transition-colors"
           >
             <Search className="w-4 h-4" />
-            <span className="hidden md:inline">Search…</span>
+            <span className="hidden md:inline ml-1.5">Search…</span>
             <kbd className="ml-1 text-[10px] px-1 py-0.5 rounded bg-background border border-border font-mono hidden md:inline">⌘K</kbd>
           </button>
 
           <NotificationsBell />
           <ThemeSwitcher />
 
-          <div className="w-px h-6 bg-border mx-1" />
+          <div className="w-px h-6 bg-border mx-0.5 hidden sm:block" />
 
+          {/* User — avatar only on mobile */}
           <button className="flex items-center gap-2 h-8 px-1.5 rounded-md hover:bg-accent">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
               AS
             </div>
             <div className="text-left leading-tight hidden lg:block">
@@ -105,9 +109,10 @@ export default function Home() {
             </div>
           </button>
 
+          {/* Inspector toggle — desktop only */}
           <button
             onClick={toggleRightPane}
-            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground"
+            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hidden md:block"
             title="Toggle inspector"
           >
             <PanelRight className="w-4 h-4" />
@@ -131,8 +136,10 @@ export default function Home() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom status bar */}
-      <StatusBar />
+      {/* Bottom status bar — desktop only */}
+      <div className="hidden md:block">
+        <StatusBar />
+      </div>
 
       {/* macOS-style dock with auto-hide */}
       <DockNav />

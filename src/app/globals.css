@@ -297,6 +297,22 @@
   display: none;
 }
 
+/* Hide scrollbar utility for PaneHeader action buttons on mobile */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile: add bottom padding so dock doesn't overlap content */
+@media (max-width: 767px) {
+  main {
+    padding-bottom: 70px;
+  }
+}
+
 /* ============================================================
    Print styles — Report Designer PDF export
    When window.print() is called, hide everything except the A4 canvas.
