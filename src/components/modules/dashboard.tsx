@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useApp, ModuleId } from '@/lib/app-store'
 import { Separator } from '@/components/ui/separator'
 import {
   TrendingUp, TrendingDown, Calendar, Cloud, Users, Truck, AlertTriangle,
@@ -46,19 +47,19 @@ const BACKLOG = [
   { name: '>14 days', value: 6, color: 'var(--critical)' },
 ]
 
-const KPIs = [
-  { label: 'SPI', value: '0.97', delta: '-0.03', trend: 'down', desc: 'Schedule Performance' },
-  { label: 'CPI', value: '1.04', delta: '+0.02', trend: 'up', desc: 'Cost Performance' },
-  { label: 'EAC', value: 'NPR 487.2M', delta: '-12.4M', trend: 'up', desc: 'Estimate at Completion' },
-  { label: 'Margin', value: '14.8%', delta: '+0.6%', trend: 'up', desc: 'Project gross margin' },
+const KPIs: { label: string; value: string; delta: string; trend: 'up' | 'down'; desc: string; module: ModuleId }[] = [
+  { label: 'SPI', value: '0.97', delta: '-0.03', trend: 'down', desc: 'Schedule Performance', module: 'scheduler' },
+  { label: 'CPI', value: '1.04', delta: '+0.02', trend: 'up', desc: 'Cost Performance', module: 'financials' },
+  { label: 'EAC', value: 'NPR 487.2M', delta: '-12.4M', trend: 'up', desc: 'Estimate at Completion', module: 'financials' },
+  { label: 'Margin', value: '14.8%', delta: '+0.6%', trend: 'up', desc: 'Project gross margin', module: 'financials' },
 ]
 
-const URGENT_ACTIONS = [
-  { type: 'PO Approval', desc: 'PO-2410-018 — Cement (Ordinary) 1,200 bags', who: 'Arjun S.', due: 'Today', severity: 'high' },
-  { type: 'DSR Review', desc: 'DSR #087 — Chainage 4+200 to 4+350 PCC', who: 'Bikash R.', due: 'Today', severity: 'high' },
-  { type: 'NCR Hold', desc: 'NCR-034 — Box culvert rebar cover < 40mm', who: 'Engineer', due: 'Open', severity: 'critical' },
-  { type: 'Variation', desc: 'SI-022 — Extra excavation at chainage 2+850', who: 'PM', due: '2 days', severity: 'medium' },
-  { type: 'RFI Reply', desc: 'RFI-067 — Rebar detailing at expansion joint', who: 'Consultant', due: 'Overdue 3d', severity: 'critical' },
+const URGENT_ACTIONS: { type: string; desc: string; who: string; due: string; severity: 'high' | 'critical' | 'medium'; module: ModuleId }[] = [
+  { type: 'PO Approval', desc: 'PO-2410-018 — Cement (Ordinary) 1,200 bags', who: 'Arjun S.', due: 'Today', severity: 'high', module: 'procurement' },
+  { type: 'DSR Review', desc: 'DSR #087 — Chainage 4+200 to 4+350 PCC', who: 'Bikash R.', due: 'Today', severity: 'high', module: 'daily-ops' },
+  { type: 'NCR Hold', desc: 'NCR-034 — Box culvert rebar cover < 40mm', who: 'Engineer', due: 'Open', severity: 'critical', module: 'qs' },
+  { type: 'Variation', desc: 'SI-022 — Extra excavation at chainage 2+850', who: 'PM', due: '2 days', severity: 'medium', module: 'correspondence' },
+  { type: 'RFI Reply', desc: 'RFI-067 — Rebar detailing at expansion joint', who: 'Consultant', due: 'Overdue 3d', severity: 'critical', module: 'correspondence' },
 ]
 
 const GANTT_MINI_TASKS = [
@@ -71,6 +72,7 @@ const GANTT_MINI_TASKS = [
 ]
 
 export function DashboardModule() {
+  const { setActiveModule } = useApp()
   const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
     // Use setTimeout to defer the initial time set — avoids synchronous setState in effect
@@ -112,8 +114,9 @@ export function DashboardModule() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 60, duration: 0.4, ease: 'easeOut' }}
+              onClick={() => setActiveModule(k.module)}
             >
-              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer group">
+              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer group hover:border-primary/40">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{k.label}</span>
                   <span className={`text-xs font-medium flex items-center gap-0.5 ${k.trend === 'up' ? 'delta-up' : 'delta-down'}`}>
@@ -122,7 +125,10 @@ export function DashboardModule() {
                   </span>
                 </div>
                 <div className="text-2xl font-bold mt-1 tracking-tight group-hover:scale-[1.02] origin-left transition-transform">{k.value}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{k.desc}</div>
+                <div className="text-xs text-muted-foreground mt-0.5 flex items-center justify-between">
+                  <span>{k.desc}</span>
+                  <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                </div>
               </Card>
             </motion.div>
           ))}
@@ -150,7 +156,7 @@ export function DashboardModule() {
             </div>
             <div className="space-y-2 max-h-[280px] overflow-y-auto">
               {URGENT_ACTIONS.map((a, i) => (
-                <div key={i} className="p-2.5 rounded-md border border-[var(--pane-divider)] hover:bg-accent/50 transition-colors cursor-pointer">
+                <div key={i} onClick={() => setActiveModule(a.module)} className="p-2.5 rounded-md border border-[var(--pane-divider)] hover:bg-accent/50 hover:border-primary/30 transition-colors cursor-pointer group">
                   <div className="flex items-start gap-2">
                     <div className={`w-1 self-stretch rounded-full ${
                       a.severity === 'critical' ? 'bg-[var(--critical)]' : a.severity === 'high' ? 'bg-[var(--warning)]' : 'bg-[var(--info)]'
@@ -290,7 +296,7 @@ export function DashboardModule() {
                   <span className="flex-1">RA Bill #4 awaiting client approval · NPR 18.4 Cr</span>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="w-full">
+              <Button variant="ghost" size="sm" className="w-full" onClick={() => setActiveModule('daily-ops')}>
                 Open Daily Operations <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </div>

@@ -58,15 +58,44 @@ function flattenCbs(items: CbsNode[]): CbsNode[] {
 export function FinancialsModule() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['1', '2']))
   const [selectedCode, setSelectedCode] = useState('1.1')
-  const flat = flattenCbs(CBS)
+  // Convert CBS into mutable state so Committed/Actual/Forecast can be edited inline
+  const [cbsData, setCbsData] = useState<CbsNode[]>(() => JSON.parse(JSON.stringify(CBS)))
+  const [editing, setEditing] = useState<{ code: string; field: 'committed' | 'actual' | 'forecast' } | null>(null)
+
+  const flat = flattenCbs(cbsData)
   const selected = flat.find(c => c.code === selectedCode) ?? flat[0]
 
-  const totals = CBS.reduce((acc, c) => ({
+  // Live totals — sum of top-level nodes
+  const totals = cbsData.reduce((acc, c) => ({
     budget: acc.budget + c.budget,
     committed: acc.committed + c.committed,
     actual: acc.actual + c.actual,
     forecast: acc.forecast + c.forecast,
   }), { budget: 0, committed: 0, actual: 0, forecast: 0 })
+
+  // Live total margin
+  const totalMarginPct = totals.budget > 0 ? ((totals.budget - totals.forecast) / totals.budget) * 100 : 0
+
+  // Update a CBS node's committed/actual/forecast
+  const updateNode = (code: string, field: 'committed' | 'actual' | 'forecast', value: number) => {
+    setCbsData(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as CbsNode[]
+      const walk = (items: CbsNode[]) => {
+        for (const n of items) {
+          if (n.code === code) {
+            n[field] = Math.max(0, value)
+            // Recalculate margin: (budget - forecast) / budget * 100
+            n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
+            return true
+          }
+          if (n.children && walk(n.children)) return true
+        }
+        return false
+      }
+      walk(updated)
+      return updated
+    })
+  }
 
   const toggleExpand = (code: string) => {
     setExpanded(prev => {
@@ -82,6 +111,8 @@ export function FinancialsModule() {
       const isExpanded = expanded.has(c.code)
       const hasChildren = c.children && c.children.length > 0
       const isSelected = c.code === selectedCode
+      const isLeaf = !hasChildren
+      const variance = c.budget - c.forecast
       rows.push(
         <div
           key={c.code}
@@ -101,11 +132,72 @@ export function FinancialsModule() {
           </div>
           <div className="w-16 font-mono text-muted-foreground">{c.code}</div>
           <div className={cn('flex-1 truncate', depth === 0 && 'font-semibold')}>{c.name}</div>
-          <div className="w-24 text-right pr-2 font-mono">{fmt(c.budget)}</div>
-          <div className="w-24 text-right pr-2 font-mono text-muted-foreground">{fmt(c.committed)}</div>
-          <div className="w-24 text-right pr-2 font-mono">{fmt(c.actual)}</div>
-          <div className="w-24 text-right pr-2 font-mono">{fmt(c.forecast)}</div>
-          <div className={cn('w-20 text-right pr-3 font-mono font-medium', c.marginPct >= 0 ? 'delta-up' : 'delta-down')}>
+          <div className="w-24 text-right pr-2 font-mono text-muted-foreground">{fmt(c.budget)}</div>
+          {/* Committed — inline editable for leaf nodes */}
+          <div className="w-24 pr-2">
+            {isLeaf ? (
+              <input
+                type="number"
+                value={c.committed || ''}
+                onChange={(e) => updateNode(c.code, 'committed', parseFloat(e.target.value) || 0)}
+                onFocus={() => setEditing({ code: c.code, field: 'committed' })}
+                onBlur={() => setEditing(null)}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
+                  editing?.code === c.code && editing.field === 'committed'
+                    ? 'border-primary bg-background ring-1 ring-primary/30'
+                    : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50 text-muted-foreground'
+                )}
+              />
+            ) : (
+              <span className="text-right block font-mono text-muted-foreground">{fmt(c.committed)}</span>
+            )}
+          </div>
+          {/* Actual — inline editable for leaf nodes */}
+          <div className="w-24 pr-2">
+            {isLeaf ? (
+              <input
+                type="number"
+                value={c.actual || ''}
+                onChange={(e) => updateNode(c.code, 'actual', parseFloat(e.target.value) || 0)}
+                onFocus={() => setEditing({ code: c.code, field: 'actual' })}
+                onBlur={() => setEditing(null)}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
+                  editing?.code === c.code && editing.field === 'actual'
+                    ? 'border-primary bg-background ring-1 ring-primary/30'
+                    : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
+                )}
+              />
+            ) : (
+              <span className="text-right block font-mono">{fmt(c.actual)}</span>
+            )}
+          </div>
+          {/* Forecast — inline editable for leaf nodes */}
+          <div className="w-24 pr-2">
+            {isLeaf ? (
+              <input
+                type="number"
+                value={c.forecast || ''}
+                onChange={(e) => updateNode(c.code, 'forecast', parseFloat(e.target.value) || 0)}
+                onFocus={() => setEditing({ code: c.code, field: 'forecast' })}
+                onBlur={() => setEditing(null)}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
+                  editing?.code === c.code && editing.field === 'forecast'
+                    ? 'border-primary bg-background ring-1 ring-primary/30'
+                    : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
+                )}
+              />
+            ) : (
+              <span className="text-right block font-mono">{fmt(c.forecast)}</span>
+            )}
+          </div>
+          {/* Margin — live recalculated, color-coded */}
+          <div className={cn('w-20 text-right pr-3 font-mono font-medium tabular-nums', c.marginPct >= 0 ? 'delta-up' : 'delta-down')}>
             {c.marginPct >= 0 ? '+' : ''}{c.marginPct.toFixed(1)}%
           </div>
         </div>
@@ -148,6 +240,10 @@ export function FinancialsModule() {
       centerPane={
         <>
           <PaneHeader title="P&L Grid · NPR">
+            <span className="hidden lg:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Edit Committed/Actual/Forecast on leaf nodes
+            </span>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Upload className="w-3.5 h-3.5" />Upload RA Bill</Button>
             <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Quick Expense</Button>
           </PaneHeader>
@@ -178,7 +274,9 @@ export function FinancialsModule() {
             <span className="w-24 text-right font-mono text-muted-foreground">{fmt(totals.committed)}</span>
             <span className="w-24 text-right font-mono">{fmt(totals.actual)}</span>
             <span className="w-24 text-right font-mono">{fmt(totals.forecast)}</span>
-            <span className={cn('w-20 text-right font-mono font-bold delta-up')}>+1.9%</span>
+            <span className={cn('w-20 text-right font-mono font-bold tabular-nums', totalMarginPct >= 0 ? 'delta-up' : 'delta-down')}>
+              {totalMarginPct >= 0 ? '+' : ''}{totalMarginPct.toFixed(1)}%
+            </span>
           </div>
         </>
       }

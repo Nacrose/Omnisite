@@ -268,3 +268,40 @@
 /* KPI delta arrows */
 .delta-up { color: var(--success); }
 .delta-down { color: var(--critical); }
+
+/* ============================================================
+   Print styles — Report Designer PDF export
+   When window.print() is called, hide everything except the A4 canvas.
+   ============================================================ */
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+  /* Show only the A4 report canvas and its descendants */
+  .print-report-canvas,
+  .print-report-canvas * {
+    visibility: visible;
+  }
+  /* Position the canvas at the top of the page */
+  .print-report-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    min-height: auto !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  /* Remove background colors that waste ink */
+  .print-report-canvas .bg-slate-50,
+  .print-report-canvas .bg-slate-100,
+  .print-report-canvas .bg-secondary\/50 {
+    background: white !important;
+  }
+  /* Page setup */
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}

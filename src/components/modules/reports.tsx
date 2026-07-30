@@ -80,11 +80,11 @@ export function ReportsModule() {
           <PaneHeader title="PDF Canvas · A4 Portrait">
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Eye className="w-3.5 h-3.5" />Preview</Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Save className="w-3.5 h-3.5" />Save</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Download className="w-3.5 h-3.5" />Export PDF</Button>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => window.print()}><Download className="w-3.5 h-3.5" />Export PDF</Button>
           </PaneHeader>
           <PaneBody className="p-6 flex justify-center bg-secondary/20">
             {/* A4 mock canvas */}
-            <div className="bg-white shadow-lg rounded-sm relative" style={{ width: '595px', minHeight: '842px' }}>
+            <div className="print-report-canvas bg-white shadow-lg rounded-sm relative" style={{ width: '595px', minHeight: '842px' }}>
               {/* Org header */}
               <div className="p-6 border-b-2 border-slate-900">
                 <div className="flex items-center justify-between">

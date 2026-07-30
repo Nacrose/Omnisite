@@ -114,3 +114,22 @@ Stage Summary:
 - Dev server: all GET / return 200, compiles cleanly.
 - Browser-verified: RFI modal opens with auto-filled background + mandatory field validation; BOQ undo/redo works (total 64,972,600 → 65,341,200 → undo → 64,972,600 → redo → 65,341,200); Help modal opens with ? key showing all shortcuts; NCR workflow advances through 4 statuses with billing hold release on close; PDF viewer has working page nav + zoom.
 - Screenshots saved: omnisite-ncr-workflow.png, omnisite-pdf-viewer.png, omnisite-undo-redo.png, omnisite-help-modal.png
+
+---
+Task ID: 6
+Agent: Super Z (main)
+Task: Iteration 6 — Financials inline editing, Scheduler Add Task modal, Dashboard clickable navigation, Report Designer print export.
+
+Work Log:
+- Financials P&L Grid Inline Editing: Converted CBS to mutable state. Committed, Actual, and Forecast cells on leaf nodes are now inline-editable number inputs (21 editable inputs across 7 leaf nodes). Budget remains read-only (contract-locked). Parent rows show aggregated values as read-only text. Margin % recalculates live per node: (budget - forecast) / budget * 100. The bottom Project Totals row now uses live totals and a live total margin %. Added "Edit Committed/Actual/Forecast on leaf nodes" hint pill. The FinancialsInspector receives the live selected node so its P&L breakdown updates in real time.
+- Scheduler Add Task Modal: The "+ Task" button now opens a full Add Task modal. Fields: Task Name (mandatory, with * marker), Task Type (4 buttons: Work/Milestone/Hammock/Summary), Start Week (number input with live "→ Wk X" indicator), Duration (number input, disabled for Milestone type, with live finish week indicator), Constraint (6 buttons: ASAP/SNET/FNLT/MFO/MSO/ALAP), Critical path toggle (checkbox). Includes a live preview panel showing the task name, week range, and a mini bar preview that updates in real time with the correct color (red for critical, amber for milestone, violet for hammock, muted for summary). The Add Task button is disabled until a name is entered. On add, the task is appended to the tasks array with a generated T-5xx ID, auto-selected, and the modal closes. Verified: added "Test Task — Curing" and it appeared in the scheduler.
+- Dashboard Clickable Navigation: KPI cards (SPI/CPI/EAC/Margin) are now clickable — each navigates to its relevant module (SPI→Scheduler, CPI/EAC/Margin→Financials). Added hover effects (border-primary/40 + arrow icon that appears on hover). Urgent Action items are also clickable — each navigates to its module (PO Approval→Procurement, DSR Review→Daily Ops, NCR Hold→Q&S, Variation/RFI→Correspondence). The "Open Daily Operations" button now navigates to the Daily Ops module. Verified: clicked SPI card → navigated to Scheduler.
+- Report Designer Print Export: The "Export PDF" button now calls window.print(). Added print-specific CSS to globals.css: @media print hides everything except the .print-report-canvas element, positions it at the top of the page, removes shadows/borders, and sets @page to A4 portrait with 12mm margins. The A4 canvas div in the reports module now has the print-report-canvas class. When the user clicks Export PDF, the browser's print dialog opens showing only the report content — they can save as PDF from there.
+- Global Filter Bar: Skipped in favor of higher-impact features (the filter would require touching every module's data layer).
+
+Stage Summary:
+- 4 features implemented and browser-verified (filter bar deferred).
+- Lint: 0 errors, 0 warnings.
+- Dev server: all GET / return 200, compiles cleanly.
+- Browser-verified: Financials has 21 editable inputs; Add Task modal opens with all fields + live preview; Dashboard SPI card click navigates to Scheduler; added "Test Task — Curing" to scheduler successfully.
+- Screenshots saved: omnisite-financials-edit.png, omnisite-add-task.png, omnisite-dashboard-clickable.png

@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import {
   Search, Plus, ChevronRight, ChevronDown, Flag, Link2, AlertTriangle,
   Calendar, Clock, Users, Layers, Zap, Gauge, TrendingUp, TrendingDown,
-  Package, Activity, Milestone,
+  Package, Activity, Milestone, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CollaboratorCursors } from '@/components/collaborator-cursors'
@@ -98,6 +98,17 @@ export function SchedulerModule() {
     | null
   >(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  // Add Task modal state
+  const [addTaskOpen, setAddTaskOpen] = useState(false)
+  const [newTask, setNewTask] = useState({
+    name: '',
+    type: 'Work' as Task['type'],
+    start: 18,
+    duration: 5,
+    progress: 0,
+    constraints: 'ASAP',
+    critical: false,
+  })
 
   const flat = flattenTasks(tasks)
   const visible = flat.filter(({ task }) => {
@@ -142,6 +153,28 @@ export function SchedulerModule() {
       walk(updated)
       return updated
     })
+  }
+
+  // Add a new task to the top level
+  const addTask = () => {
+    const taskNum = flat.length + 1
+    const newId = `T-${500 + taskNum}`
+    const task: Task = {
+      id: newId,
+      name: newTask.name || 'New Task',
+      type: newTask.type,
+      start: newTask.start,
+      duration: newTask.type === 'Milestone' ? 0 : newTask.duration,
+      progress: 0,
+      baseline: [newTask.start, newTask.start + newTask.duration],
+      resources: [],
+      critical: newTask.critical,
+      constraints: newTask.constraints,
+    }
+    setTasks(prev => [...prev, task])
+    setSelectedId(newId)
+    setAddTaskOpen(false)
+    setNewTask({ name: '', type: 'Work', start: 18, duration: 5, progress: 0, constraints: 'ASAP', critical: false })
   }
 
   const toggleExpand = (id: string) => {
@@ -245,6 +278,7 @@ export function SchedulerModule() {
   }, [dragging])
 
   return (
+    <>
     <Workspace3Pane
       leftPane={
         <>
@@ -281,7 +315,7 @@ export function SchedulerModule() {
               <span className="text-muted-foreground">Resource usage</span>
             </label>
             <Button variant="ghost" size="sm" className="h-7 text-xs"><Gauge className="w-3.5 h-3.5" />Level</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Task</Button>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => setAddTaskOpen(true)}><Plus className="w-3.5 h-3.5" />Task</Button>
           </PaneHeader>
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             {/* Gantt canvas */}
@@ -474,6 +508,169 @@ export function SchedulerModule() {
       leftPaneWidth="320px"
       rightPaneWidth="380px"
     />
+
+      {/* Add Task Modal */}
+      {addTaskOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setAddTaskOpen(false)}
+        >
+          <div
+            className="w-full max-w-md pane border border-[var(--pane-divider)] rounded-xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 h-12 border-b border-[var(--pane-divider)] bg-primary/5">
+              <div className="flex items-center gap-2">
+                <Plus className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold">Add New Task</span>
+              </div>
+              <button onClick={() => setAddTaskOpen(false)} className="p-1 rounded hover:bg-accent text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+              {/* Task name */}
+              <div>
+                <label className="text-xs font-medium">Task Name <span className="text-red-500">*</span></label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  placeholder="e.g. PCC M20 pouring at pier P-5"
+                  value={newTask.name}
+                  onChange={(e) => setNewTask(t => ({ ...t, name: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+
+              {/* Task type */}
+              <div>
+                <label className="text-xs font-medium">Task Type</label>
+                <div className="mt-1 grid grid-cols-4 gap-1.5">
+                  {(['Work', 'Milestone', 'Hammock', 'Summary'] as const).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setNewTask(prev => ({ ...prev, type: t }))}
+                      className={cn(
+                        'h-8 rounded text-[11px] border transition-colors',
+                        newTask.type === t
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-[var(--pane-divider)] hover:bg-accent'
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Start week + Duration */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium">Start Week</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      type="number"
+                      className="h-8 text-xs w-20"
+                      min={0}
+                      max={TOTAL_WEEKS - 1}
+                      value={newTask.start}
+                      onChange={(e) => setNewTask(t => ({ ...t, start: Math.max(0, Math.min(TOTAL_WEEKS - 1, parseInt(e.target.value) || 0)) }))}
+                    />
+                    <span className="text-[10px] text-muted-foreground">→ Wk {newTask.start + 1}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Duration (weeks)</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      type="number"
+                      className="h-8 text-xs w-20"
+                      min={1}
+                      max={TOTAL_WEEKS - newTask.start}
+                      value={newTask.duration}
+                      onChange={(e) => setNewTask(t => ({ ...t, duration: Math.max(1, Math.min(TOTAL_WEEKS - t.start, parseInt(e.target.value) || 1)) }))}
+                      disabled={newTask.type === 'Milestone'}
+                    />
+                    <span className="text-[10px] text-muted-foreground">→ Wk {newTask.start + newTask.duration + 1}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Constraints */}
+              <div>
+                <label className="text-xs font-medium">Constraint</label>
+                <div className="mt-1 grid grid-cols-3 gap-1.5">
+                  {['ASAP', 'SNET', 'FNLT', 'MFO', 'MSO', 'ALAP'].map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setNewTask(t => ({ ...t, constraints: c }))}
+                      className={cn(
+                        'h-7 rounded text-[10px] border transition-colors font-mono',
+                        newTask.constraints === c
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-[var(--pane-divider)] hover:bg-accent'
+                      )}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Critical path toggle */}
+              <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)] cursor-pointer hover:bg-accent/30">
+                <input
+                  type="checkbox"
+                  checked={newTask.critical}
+                  onChange={(e) => setNewTask(t => ({ ...t, critical: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-xs flex-1">Mark as critical path task</span>
+                <span className="text-[10px] text-red-500">highlighted in red</span>
+              </label>
+
+              {/* Preview */}
+              <div className="p-2.5 rounded-md bg-secondary/30 text-[11px]">
+                <div className="text-[10px] text-muted-foreground mb-1">Preview</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-muted-foreground">T-new</span>
+                  <span className="font-medium">{newTask.name || 'New Task'}</span>
+                  <span className="ml-auto text-[10px] text-muted-foreground">
+                    Wk {newTask.start + 1} → Wk {newTask.start + newTask.duration + 1} · {newTask.duration}w
+                  </span>
+                </div>
+                {/* Mini bar preview */}
+                <div className="mt-2 h-4 relative bg-secondary rounded-sm overflow-hidden">
+                  <div
+                    className={cn(
+                      'absolute h-full rounded-sm',
+                      newTask.critical ? 'bg-red-500' : 'bg-primary',
+                      newTask.type === 'Milestone' && 'bg-amber-500',
+                      newTask.type === 'Hammock' && 'bg-violet-500',
+                      newTask.type === 'Summary' && 'bg-muted-foreground/60'
+                    )}
+                    style={{ left: `${(newTask.start / TOTAL_WEEKS) * 100}%`, width: `${Math.max((newTask.duration / TOTAL_WEEKS) * 100, 2)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[var(--pane-divider)] bg-secondary/20">
+              <Button variant="outline" size="sm" onClick={() => setAddTaskOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={!newTask.name.trim()}
+                onClick={addTask}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Task
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
