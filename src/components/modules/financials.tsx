@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
 
 interface CbsNode {
   code: string; name: string; budget: number; committed: number; actual: number; forecast: number; marginPct: number; level: number; children?: CbsNode[]
@@ -57,12 +58,72 @@ function flattenCbs(items: CbsNode[]): CbsNode[] {
 }
 
 export function FinancialsModule() {
-  // Persistent state — survives page refreshes via localStorage
+  // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedCode, setSelectedCode] = usePersistentState('omnisite-financials-selected', '1.1')
   const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-financials-expanded', ['1', '2'])
-  const [cbsData, setCbsData] = usePersistentState<CbsNode[]>('omnisite-financials-cbs', () => JSON.parse(JSON.stringify(CBS)))
-  // Non-persistent UI state
-  const [editing, setEditing] = useState<{ code: string; field: 'committed' | 'actual' | 'forecast' } | null>(null)
+  const [cbsRows, setCbsRows] = useSyncedState<CbsNode[]>(
+    'omnisite-financials-cbs',
+    'cbs_nodes',
+    () => JSON.parse(JSON.stringify(CBS)),
+    {
+      fieldMap: { marginPct: 'margin_pct', parentCode: 'parent_code' },
+      primaryKey: 'code',
+    }
+  )
+
+  // Rebuild tree from flat rows
+  const cbsData = (() => {
+    if (!cbsRows || cbsRows.length === 0) return JSON.parse(JSON.stringify(CBS))
+    const hasChildren = cbsRows.some((r: Record<string, unknown>) => r.children)
+    if (hasChildren) return cbsRows
+
+    const rows = cbsRows as unknown as Record<string, unknown>[]
+    const map = new Map<string, CbsNode>()
+    const roots: CbsNode[] = []
+
+    for (const row of rows) {
+      const node: CbsNode = {
+        code: row.code as string,
+        name: row.name as string,
+        budget: Number(row.budget) || 0,
+        committed: Number(row.committed) || 0,
+        actual: Number(row.actual) || 0,
+        forecast: Number(row.forecast) || 0,
+        marginPct: Number(row.marginPct ?? row.margin_pct) || 0,
+        level: Number(row.level) || 0,
+      }
+      map.set(node.code, node)
+    }
+    for (const row of rows) {
+      const node = map.get(row.code as string)!
+      const parentCode = (row.parentCode || row.parent_code) as string | null
+      if (parentCode && map.has(parentCode)) {
+        const parent = map.get(parentCode)!
+        if (!parent.children) parent.children = []
+        parent.children.push(node)
+      } else {
+        roots.push(node)
+      }
+    }
+    return roots.length > 0 ? roots : JSON.parse(JSON.stringify(CBS))
+  })()
+
+  // Flatten tree for saving
+  const flattenCbs = (items: CbsNode[], parentCode: string | null = null): CbsNode[] => {
+    const out: CbsNode[] = []
+    for (const item of items) {
+      out.push({ ...item, parentCode: parentCode || undefined, children: undefined })
+      if (item.children) out.push(...flattenCbs(item.children, item.code))
+    }
+    return out
+  }
+
+  // Wrapper setter that flattens before saving
+  const setCbsData = (updater: (prev: CbsNode[]) => CbsNode[]) => {
+    const next = updater(cbsData)
+    setCbsRows(flattenCbs(next) as unknown as CbsNode[])
+  }
+
   // Convert expanded array to Set for O(1) lookups
   const expanded = new Set(expandedArr)
 
@@ -79,6 +140,9 @@ export function FinancialsModule() {
 
   // Live total margin
   const totalMarginPct = totals.budget > 0 ? ((totals.budget - totals.forecast) / totals.budget) * 100 : 0
+
+  // Non-persistent UI state
+  const [editing, setEditing] = useState<{ code: string; field: 'committed' | 'actual' | 'forecast' } | null>(null)
 
   // Update a CBS node's committed/actual/forecast
   const updateNode = (code: string, field: 'committed' | 'actual' | 'forecast', value: number) => {

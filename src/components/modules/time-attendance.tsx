@@ -10,6 +10,7 @@ import {
   Plus, Search, Fingerprint, MapPin, Clock, DollarSign, Download, AlertTriangle, CheckCircle2, Smartphone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useSyncedState } from '@/lib/use-synced-state'
 
 interface Worker {
   id: string; name: string; trade: string; phone: string; status: 'on-site' | 'off-site' | 'break';
@@ -51,11 +52,20 @@ const WORKERS: Worker[] = [
 
 export function TimeAttendanceModule() {
   const [selectedId, setSelectedId] = useState('W-001')
-  const selected = WORKERS.find(w => w.id === selectedId) ?? WORKERS[0]
+  const [workerList, setWorkerList] = useSyncedState<Worker[]>(
+    'omnisite-workers',
+    'workers',
+    () => JSON.parse(JSON.stringify(WORKERS)),
+    {
+      fieldMap: { clockIn: 'clock_in', clockOut: 'clock_out', geoFence: 'geo_fence', todayHours: 'today_hours' },
+      primaryKey: 'id',
+    }
+  ) as [Worker[], (v: Worker[] | ((prev: Worker[]) => Worker[])) => void, boolean]
+  const selected = workerList.find(w => w.id === selectedId) ?? workerList[0]
 
-  const totalOnSite = WORKERS.filter(w => w.status === 'on-site').length
-  const totalHours = WORKERS.reduce((s, w) => s + (w.todayHours || 0), 0)
-  const geoFenceBreaches = WORKERS.filter(w => w.geoFence === false && w.status === 'on-site').length
+  const totalOnSite = workerList.filter(w => w.status === 'on-site').length
+  const totalHours = workerList.reduce((s, w) => s + (w.todayHours || 0), 0)
+  const geoFenceBreaches = workerList.filter(w => w.geoFence === false && w.status === 'on-site').length
 
   return (
     <Workspace3Pane
@@ -72,7 +82,7 @@ export function TimeAttendanceModule() {
               </div>
             </div>
             {['All Trades', 'Mason (Skilled)', 'Mazdoor (Unskilled)', 'Bar bender', 'Operator', 'Helper', 'Carpenter'].map(t => {
-              const count = t === 'All Trades' ? WORKERS.length : WORKERS.filter(w => w.trade === t).length
+              const count = t === 'All Trades' ? workerList.length : workerList.filter(w => w.trade === t).length
               return (
                 <button key={t} className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-accent/50">
                   <span className="flex items-center gap-2"><Fingerprint className="w-3 h-3 text-muted-foreground" />{t}</span>
@@ -115,7 +125,7 @@ export function TimeAttendanceModule() {
             <div className="w-44 px-2">Task Allocation</div>
           </div>
           <PaneBody className="px-0">
-            {WORKERS.map(w => (
+            {workerList.map(w => (
               <div
                 key={w.id}
                 onClick={() => setSelectedId(w.id)}

@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
+import { useSyncedState } from '@/lib/use-synced-state'
 
 interface QsItem {
   id: string; type: 'ITR' | 'NCR' | 'Punch' | 'Incident' | 'Near-Miss'; title: string; linkedBoq?: string;
@@ -43,7 +44,15 @@ const NCR_WORKFLOW: Record<string, string | null> = {
 export function QsModule() {
   const [selectedId, setSelectedId] = useState('NCR-034')
   const [filter, setFilter] = useState<'All' | 'ITR' | 'NCR' | 'Punch' | 'Incident' | 'Near-Miss'>('All')
-  const [items, setItems] = useState<QsItem[]>(() => JSON.parse(JSON.stringify(INITIAL_ITEMS)))
+  const [items, setItems] = useSyncedState<QsItem[]>(
+    'omnisite-qs-items',
+    'qs_items',
+    () => JSON.parse(JSON.stringify(INITIAL_ITEMS)),
+    {
+      fieldMap: { linkedBoq: 'linked_boq', dueDate: 'due_date', billingHold: 'billing_hold' },
+      primaryKey: 'id',
+    }
+  ) as [QsItem[], (v: QsItem[] | ((prev: QsItem[]) => QsItem[])) => void, boolean]
   const selected = items.find(i => i.id === selectedId) ?? items[0]
   const filtered = filter === 'All' ? items : items.filter(i => i.type === filter)
 

@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
 import {
   DndContext, DragOverlay, useDraggable, useDroppable,
   PointerSensor, useSensor, useSensors, closestCenter,
@@ -103,7 +104,59 @@ export function BoqModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedId, setSelectedId] = usePersistentState('omnisite-boq-selected', '1.1.3')
   const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-boq-expanded', ['1', '1.1', '2', '2.1', '3'])
-  const [boqData, setBoqData] = usePersistentState<BoqItem[]>('omnisite-boq-data', () => JSON.parse(JSON.stringify(BOQ_DATA)))
+  const [boqRows, setBoqRows, boqLoading] = useSyncedState<BoqItem[]>(
+    'omnisite-boq-data',
+    'boq_items',
+    () => JSON.parse(JSON.stringify(BOQ_DATA)),
+    {
+      fieldMap: { desc: 'description', hasRA: 'has_ra', parentId: 'parent_id' },
+      primaryKey: 'id',
+    }
+  )
+
+  // Rebuild tree from flat rows (DB stores flat, app needs tree)
+  const boqData = (() => {
+    if (!boqRows || boqRows.length === 0) return JSON.parse(JSON.stringify(BOQ_DATA))
+    // Check if data is already a tree (has children) or flat rows
+    const hasChildren = boqRows.some((r: Record<string, unknown>) => r.children)
+    if (hasChildren) return boqRows
+
+    // Rebuild tree from flat rows using parent_id
+    const rows = boqRows as unknown as Record<string, unknown>[]
+    const map = new Map<string, BoqItem>()
+    const roots: BoqItem[] = []
+
+    // First pass: create all nodes
+    for (const row of rows) {
+      const item: BoqItem = {
+        id: row.id as string,
+        code: row.code as string,
+        desc: (row.desc || row.description) as string,
+        type: (row.type as string) || 'Priced',
+        qty: Number(row.qty) || 0,
+        uom: (row.uom as string) || '',
+        rate: Number(row.rate) || 0,
+        hasRA: Boolean(row.hasRA ?? row.has_ra),
+        level: Number(row.level) || 0,
+      }
+      map.set(item.id, item)
+    }
+
+    // Second pass: build tree
+    for (const row of rows) {
+      const item = map.get(row.id as string)!
+      const parentId = (row.parentId || row.parent_id) as string | null
+      if (parentId && map.has(parentId)) {
+        const parent = map.get(parentId)!
+        if (!parent.children) parent.children = []
+        parent.children.push(item)
+      } else {
+        roots.push(item)
+      }
+    }
+
+    return roots.length > 0 ? roots : JSON.parse(JSON.stringify(BOQ_DATA))
+  })()
   // Non-persistent UI state
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<{ id: string; field: 'qty' | 'rate' } | null>(null)
@@ -121,14 +174,23 @@ export function BoqModule() {
   const canUndo = undoStack.length > 0
   const canRedo = redoStack.length > 0
 
+  // Flatten tree to flat rows for DB storage
+  const flattenTree = (items: BoqItem[], parentId: string | null = null): BoqItem[] => {
+    const out: BoqItem[] = []
+    for (const item of items) {
+      out.push({ ...item, parentId: parentId || undefined, children: undefined })
+      if (item.children) out.push(...flattenTree(item.children, item.id))
+    }
+    return out
+  }
+
   // Helper: commit a new boqData state, pushing the current state to undo stack and clearing redo
   const commitBoqData = (updater: (prev: BoqItem[]) => BoqItem[]) => {
-    setBoqData(prev => {
-      const next = updater(prev)
-      setUndoStack(u => [...u, JSON.parse(JSON.stringify(prev))])
-      setRedoStack([])
-      return next
-    })
+    const next = updater(boqData)
+    setUndoStack(u => [...u, JSON.parse(JSON.stringify(boqData))])
+    setRedoStack([])
+    // Save flattened tree to Supabase/localStorage
+    setBoqRows(flattenTree(next) as unknown as BoqItem[])
   }
 
   const undo = () => {
@@ -136,7 +198,7 @@ export function BoqModule() {
     setUndoStack(u => {
       const prev = u[u.length - 1]
       setRedoStack(r => [...r, JSON.parse(JSON.stringify(boqData))])
-      setBoqData(prev)
+      setBoqRows(flattenTree(prev) as unknown as BoqItem[])
       return u.slice(0, -1)
     })
     toast.success('Undo', { description: `Reverted (${undoStack.length - 1} actions left)` })
@@ -147,7 +209,7 @@ export function BoqModule() {
     setRedoStack(r => {
       const next = r[r.length - 1]
       setUndoStack(u => [...u, JSON.parse(JSON.stringify(boqData))])
-      setBoqData(next)
+      setBoqRows(flattenTree(next) as unknown as BoqItem[])
       return r.slice(0, -1)
     })
     toast.success('Redo', { description: `${redoStack.length - 1} actions left` })

@@ -1,39 +1,78 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
 
 /**
- * useSyncedState — a hybrid storage hook.
+ * useSyncedState — hybrid storage hook.
  *
- * - If Supabase is configured (NEXT_PUBLIC_SUPABASE_URL is set):
- *   → Loads initial data from Supabase table
- *   → Saves changes to Supabase
- *   → Subscribes to real-time updates (other users' changes appear instantly)
- * - If Supabase is NOT configured (development/demo):
- *   → Falls back to localStorage via usePersistentState
+ * If Supabase is configured → loads from DB, saves to DB, subscribes to real-time.
+ * If not → falls back to localStorage.
  *
- * This allows the app to work immediately (localStorage) and
- * seamlessly upgrade to multi-user (Supabase) when env vars are added.
+ * The hook handles the mapping between app objects and DB rows via optional
+ * transform functions.
  */
+
+interface SyncConfig {
+  /** Map app field names to DB column names. e.g., { desc: 'description', hasRA: 'has_ra' } */
+  fieldMap?: Record<string, string>
+  /** The primary key column name in the DB (default: 'id') */
+  primaryKey?: string
+}
+
 export function useSyncedState<T>(
   localStorageKey: string,
   supabaseTable: string,
-  initial: T | (() => T)
+  initial: T | (() => T),
+  config?: SyncConfig
 ): [T, (value: T | ((prev: T) => T)) => void, boolean] {
   const useSupabase = isSupabaseConfigured()
   const [localState, setLocalState] = usePersistentState(localStorageKey, initial)
   const [supabaseState, setSupabaseState] = useState<T | null>(null)
   const [loading, setLoading] = useState(useSupabase)
 
-  // Load from Supabase and subscribe to real-time
+  const pk = config?.primaryKey || 'id'
+  const fmap = config?.fieldMap || {}
+
+  // Transform a DB row → app object (reverse map column names to field names)
+  const fromDb = (row: Record<string, unknown>): Record<string, unknown> => {
+    const obj: Record<string, unknown> = {}
+    for (const [appField, dbCol] of Object.entries(fmap)) {
+      if (row[dbCol] !== undefined) obj[appField] = row[dbCol]
+    }
+    // Copy unmapped fields directly
+    for (const key of Object.keys(row)) {
+      if (!Object.values(fmap).includes(key)) {
+        // Convert snake_case to camelCase for known patterns
+        if (key === 'created_at' || key === 'updated_at' || key === 'project_id') continue
+        obj[key] = row[key]
+      }
+    }
+    return obj
+  }
+
+  // Transform an app object → DB row (map field names to column names)
+  const toDb = (item: Record<string, unknown>): Record<string, unknown> => {
+    const row: Record<string, unknown> = {}
+    for (const key of Object.keys(item)) {
+      const dbCol = fmap[key] || key
+      // Skip app-only fields that don't exist in DB (like 'children')
+      if (key === 'children' || key === 'baseline') {
+        // Serialize complex fields as JSON
+        row[dbCol] = JSON.stringify(item[key])
+        continue
+      }
+      row[dbCol] = item[key]
+    }
+    return row
+  }
+
   useEffect(() => {
     if (!useSupabase) return
 
     let mounted = true
 
-    // Load initial data
     const load = async () => {
       try {
         const { data, error } = await supabase
@@ -42,27 +81,20 @@ export function useSyncedState<T>(
           .order('created_at', { ascending: true })
 
         if (error) {
-          console.warn(`[useSyncedState] Failed to load ${supabaseTable}:`, error)
-          // Fall back to localStorage data
+          console.warn(`[useSyncedState] Load failed for ${supabaseTable}:`, error.message)
           if (mounted) setSupabaseState(localState)
         } else if (data && data.length > 0) {
-          // Transform DB rows to the expected type
-          // The data from Supabase is an array of rows; we store the whole array
-          if (mounted) setSupabaseState(data as unknown as T)
+          // Transform DB rows to app objects
+          const transformed = data.map(row => fromDb(row))
+          if (mounted) setSupabaseState(transformed as unknown as T)
         } else {
-          // No data in DB — seed with initial data
+          // No data — use initial (don't seed, the SQL seed already ran)
           const initialData = typeof initial === 'function' ? (initial as () => T)() : initial
           if (mounted) setSupabaseState(initialData)
-          // Seed the database
-          if (Array.isArray(initialData)) {
-            for (const item of initialData) {
-              await supabase.from(supabaseTable).insert(item)
-            }
-          }
         }
         if (mounted) setLoading(false)
       } catch (e) {
-        console.warn(`[useSyncedState] Error loading ${supabaseTable}, using localStorage:`, e)
+        console.warn(`[useSyncedState] Error for ${supabaseTable}, using localStorage:`, e)
         if (mounted) {
           setSupabaseState(localState)
           setLoading(false)
@@ -72,19 +104,19 @@ export function useSyncedState<T>(
 
     load()
 
-    // Subscribe to real-time changes
+    // Real-time subscription
     const channel = supabase
-      .channel(`${supabaseTable}-changes`)
+      .channel(`${supabaseTable}-rt`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: supabaseTable },
         async () => {
-          // Reload all data when any change occurs
           const { data } = await supabase
             .from(supabaseTable)
             .select('*')
             .order('created_at', { ascending: true })
           if (data && mounted) {
-            setSupabaseState(data as unknown as T)
+            const transformed = data.map(row => fromDb(row))
+            setSupabaseState(transformed as unknown as T)
           }
         }
       )
@@ -104,18 +136,15 @@ export function useSyncedState<T>(
         : value
       setSupabaseState(newValue)
 
-      // Sync to Supabase (upsert all items if array)
+      // Sync to Supabase — upsert each item individually
       if (Array.isArray(newValue)) {
-        // For arrays, we do a bulk sync — delete all and re-insert
-        // This is simple but works for development. In production, use diff-based updates.
-        supabase.from(supabaseTable).delete().neq('id', '00000000-0000-0000-0000-000000000000')
-          .then(() => {
-            for (const item of newValue) {
-              supabase.from(supabaseTable).upsert(item)
-            }
-          })
-      } else {
-        supabase.from(supabaseTable).upsert(newValue as Record<string, unknown>)
+        for (const item of newValue) {
+          const row = toDb(item as Record<string, unknown>)
+          const id = (item as Record<string, unknown>)[pk === 'id' ? 'id' : pk] || (item as Record<string, unknown>).id
+          if (id) {
+            supabase.from(supabaseTable).upsert({ ...row, id })
+          }
+        }
       }
 
       // Also save to localStorage as backup
@@ -125,7 +154,6 @@ export function useSyncedState<T>(
     }
   }
 
-  // Return appropriate state
   const currentState = useSupabase
     ? (supabaseState !== null ? supabaseState : (typeof initial === 'function' ? (initial as () => T)() : initial))
     : localState

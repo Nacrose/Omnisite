@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils'
 import { CollaboratorCursors } from '@/components/collaborator-cursors'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
 import { toast } from 'sonner'
 
 interface Task {
@@ -88,10 +89,24 @@ function flattenTasks(items: Task[]): { task: Task; depth: number }[] {
 }
 
 export function SchedulerModule() {
-  // Persistent state — survives page refreshes via localStorage
+  // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedId, setSelectedId] = usePersistentState('omnisite-scheduler-selected', 'T-203')
   const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-scheduler-expanded', ['T-100', 'T-200', 'T-300', 'T-400'])
-  const [tasks, setTasks] = usePersistentState<Task[]>('omnisite-scheduler-tasks', () => JSON.parse(JSON.stringify(TASKS)))
+  const [tasks, setTasks] = useSyncedState<Task[]>(
+    'omnisite-scheduler-tasks',
+    'tasks',
+    () => JSON.parse(JSON.stringify(TASKS)),
+    {
+      fieldMap: {
+        start: 'start_week',
+        duration: 'duration',
+        baseline: 'baseline_finish',
+        constraints: 'constraints',
+        parentId: 'parent_id',
+      },
+      primaryKey: 'id',
+    }
+  ) as [Task[], (v: Task[] | ((prev: Task[]) => Task[])) => void, boolean]
   // Non-persistent UI state
   const [showResources, setShowResources] = useState(false)
   const [showCriticalOnly, setShowCriticalOnly] = useState(false)

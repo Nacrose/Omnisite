@@ -13,6 +13,7 @@ import {
   CheckCircle2, User, Phone, MapPin, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useSyncedState } from '@/lib/use-synced-state'
 
 interface Equip {
   id: string; name: string; type: string; status: 'active' | 'breakdown' | 'idle'; owned: boolean; operator?: string; licenseExp?: string;
@@ -55,8 +56,17 @@ const EQUIP: Equip[] = [
 
 export function EquipmentModule() {
   const [selectedId, setSelectedId] = useState('E-001')
-  const selected = EQUIP.find(e => e.id === selectedId) ?? EQUIP[0]
-  const totalCost = EQUIP.reduce((s, e) => s + (e.chargeRate || 0) * (e.hoursToday || 8), 0)
+  const [equipList, setEquipList] = useSyncedState<Equip[]>(
+    'omnisite-equipment',
+    'equipment',
+    () => JSON.parse(JSON.stringify(EQUIP)),
+    {
+      fieldMap: { chargeRate: 'charge_rate', fuelToday: 'fuel_today', hoursToday: 'hours_today', burnRate: 'burn_rate', burnNorm: 'burn_norm', licenseExp: 'license_expiry' },
+      primaryKey: 'id',
+    }
+  ) as [Equip[], (v: Equip[] | ((prev: Equip[]) => Equip[])) => void, boolean]
+  const selected = equipList.find(e => e.id === selectedId) ?? equipList[0]
+  const totalCost = equipList.reduce((s, e) => s + (e.chargeRate || 0) * (e.hoursToday || 8), 0)
 
   return (
     <Workspace3Pane
@@ -73,7 +83,7 @@ export function EquipmentModule() {
               </div>
             </div>
             {['Excavator', 'Tipper Truck', 'Mixer', 'Vibrator', 'Plant', 'Compactor', 'Crane'].map(cat => {
-              const count = EQUIP.filter(e => e.type === cat).length
+              const count = equipList.filter(e => e.type === cat).length
               return (
                 <button key={cat} className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-accent/50">
                   <span className="flex items-center gap-2"><Truck className="w-3 h-3 text-muted-foreground" />{cat}</span>
@@ -106,7 +116,7 @@ export function EquipmentModule() {
             <div className="w-32 px-2">Operator</div>
           </div>
           <PaneBody className="px-0">
-            {EQUIP.map(e => {
+            {equipList.map(e => {
               const burnAlert = e.burnRate && e.burnNorm && e.burnRate > e.burnNorm
               return (
                 <div
