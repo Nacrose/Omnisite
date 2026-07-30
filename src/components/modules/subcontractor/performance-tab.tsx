@@ -1,0 +1,109 @@
+'use client'
+
+import { Badge } from '@/components/ui/badge'
+import { Calendar, ShieldCheck, Package, Activity } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { Subcontractor } from './types'
+import { fmtNPR } from './types'
+
+// ─── Performance Dashboard Tab ───────────────────────────────────────────────
+
+export function PerformanceTab({ sc }: { sc: Subcontractor }) {
+  const onTimeRate = sc.assignedTasks.length > 0
+    ? (sc.assignedTasks.filter(t => t.status === 'on-track').length / sc.assignedTasks.length) * 100
+    : 100
+
+  const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
+  const retention = earned * (sc.retentionPct / 100)
+  const netPayable = earned - sc.advancePaid - retention - sc.reworkCost
+
+  // Material efficiency
+  let matEfficiency = 100
+  let matCount = 0
+  const materialMap = new Map<string, { issued: number; returned: number; theoretical: number }>()
+  for (const mi of sc.materialIssues) {
+    const e = materialMap.get(mi.materialCode) || { issued: 0, returned: 0, theoretical: 0 }
+    e.issued += mi.qty; materialMap.set(mi.materialCode, e)
+  }
+  for (const mr of sc.materialReturns) {
+    const e = materialMap.get(mr.materialCode)
+    if (e) e.returned += mr.qty
+  }
+  const totalRmt = sc.items.find(i => i.type === 'composite')?.actualQty || 0
+  for (const [, m] of materialMap) {
+    if (m.code === 'M-CEM-OPC' as any) m.theoretical = totalRmt * 5.7
+    else if (m.code === 'M-STEEL-TMT16' as any || m.code === 'M-STEEL-ISMB150' as any) m.theoretical = totalRmt * 0.095
+    const netUsed = m.issued - m.returned
+    const variance = m.theoretical > 0 ? Math.abs(((netUsed - m.theoretical) / m.theoretical) * 100) : 0
+    matEfficiency = Math.min(matEfficiency, 100 - variance)
+    matCount++
+  }
+
+  const kpis = [
+    { label: 'On-Time Delivery', value: `${onTimeRate.toFixed(0)}%`, icon: Calendar, color: onTimeRate >= 80 ? 'text-emerald-600' : onTimeRate >= 50 ? 'text-amber-600' : 'text-red-600', desc: `${sc.assignedTasks.filter(t => t.status === 'on-track').length}/${sc.assignedTasks.length} tasks on track` },
+    { label: 'Quality (NCRs)', value: `${sc.ncrCount}`, icon: ShieldCheck, color: sc.ncrCount === 0 ? 'text-emerald-600' : sc.ncrCount <= 1 ? 'text-amber-600' : 'text-red-600', desc: 'Non-conformance reports linked to SC' },
+    { label: 'Material Efficiency', value: `${matEfficiency.toFixed(0)}%`, icon: Package, color: matEfficiency >= 95 ? 'text-emerald-600' : matEfficiency >= 85 ? 'text-amber-600' : 'text-red-600', desc: `${matCount} materials tracked` },
+    { label: 'Safety (Incidents)', value: `${sc.incidents}`, icon: Activity, color: sc.incidents === 0 ? 'text-emerald-600' : 'text-red-600', desc: 'Incidents on SC tasks' },
+  ]
+
+  return (
+    <div className="p-4 space-y-3 text-xs">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Performance Dashboard</div>
+
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 gap-2">
+        {kpis.map(k => {
+          const Icon = k.icon
+          return (
+            <div key={k.label} className="p-2.5 rounded-md border border-[var(--pane-divider)]">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{k.label}</span>
+                <Icon className={cn('w-3.5 h-3.5', k.color)} />
+              </div>
+              <div className={cn('text-lg font-bold mt-0.5', k.color)}>{k.value}</div>
+              <div className="text-[10px] text-muted-foreground">{k.desc}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Compliance */}
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Compliance</div>
+        <div className="space-y-1.5">
+          <ComplianceRow label="PAN" value={sc.pan} status="ok" />
+          <ComplianceRow label="GST" value={sc.gst} status="ok" />
+          <ComplianceRow label="Insurance" value={`Expires ${sc.insuranceExpiry}`} status="ok" />
+          <ComplianceRow label="Labour License" value={`Expires ${sc.labourLicenseExpiry}`} status="warn" />
+        </div>
+      </div>
+
+      {/* Financial summary */}
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Financial Summary</div>
+        <div className="p-2.5 rounded-md bg-secondary/40 space-y-1">
+          <div className="flex justify-between"><span className="text-muted-foreground">Agreement value</span><span className="font-mono">{sc.agreementValue > 0 ? fmtNPR(sc.agreementValue) : 'Variable'}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Earned to date</span><span className="font-mono font-medium">{fmtNPR(earned)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Advance paid</span><span className="font-mono text-red-600">{fmtNPR(sc.advancePaid)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Net payable</span><span className="font-mono font-bold text-emerald-600">{fmtNPR(netPayable)}</span></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ComplianceRow({ label, value, status }: { label: string; value: string; status: 'ok' | 'warn' | 'exp' }) {
+  return (
+    <div className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)]">
+      <div className={cn(
+        'w-1.5 h-1.5 rounded-full',
+        status === 'ok' && 'bg-emerald-500',
+        status === 'warn' && 'bg-amber-500',
+        status === 'exp' && 'bg-red-500',
+      )} />
+      <span className="text-[10px] text-muted-foreground w-24">{label}</span>
+      <span className="text-[10px] flex-1 truncate">{value}</span>
+      {status === 'warn' && <Badge variant="secondary" className="text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-300">Expiring</Badge>}
+    </div>
+  )
+}

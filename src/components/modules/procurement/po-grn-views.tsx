@@ -1,0 +1,207 @@
+'use client'
+
+import { useState } from 'react'
+import { Badge } from '@/components/ui/badge'
+import { PaneBody } from '@/components/workspace-3pane'
+import {
+  CheckCircle2, AlertTriangle, Boxes,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import { Po, STOCK } from './types'
+
+export function PoCenterView({ pos }: { pos: Po[] }) {
+  return (
+    <PaneBody className="px-0">
+      <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
+        <div className="w-32 px-2">PO #</div>
+        <div className="flex-1 px-2">Vendor</div>
+        <div className="w-24 px-2">Date</div>
+        <div className="w-16 px-2 text-center">Items</div>
+        <div className="w-28 px-2 text-right">Value (NPR)</div>
+        <div className="w-24 px-2">Status</div>
+        <div className="w-16 px-2 text-center">GRN</div>
+      </div>
+      {pos.map(p => (
+        <div key={p.id} className="flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer">
+          <div className="w-32 px-2 font-mono">{p.id}</div>
+          <div className="flex-1 px-2 font-medium truncate">{p.vendor}</div>
+          <div className="w-24 px-2 text-muted-foreground">{p.date}</div>
+          <div className="w-16 px-2 text-center">{p.items}</div>
+          <div className="w-28 px-2 text-right font-mono">{p.value.toLocaleString()}</div>
+          <div className="w-24 px-2">
+            <Badge variant="secondary" className={cn('text-[10px]', p.status === 'Delivered' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', p.status === 'Pending' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300')}>{p.status}</Badge>
+          </div>
+          <div className="w-16 px-2 text-center">
+            {p.grn ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-muted-foreground/40">—</span>}
+          </div>
+        </div>
+      ))}
+    </PaneBody>
+  )
+}
+
+export function GrnCenterView() {
+  const [rows, setRows] = useState([
+    { po: 'PO-018', vendor: 'Udaipur Cement', poq: 1200, grnq: 1200, invq: 1200, pay: 'Cleared' as 'Cleared' | 'Hold' | 'Partial Hold' | 'Awaiting GRN' },
+    { po: 'PO-014', vendor: 'Trishuli Sand', poq: 45, grnq: 38, invq: 38, pay: 'Partial Hold' as const },
+    { po: 'PO-022', vendor: 'Hetauda Aggregates', poq: 96, grnq: 0, invq: 0, pay: 'Awaiting GRN' as const },
+    { po: 'PO-016', vendor: 'Ghorahi Ply', poq: 60, grnq: 60, invq: 58, pay: 'Hold' as const },
+  ])
+
+  // 3-way match check: PO qty === GRN qty === Invoice qty
+  const isMatched = (r: typeof rows[0]) => r.poq === r.grnq && r.grnq === r.invq
+  const lockedAmount = rows.filter(r => !isMatched(r) && r.grnq > 0).reduce((sum, r) => sum + r.invq * 920, 0) // simplified rate
+
+  // Toggle payment approval — only allowed if 3-way match passes
+  const toggleApproval = (po: string) => {
+    setRows(prev => prev.map(r => {
+      if (r.po !== po) return r
+      if (!isMatched(r)) {
+        toast.error('Payment locked', { description: `${po} fails 3-way match. PO ${r.poq} ≠ GRN ${r.grnq} ≠ Inv ${r.invq}. Cannot approve.` })
+        return r
+      }
+      const newPay = r.pay === 'Cleared' ? 'Hold' : 'Cleared'
+      toast.success(newPay === 'Cleared' ? 'Payment cleared' : 'Payment held', { description: `${po} — 3-way match verified` })
+      return { ...r, pay: newPay }
+    }))
+  }
+
+  return (
+    <PaneBody className="p-4">
+      <div className="rounded-lg border border-[var(--pane-divider)] overflow-hidden">
+        <div className="px-3 py-2 border-b border-[var(--pane-divider)] bg-secondary/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+          <span>3-Way Match · PO vs GRN vs Invoice</span>
+          <span className="text-[10px] normal-case font-normal">Click ✓ to approve — locked if mismatch</span>
+        </div>
+        <table className="w-full text-xs">
+          <thead className="bg-secondary/20">
+            <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <th className="text-left p-2">PO #</th>
+              <th className="text-left p-2">Vendor</th>
+              <th className="text-right p-2">PO Qty</th>
+              <th className="text-right p-2">GRN Qty</th>
+              <th className="text-right p-2">Invoice Qty</th>
+              <th className="text-center p-2">Match</th>
+              <th className="text-right p-2">Pay Status</th>
+              <th className="text-center p-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const matched = isMatched(r)
+              return (
+                <tr key={i} className="border-t border-[var(--pane-divider)] row-hover">
+                  <td className="p-2 font-mono">{r.po}</td>
+                  <td className="p-2 truncate">{r.vendor}</td>
+                  <td className="p-2 text-right font-mono">{r.poq}</td>
+                  <td className="p-2 text-right font-mono">{r.grnq}</td>
+                  <td className="p-2 text-right font-mono">{r.invq}</td>
+                  <td className="p-2 text-center">
+                    {matched
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                      : <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />}
+                  </td>
+                  <td className={cn('p-2 text-right text-[11px] font-medium',
+                    r.pay === 'Cleared' ? 'text-emerald-600' : 'text-amber-600')}>
+                    {r.pay}
+                  </td>
+                  <td className="p-2 text-center">
+                    <button
+                      onClick={() => toggleApproval(r.po)}
+                      disabled={!matched}
+                      className={cn(
+                        'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
+                        matched
+                          ? r.pay === 'Cleared'
+                            ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25'
+                            : 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25'
+                          : 'bg-secondary text-muted-foreground/40 cursor-not-allowed'
+                      )}
+                      title={matched ? 'Toggle payment approval' : 'Locked — 3-way match fails'}
+                    >
+                      {matched ? (r.pay === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className={cn('mt-3 p-3 rounded-md text-xs', lockedAmount > 0 ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-emerald-500/10 border border-emerald-500/30')}>
+        <div className={cn('font-medium flex items-center gap-1.5', lockedAmount > 0 ? 'text-amber-600' : 'text-emerald-600')}>
+          {lockedAmount > 0 ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+          {lockedAmount > 0 ? 'Payment gate active' : 'All payments cleared'}
+        </div>
+        <div className="text-muted-foreground mt-0.5">
+          {lockedAmount > 0
+            ? `${rows.filter(r => !isMatched(r) && r.grnq > 0).length} invoices on hold pending 3-way match reconciliation. NPR ${lockedAmount.toLocaleString()} locked.`
+            : 'All 3-way matches verified. All payments approved.'}
+        </div>
+      </div>
+    </PaneBody>
+  )
+}
+
+export function StockCenterView() {
+  return (
+    <>
+      <div className="px-4 py-3 border-b border-[var(--pane-divider)] bg-secondary/20 flex items-center gap-3 text-xs">
+        <Badge variant="outline"><Boxes className="w-3 h-3 mr-1" />5 SKUs · 3 warehouses</Badge>
+        <span className="text-muted-foreground">Total stock value: <span className="font-mono font-semibold text-foreground">NPR 1,924,840</span></span>
+      </div>
+      <PaneBody className="px-0">
+        <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
+          <div className="w-32 px-2">Code</div>
+          <div className="flex-1 px-2">Material</div>
+          <div className="w-20 px-2 text-right">On Hand</div>
+          <div className="w-20 px-2 text-right">Reserved</div>
+          <div className="w-20 px-2 text-right">Available</div>
+          <div className="w-28 px-2 text-right">Avg Cost</div>
+          <div className="flex-1 px-2">Warehouse</div>
+        </div>
+        {STOCK.map(s => {
+          const lowStock = s.available < s.onHand * 0.3
+          return (
+            <div key={s.code} className={cn('flex items-center h-9 border-b border-[var(--pane-divider)] text-xs row-hover', lowStock && 'bg-amber-500/5')}>
+              <div className="w-32 px-2 font-mono text-muted-foreground">{s.code}</div>
+              <div className="flex-1 px-2 font-medium">{s.name}</div>
+              <div className="w-20 px-2 text-right font-mono">{s.onHand.toLocaleString()}</div>
+              <div className="w-20 px-2 text-right font-mono text-muted-foreground">{s.reserved.toLocaleString()}</div>
+              <div className={cn('w-20 px-2 text-right font-mono font-medium', lowStock && 'text-amber-600')}>{s.available.toLocaleString()}</div>
+              <div className="w-28 px-2 text-right font-mono">{s.avgCost.toLocaleString()}</div>
+              <div className="flex-1 px-2 text-muted-foreground text-[10px] truncate">{s.warehouse}</div>
+            </div>
+          )
+        })}
+      </PaneBody>
+    </>
+  )
+}
+
+export function MinCenterView() {
+  return (
+    <PaneBody className="p-4 space-y-2">
+      {[
+        { id: 'MIN-0042', date: '30 Jul', task: 'T-203 PCC M15', items: '392 bags cement, 12.8 cum sand', issued: 'Bikash R.', status: 'Issued' },
+        { id: 'MIN-0041', date: '29 Jul', task: 'T-301 Base slab', items: '3.2 MT steel, 60 sheets ply', issued: 'Bikash R.', status: 'Issued' },
+        { id: 'MIN-0040', date: '29 Jul', task: 'T-201 Excavation', items: '— (no material)', issued: 'Bikash R.', status: 'N/A' },
+      ].map(m => (
+        <div key={m.id} className="rounded-lg border border-[var(--pane-divider)] p-3 hover:bg-accent/30 cursor-pointer">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-mono text-xs text-muted-foreground">{m.id}</span>
+            <span className="text-xs text-muted-foreground">{m.date}</span>
+            <Badge variant="secondary" className="text-[9px]">{m.status}</Badge>
+            <span className="ml-auto text-xs">{m.task}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">{m.items}</div>
+          <div className="text-[10px] text-muted-foreground mt-1">Issued by: {m.issued}</div>
+        </div>
+      ))}
+      <div className="text-[11px] text-muted-foreground p-3 border-t border-[var(--pane-divider)]">
+        MIN links material issue to specific DSR task. Stock deducted in real-time. Variance vs theoretical tracked in DSR Inspector.
+      </div>
+    </PaneBody>
+  )
+}

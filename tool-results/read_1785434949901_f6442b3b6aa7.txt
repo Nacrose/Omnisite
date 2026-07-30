@@ -1,0 +1,1257 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect } from 'react'
+     4→import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+     5→import { Input } from '@/components/ui/input'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Badge } from '@/components/ui/badge'
+     8→import { Checkbox } from '@/components/ui/checkbox'
+     9→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    10→import { Separator } from '@/components/ui/separator'
+    11→import { Card } from '@/components/ui/card'
+    12→import { ScrollArea } from '@/components/ui/scroll-area'
+    13→import {
+    14→  Search, Plus, ChevronRight, ChevronDown, Download, Save, FolderOpen,
+    15→  Zap, Edit3, FileSpreadsheet, AlertTriangle, CheckCircle2, TrendingUp,
+    16→  History, Link2, Lock, Layers, Copy, Trash2, FilePlus, ArrowRight, Undo2, Redo2, GripVertical,
+    17→} from 'lucide-react'
+    18→import { cn } from '@/lib/utils'
+    19→import { toast } from 'sonner'
+    20→import { Toaster } from '@/components/ui/sonner'
+    21→import { usePersistentState } from '@/lib/use-persistent-state'
+    22→import { useSyncedState } from '@/lib/use-synced-state'
+    23→import {
+    24→  DndContext, DragOverlay, useDraggable, useDroppable,
+    25→  PointerSensor, useSensor, useSensors, closestCenter,
+    26→} from '@dnd-kit/core'
+    27→import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
+    28→
+    29→interface BoqItem {
+    30→  id: string
+    31→  code: string
+    32→  desc: string
+    33→  type: 'Priced' | 'Provisional Sum' | 'Daywork' | 'Heading'
+    34→  qty: number
+    35→  uom: string
+    36→  rate: number
+    37→  hasRA?: boolean
+    38→  level: number
+    39→  children?: BoqItem[]
+    40→}
+    41→
+    42→const BOQ_DATA: BoqItem[] = [
+    43→  {
+    44→    id: '1', code: '1', desc: 'Bridge over Bagmati River', type: 'Heading', qty: 0, uom: '', rate: 0, level: 0,
+    45→    children: [
+    46→      {
+    47→        id: '1.1', code: '1.1', desc: 'Foundation Works', type: 'Heading', qty: 0, uom: '', rate: 0, level: 1,
+    48→        children: [
+    49→          { id: '1.1.1', code: '1.1.1', desc: 'Excavation in ordinary soil', type: 'Priced', qty: 1240, uom: 'cum', rate: 485, hasRA: true, level: 2 },
+    50→          { id: '1.1.2', code: '1.1.2', desc: 'Stone soling 150mm thick', type: 'Priced', qty: 320, uom: 'cum', rate: 4250, hasRA: true, level: 2 },
+    51→          { id: '1.1.3', code: '1.1.3', desc: 'PCC M15 (1:2:4) below footing', type: 'Priced', qty: 88, uom: 'cum', rate: 9800, hasRA: true, level: 2 },
+    52→          { id: '1.1.4', code: '1.1.4', desc: 'PCC M20 grade concrete', type: 'Priced', qty: 145, uom: 'cum', rate: 12400, hasRA: true, level: 2 },
+    53→        ],
+    54→      },
+    55→      {
+    56→        id: '1.2', code: '1.2', desc: 'Substructure', type: 'Heading', qty: 0, uom: '', rate: 0, level: 1,
+    57→        children: [
+    58→          { id: '1.2.1', code: '1.2.1', desc: 'Reinforcement steel Fe500 (TMT)', type: 'Priced', qty: 18.5, uom: 'MT', rate: 118000, hasRA: true, level: 2 },
+    59→          { id: '1.2.2', code: '1.2.2', desc: 'Shuttering ply waterproof', type: 'Priced', qty: 420, uom: 'sqm', rate: 980, hasRA: true, level: 2 },
+    60→          { id: '1.2.3', code: '1.2.3', desc: 'Dewatering provision', type: 'Provisional Sum', qty: 1, uom: 'lot', rate: 250000, level: 2 },
+    61→        ],
+    62→      },
+    63→    ],
+    64→  },
+    65→  {
+    66→    id: '2', code: '2', desc: 'Road Works', type: 'Heading', qty: 0, uom: '', rate: 0, level: 0,
+    67→    children: [
+    68→      {
+    69→        id: '2.1', code: '2.1', desc: 'Earthwork', type: 'Heading', qty: 0, uom: '', rate: 0, level: 1,
+    70→        children: [
+    71→          { id: '2.1.1', code: '2.1.1', desc: 'Excavation for road formation', type: 'Priced', qty: 18500, uom: 'cum', rate: 412, hasRA: true, level: 2 },
+    72→          { id: '2.1.2', code: '2.1.2', desc: 'Embankment fill (compacted)', type: 'Priced', qty: 8200, uom: 'cum', rate: 385, hasRA: true, level: 2 },
+    73→        ],
+    74→      },
+    75→      {
+    76→        id: '2.2', code: '2.2', desc: 'Pavement', type: 'Heading', qty: 0, uom: '', rate: 0, level: 1,
+    77→        children: [
+    78→          { id: '2.2.1', code: '2.2.1', desc: 'DBM 50mm thick bituminous layer', type: 'Priced', qty: 14200, uom: 'sqm', rate: 1450, hasRA: true, level: 2 },
+    79→          { id: '2.2.2', code: '2.2.2', desc: 'BC 40mm wearing course', type: 'Priced', qty: 14200, uom: 'sqm', rate: 1680, hasRA: true, level: 2 },
+    80→          { id: '2.2.3', code: '2.2.3', desc: 'Prime coat application', type: 'Daywork', qty: 1, uom: 'lot', rate: 0, level: 2 },
+    81→        ],
+    82→      },
+    83→    ],
+    84→  },
+    85→  {
+    86→    id: '3', code: '3', desc: 'Drainage & Cross Drainage', type: 'Heading', qty: 0, uom: '', rate: 0, level: 0,
+    87→    children: [
+    88→      { id: '3.1', code: '3.1', desc: 'Hume pipe NP3 600mm dia', type: 'Priced', qty: 84, uom: 'rmt', rate: 6800, hasRA: true, level: 1 },
+    89→      { id: '3.2', code: '3.2', desc: 'Box culvert 2x2m precast', type: 'Priced', qty: 6, uom: 'no', rate: 285000, hasRA: true, level: 1 },
+    90→    ],
+    91→  },
+    92→]
+    93→
+    94→function flatten(items: BoqItem[]): BoqItem[] {
+    95→  const out: BoqItem[] = []
+    96→  for (const i of items) {
+    97→    out.push(i)
+    98→    if (i.children) out.push(...flatten(i.children))
+    99→  }
+   100→  return out
+   101→}
+   102→
+   103→export function BoqModule() {
+   104→  // Synced state — uses Supabase when configured, falls back to localStorage
+   105→  const [selectedId, setSelectedId] = usePersistentState('omnisite-boq-selected', '1.1.3')
+   106→  const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-boq-expanded', ['1', '1.1', '2', '2.1', '3'])
+   107→  const [boqRows, setBoqRows, boqLoading] = useSyncedState<BoqItem[]>(
+   108→    'omnisite-boq-data',
+   109→    'boq_items',
+   110→    () => JSON.parse(JSON.stringify(BOQ_DATA)),
+   111→    {
+   112→      fieldMap: { desc: 'description', hasRA: 'has_ra', parentId: 'parent_id' },
+   113→      primaryKey: 'id',
+   114→    }
+   115→  )
+   116→
+   117→  // Rebuild tree from flat rows (DB stores flat, app needs tree)
+   118→  const boqData = (() => {
+   119→    if (!boqRows || boqRows.length === 0) return JSON.parse(JSON.stringify(BOQ_DATA))
+   120→    // Check if data is already a tree (has children) or flat rows
+   121→    const hasChildren = boqRows.some((r: Record<string, unknown>) => r.children)
+   122→    if (hasChildren) return boqRows
+   123→
+   124→    // Rebuild tree from flat rows using parent_id
+   125→    const rows = boqRows as unknown as Record<string, unknown>[]
+   126→    const map = new Map<string, BoqItem>()
+   127→    const roots: BoqItem[] = []
+   128→
+   129→    // First pass: create all nodes
+   130→    for (const row of rows) {
+   131→      const item: BoqItem = {
+   132→        id: row.id as string,
+   133→        code: row.code as string,
+   134→        desc: (row.desc || row.description) as string,
+   135→        type: (row.type as string) || 'Priced',
+   136→        qty: Number(row.qty) || 0,
+   137→        uom: (row.uom as string) || '',
+   138→        rate: Number(row.rate) || 0,
+   139→        hasRA: Boolean(row.hasRA ?? row.has_ra),
+   140→        level: Number(row.level) || 0,
+   141→      }
+   142→      map.set(item.id, item)
+   143→    }
+   144→
+   145→    // Second pass: build tree
+   146→    for (const row of rows) {
+   147→      const item = map.get(row.id as string)!
+   148→      const parentId = (row.parentId || row.parent_id) as string | null
+   149→      if (parentId && map.has(parentId)) {
+   150→        const parent = map.get(parentId)!
+   151→        if (!parent.children) parent.children = []
+   152→        parent.children.push(item)
+   153→      } else {
+   154→        roots.push(item)
+   155→      }
+   156→    }
+   157→
+   158→    return roots.length > 0 ? roots : JSON.parse(JSON.stringify(BOQ_DATA))
+   159→  })()
+   160→  // Non-persistent UI state
+   161→  const [selected, setSelected] = useState<Set<string>>(new Set())
+   162→  const [editing, setEditing] = useState<{ id: string; field: 'qty' | 'rate' } | null>(null)
+   163→  // Context menu state
+   164→  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
+   165→  // Drag-and-drop state
+   166→  const [draggedItem, setDraggedItem] = useState<BoqItem | null>(null)
+   167→  const [dragOverHeading, setDragOverHeading] = useState<string | null>(null)
+   168→  // Undo/redo history stacks (deep snapshots of boqData)
+   169→  const [undoStack, setUndoStack] = useState<BoqItem[][]>([])
+   170→  const [redoStack, setRedoStack] = useState<BoqItem[][]>([])
+   171→
+   172→  // Convert expanded array to Set for O(1) lookups
+   173→  const expanded = new Set(expandedArr)
+   174→  const canUndo = undoStack.length > 0
+   175→  const canRedo = redoStack.length > 0
+   176→
+   177→  // Flatten tree to flat rows for DB storage
+   178→  const flattenTree = (items: BoqItem[], parentId: string | null = null): BoqItem[] => {
+   179→    const out: BoqItem[] = []
+   180→    for (const item of items) {
+   181→      out.push({ ...item, parentId: parentId || undefined, children: undefined })
+   182→      if (item.children) out.push(...flattenTree(item.children, item.id))
+   183→    }
+   184→    return out
+   185→  }
+   186→
+   187→  // Helper: commit a new boqData state, pushing the current state to undo stack and clearing redo
+   188→  const commitBoqData = (updater: (prev: BoqItem[]) => BoqItem[]) => {
+   189→    const next = updater(boqData)
+   190→    setUndoStack(u => [...u, JSON.parse(JSON.stringify(boqData))])
+   191→    setRedoStack([])
+   192→    // Save flattened tree to Supabase/localStorage
+   193→    setBoqRows(flattenTree(next) as unknown as BoqItem[])
+   194→  }
+   195→
+   196→  const undo = () => {
+   197→    if (undoStack.length === 0) return
+   198→    setUndoStack(u => {
+   199→      const prev = u[u.length - 1]
+   200→      setRedoStack(r => [...r, JSON.parse(JSON.stringify(boqData))])
+   201→      setBoqRows(flattenTree(prev) as unknown as BoqItem[])
+   202→      return u.slice(0, -1)
+   203→    })
+   204→    toast.success('Undo', { description: `Reverted (${undoStack.length - 1} actions left)` })
+   205→  }
+   206→
+   207→  const redo = () => {
+   208→    if (redoStack.length === 0) return
+   209→    setRedoStack(r => {
+   210→      const next = r[r.length - 1]
+   211→      setUndoStack(u => [...u, JSON.parse(JSON.stringify(boqData))])
+   212→      setBoqRows(flattenTree(next) as unknown as BoqItem[])
+   213→      return r.slice(0, -1)
+   214→    })
+   215→    toast.success('Redo', { description: `${redoStack.length - 1} actions left` })
+   216→  }
+   217→
+   218→  // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z)
+   219→  useEffect(() => {
+   220→    const handler = (e: KeyboardEvent) => {
+   221→      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+   222→        const target = e.target as HTMLElement
+   223→        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+   224→        e.preventDefault()
+   225→        undo()
+   226→      } else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+   227→        const target = e.target as HTMLElement
+   228→        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+   229→        e.preventDefault()
+   230→        redo()
+   231→      }
+   232→    }
+   233→    document.addEventListener('keydown', handler)
+   234→    return () => document.removeEventListener('keydown', handler)
+   235→  }, [undo, redo])
+   236→
+   237→  const allFlat = flatten(boqData)
+   238→  const selectedLeaf = allFlat.find(i => i.id === selectedId) ?? allFlat[2]
+   239→
+   240→  // Live contract total — sum of qty × rate for all non-heading items
+   241→  const contractTotal = allFlat
+   242→    .filter(i => i.type !== 'Heading')
+   243→    .reduce((sum, i) => sum + i.qty * i.rate, 0)
+   244→
+   245→  // Update a single BOQ item's qty or rate
+   246→  const updateItem = (id: string, field: 'qty' | 'rate', value: number) => {
+   247→    commitBoqData(prev => {
+   248→      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+   249→      const walk = (items: BoqItem[]) => {
+   250→        for (const it of items) {
+   251→          if (it.id === id) {
+   252→            it[field] = Math.max(0, value)
+   253→            return true
+   254→          }
+   255→          if (it.children && walk(it.children)) return true
+   256→        }
+   257→        return false
+   258→      }
+   259→      walk(updated)
+   260→      return updated
+   261→    })
+   262→  }
+   263→
+   264→  // Context menu actions
+   265→  const duplicateItem = (id: string) => {
+   266→    commitBoqData(prev => {
+   267→      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+   268→      const walk = (items: BoqItem[]): BoqItem[] => {
+   269→        const result: BoqItem[] = []
+   270→        for (const it of items) {
+   271→          result.push(it)
+   272→          if (it.id === id) {
+   273→            const copy = JSON.parse(JSON.stringify(it)) as BoqItem
+   274→            copy.id = `${it.id}-copy-${Date.now().toString(36)}`
+   275→            copy.code = `${it.code}-copy`
+   276→            copy.desc = `${it.desc} (Copy)`
+   277→            result.push(copy)
+   278→          }
+   279→          if (it.children) it.children = walk(it.children)
+   280→        }
+   281→        return result
+   282→      }
+   283→      return walk(updated)
+   284→    })
+   285→    toast.success('Item duplicated', { description: `Copy created below ${id}` })
+   286→  }
+   287→
+   288→  const deleteItem = (id: string) => {
+   289→    commitBoqData(prev => {
+   290→      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+   291→      const walk = (items: BoqItem[]): BoqItem[] => {
+   292→        return items.filter(it => {
+   293→          if (it.id === id) return false
+   294→          if (it.children) it.children = walk(it.children)
+   295→          return true
+   296→        })
+   297→      }
+   298→      return walk(updated)
+   299→    })
+   300→    toast.success('Item deleted', { description: `${id} removed from BOQ` })
+   301→  }
+   302→
+   303→  const addChildItem = (parentId: string) => {
+   304→    const newId = `${parentId}.${Date.now().toString(36)}`
+   305→    commitBoqData(prev => {
+   306→      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+   307→      const walk = (items: BoqItem[]) => {
+   308→        for (const it of items) {
+   309→          if (it.id === parentId) {
+   310→            if (!it.children) it.children = []
+   311→            it.children.push({
+   312→              id: newId,
+   313→              code: `${it.code}.new`,
+   314→              desc: 'New BOQ item',
+   315→              type: 'Priced',
+   316→              qty: 0,
+   317→              uom: 'cum',
+   318→              rate: 0,
+   319→              level: it.level + 1,
+   320→            })
+   321→            return true
+   322→          }
+   323→          if (it.children && walk(it.children)) return true
+   324→        }
+   325→        return false
+   326→      }
+   327→      walk(updated)
+   328→      return updated
+   329→    })
+   330→    setExpandedArr(prev => prev.includes(parentId) ? prev : [...prev, parentId])
+   331→    setSelectedId(newId)
+   332→    toast.success('Child item added', { description: `New item under ${parentId}` })
+   333→  }
+   334→
+   335→  // ─── Drag-and-drop reparenting ────────────────────────────────────────────
+   336→
+   337→  // Find an item and its parent in the tree
+   338→  const findItemAndParent = (items: BoqItem[], id: string, parent: BoqItem | null = null, depth = 0): { item: BoqItem; parent: BoqItem | null; depth: number } | null => {
+   339→    for (const it of items) {
+   340→      if (it.id === id) return { item: it, parent, depth }
+   341→      if (it.children) {
+   342→        const found = findItemAndParent(it.children, id, it, depth + 1)
+   343→        if (found) return found
+   344→      }
+   345→    }
+   346→    return null
+   347→  }
+   348→
+   349→  // Recursively update the level of an item and its children
+   350→  const updateLevels = (item: BoqItem, newLevel: number): BoqItem => {
+   351→    return {
+   352→      ...item,
+   353→      level: newLevel,
+   354→      children: item.children?.map(c => updateLevels(c, newLevel + 1)),
+   355→    }
+   356→  }
+   357→
+   358→  // Reparent an item: remove from old location, add to new parent's children
+   359→  const reparentItem = (draggedId: string, targetHeadingId: string) => {
+   360→    if (draggedId === targetHeadingId) return // can't drop on self
+   361→
+   362→    // Find the dragged item and check it's not a parent of the target (no cycles)
+   363→    const dragInfo = findItemAndParent(boqData, draggedId)
+   364→    if (!draggedItem) return
+   365→
+   366→    // Check for cycle: is targetHeadingId a descendant of draggedId?
+   367→    const isDescendant = (items: BoqItem[] | undefined, ancestorId: string, targetId: string): boolean => {
+   368→      if (!items) return false
+   369→      for (const it of items) {
+   370→        if (it.id === ancestorId) {
+   371→          // Check if targetId is in this subtree
+   372→          const checkSubtree = (node: BoqItem): boolean => {
+   373→            if (node.id === targetId) return true
+   374→            return node.children?.some(c => checkSubtree(c)) || false
+   375→          }
+   376→          if (checkSubtree(it)) return true
+   377→        }
+   378→        if (it.children && isDescendant(it.children, ancestorId, targetId)) return true
+   379→      }
+   380→      return false
+   381→    }
+   382→    if (isDescendant(boqData, draggedId, targetHeadingId)) {
+   383→      toast.error('Cannot reparent', { description: 'Cannot move a heading into its own subtree' })
+   384→      return
+   385→    }
+   386→
+   387→    commitBoqData(prev => {
+   388→      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+   389→      let movedItem: BoqItem | null = null
+   390→
+   391→      // Step 1: Remove the dragged item from its current location
+   392→      const removeFromTree = (items: BoqItem[]): BoqItem[] => {
+   393→        return items.filter(it => {
+   394→          if (it.id === draggedId) {
+   395→            movedItem = it
+   396→            return false
+   397→          }
+   398→          if (it.children) it.children = removeFromTree(it.children)
+   399→          return true
+   400→        })
+   401→      }
+   402→      const cleaned = removeFromTree(updated)
+   403→
+   404→      // Step 2: Find the target heading and add the item to its children
+   405→      if (movedItem) {
+   406→        const targetLevel = findItemAndParent(cleaned, targetHeadingId)?.depth ?? 0
+   407→        movedItem = updateLevels(movedItem, targetLevel + 1)
+   408→        const addToTarget = (items: BoqItem[]): boolean => {
+   409→          for (const it of items) {
+   410→            if (it.id === targetHeadingId) {
+   411→              if (!it.children) it.children = []
+   412→              it.children.push(movedItem!)
+   413→              return true
+   414→            }
+   415→            if (it.children && addToTarget(it.children)) return true
+   416→          }
+   417→          return false
+   418→        }
+   419→        addToTarget(cleaned)
+   420→      }
+   421→
+   422→      return cleaned
+   423→    })
+   424→
+   425→    // Auto-expand the target heading
+   426→    setExpandedArr(prev => prev.includes(targetHeadingId) ? prev : [...prev, targetHeadingId])
+   427→    setSelectedId(draggedId)
+   428→    toast.success('Item reparented', {
+   429→      description: `${draggedItem?.code} moved under ${targetHeadingId}`,
+   430→    })
+   431→  }
+   432→
+   433→  // DnD sensors — require 5px movement to start drag (prevents accidental drags on click)
+   434→  const sensors = useSensors(
+   435→    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+   436→  )
+   437→
+   438→  const handleDragStart = (e: DragStartEvent) => {
+   439→    const item = allFlat.find(i => i.id === e.active.id)
+   440→    setDraggedItem(item || null)
+   441→  }
+   442→
+   443→  const handleDragOver = (e: { over: { id: string | number } | null }) => {
+   444→    setDragOverHeading(e.over ? String(e.over.id) : null)
+   445→  }
+   446→
+   447→  const handleDragEnd = (e: DragEndEvent) => {
+   448→    const { active, over } = e
+   449→    setDraggedItem(null)
+   450→    setDragOverHeading(null)
+   451→    if (!over) return
+   452→    reparentItem(String(active.id), String(over.id))
+   453→  }
+   454→
+   455→  const handleDragCancel = () => {
+   456→    setDraggedItem(null)
+   457→    setDragOverHeading(null)
+   458→  }
+   459→
+   460→  const exportRa = (id: string) => {
+   461→    const item = allFlat.find(i => i.id === id)
+   462→    toast.success('RA exported (DoR format)', {
+   463→      description: `${item?.code} — ${item?.desc} · Excel download started`,
+   464→    })
+   465→  }
+   466→
+   467→  // Close context menu on outside click / escape
+   468→  useEffect(() => {
+   469→    if (!contextMenu) return
+   470→    const close = () => setContextMenu(null)
+   471→    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
+   472→    document.addEventListener('click', close)
+   473→    document.addEventListener('keydown', onKey)
+   474→    return () => {
+   475→      document.removeEventListener('click', close)
+   476→      document.removeEventListener('keydown', onKey)
+   477→    }
+   478→  }, [contextMenu])
+   479→
+   480→  const toggleExpand = (id: string) => {
+   481→    setExpandedArr(prev => {
+   482→      const arr = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+   483→      return arr
+   484→    })
+   485→  }
+   486→
+   487→  const renderRows = (items: BoqItem[], depth = 0): React.ReactNode[] => {
+   488→    const rows: React.ReactNode[] = []
+   489→    for (const item of items) {
+   490→      const isHeading = item.type === 'Heading'
+   491→      const isExpanded = expanded.has(item.id)
+   492→      const hasChildren = item.children && item.children.length > 0
+   493→      const isSelected = item.id === selectedId
+   494→
+   495→      rows.push(
+   496→        <BoqDndRow
+   497→          key={item.id}
+   498→          item={item}
+   499→          isHeading={isHeading}
+   500→          isDragged={draggedItem?.id === item.id}
+   501→          isDragOver={dragOverHeading === item.id && !!draggedItem}
+   502→        >
+   503→        <div
+   504→          onClick={() => setSelectedId(item.id)}
+   505→          onContextMenu={(e) => {
+   506→            e.preventDefault()
+   507→            setSelectedId(item.id)
+   508→            setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id })
+   509→          }}
+   510→          className={cn(
+   511→            'flex items-center h-9 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover transition-colors',
+   512→            isSelected && 'bg-accent'
+   513→          )}
+   514→          style={{ paddingLeft: `${depth * 18 + 8}px` }}
+   515→        >
+   516→          {!isHeading && (
+   517→            <div className="w-6 flex-shrink-0">
+   518→              <Checkbox
+   519→                checked={selected.has(item.id)}
+   520→                onCheckedChange={(v) => {
+   521→                  setSelected(prev => {
+   522→                    const n = new Set(prev)
+   523→                    if (v) n.add(item.id); else n.delete(item.id)
+   524→                    return n
+   525→                  })
+   526→                }}
+   527→                onClick={e => e.stopPropagation()}
+   528→              />
+   529→            </div>
+   530→          )}
+   531→          <div className="w-7 flex-shrink-0">
+   532→            {hasChildren && (
+   533→              <button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id) }} className="p-0.5 hover:bg-accent-foreground/10 rounded">
+   534→                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+   535→              </button>
+   536→            )}
+   537→          </div>
+   538→          <div className="w-16 flex-shrink-0 font-mono text-muted-foreground">{item.code}</div>
+   539→          <div className={cn('flex-1 min-w-0 truncate', isHeading && 'font-semibold')}>
+   540→            {item.desc}
+   541→          </div>
+   542→          {/* Qty cell — inline editable for non-heading items */}
+   543→          <div className="w-24 flex-shrink-0 pr-2">
+   544→            {isHeading || item.type === 'Provisional Sum' ? (
+   545→              <span className="text-right block text-muted-foreground">{item.qty > 0 ? item.qty.toLocaleString() : '—'}</span>
+   546→            ) : (
+   547→              <input
+   548→                type="number"
+   549→                value={item.qty || ''}
+   550→                onChange={(e) => updateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
+   551→                onFocus={() => setEditing({ id: item.id, field: 'qty' })}
+   552→                onBlur={() => setEditing(null)}
+   553→                onClick={(e) => e.stopPropagation()}
+   554→                className={cn(
+   555→                  'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
+   556→                  editing?.id === item.id && editing.field === 'qty'
+   557→                    ? 'border-primary bg-background ring-1 ring-primary/30'
+   558→                    : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
+   559→                )}
+   560→              />
+   561→            )}
+   562→          </div>
+   563→          <div className="w-14 flex-shrink-0 text-muted-foreground">{item.uom || '—'}</div>
+   564→          {/* Rate cell — inline editable for non-heading items (locked for Provisional Sum) */}
+   565→          <div className="w-28 flex-shrink-0 pr-2">
+   566→            {isHeading ? (
+   567→              <span className="text-right block font-mono text-muted-foreground">—</span>
+   568→            ) : item.type === 'Provisional Sum' ? (
+   569→              <div className="flex items-center justify-end gap-1 text-muted-foreground">
+   570→                <Lock className="w-2.5 h-2.5" />
+   571→                <span className="font-mono">{item.rate.toLocaleString()}</span>
+   572→              </div>
+   573→            ) : (
+   574→              <input
+   575→                type="number"
+   576→                value={item.rate || ''}
+   577→                onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
+   578→                onFocus={() => setEditing({ id: item.id, field: 'rate' })}
+   579→                onBlur={() => setEditing(null)}
+   580→                onClick={(e) => e.stopPropagation()}
+   581→                className={cn(
+   582→                  'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
+   583→                  editing?.id === item.id && editing.field === 'rate'
+   584→                    ? 'border-primary bg-background ring-1 ring-primary/30'
+   585→                    : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
+   586→                )}
+   587→              />
+   588→            )}
+   589→          </div>
+   590→          {/* Amount cell — auto-calculated, live updates */}
+   591→          <div className="w-28 flex-shrink-0 text-right pr-3 font-mono font-medium tabular-nums">
+   592→            {item.qty * item.rate > 0 ? (item.qty * item.rate).toLocaleString() : '—'}
+   593→          </div>
+   594→          <div className="w-24 flex-shrink-0 pr-2">
+   595→            {isHeading ? (
+   596→              <Badge variant="outline" className="text-[10px]">Heading</Badge>
+   597→            ) : (
+   598→              <Badge
+   599→                variant="secondary"
+   600→                className={cn('text-[10px]', item.type === 'Provisional Sum' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300', item.type === 'Daywork' && 'bg-violet-500/15 text-violet-700 dark:text-violet-300')}
+   601→              >
+   602→                {item.type}
+   603→              </Badge>
+   604→            )}
+   605→          </div>
+   606→          <div className="w-10 flex-shrink-0 flex justify-center">
+   607→            {!isHeading && item.hasRA && <Lock className="w-3 h-3 text-emerald-500" />}
+   608→          </div>
+   609→        </div>
+   610→        </BoqDndRow>
+   611→      )
+   612→
+   613→      if (hasChildren && isExpanded) {
+   614→        rows.push(...renderRows(item.children!, depth + 1))
+   615→      }
+   616→    }
+   617→    return rows
+   618→  }
+   619→
+   620→  return (
+   621→    <>
+   622→    <Workspace3Pane
+   623→      leftPane={
+   624→        <>
+   625→          <PaneHeader title="BOQ Outline">
+   626→            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+   627→          </PaneHeader>
+   628→          <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
+   629→            <div className="relative">
+   630→              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+   631→              <Input placeholder="Filter BOQ items…" className="h-8 pl-7 text-xs" />
+   632→            </div>
+   633→          </div>
+   634→          <PaneBody className="py-2">
+   635→            <BoqOutlineTree items={boqData} selectedId={selectedId} onSelect={setSelectedId} expanded={expanded} onToggle={toggleExpand} />
+   636→          </PaneBody>
+   637→          <div className="border-t border-[var(--pane-divider)] p-3 space-y-2">
+   638→            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Contract Summary</div>
+   639→            <div className="space-y-1 text-xs">
+   640→              <div className="flex justify-between"><span className="text-muted-foreground">Total Contract Value</span><span className="font-mono font-semibold tabular-nums">NPR {(contractTotal / 1_000_000).toFixed(1)}M</span></div>
+   641→              <div className="flex justify-between"><span className="text-muted-foreground">Priced items</span><span className="font-mono">82</span></div>
+   642→              <div className="flex justify-between"><span className="text-muted-foreground">Provisional Sums</span><span className="font-mono">7</span></div>
+   643→              <div className="flex justify-between"><span className="text-muted-foreground">Daywork items</span><span className="font-mono">3</span></div>
+   644→            </div>
+   645→          </div>
+   646→        </>
+   647→      }
+   648→      centerPane={
+   649→        <>
+   650→          <PaneHeader title={`BOQ Grid · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}>
+   651→            <span className="hidden lg:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
+   652→              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+   653→              Edit Qty/Rate · drag rows to headings to reparent
+   654→            </span>
+   655→            {/* Undo/Redo buttons */}
+   656→            <div className="flex items-center gap-0.5 border-r border-[var(--pane-divider)] pr-1.5 mr-1">
+   657→              <Button
+   658→                variant="ghost"
+   659→                size="sm"
+   660→                className={cn('h-7 w-7 p-0', !canUndo && 'opacity-40 cursor-not-allowed')}
+   661→                onClick={undo}
+   662→                disabled={!canUndo}
+   663→                title="Undo (⌘Z)"
+   664→              >
+   665→                <Undo2 className="w-3.5 h-3.5" />
+   666→              </Button>
+   667→              <Button
+   668→                variant="ghost"
+   669→                size="sm"
+   670→                className={cn('h-7 w-7 p-0', !canRedo && 'opacity-40 cursor-not-allowed')}
+   671→                onClick={redo}
+   672→                disabled={!canRedo}
+   673→                title="Redo (⌘⇧Z)"
+   674→              >
+   675→                <Redo2 className="w-3.5 h-3.5" />
+   676→              </Button>
+   677→              {(canUndo || canRedo) && (
+   678→                <span className="text-[9px] text-muted-foreground font-mono px-1">
+   679→                  {undoStack.length}/{undoStack.length + redoStack.length}
+   680→                </span>
+   681→              )}
+   682→            </div>
+   683→            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
+   684→              <FileSpreadsheet className="w-3.5 h-3.5" />Export RA (DoR Format)
+   685→            </Button>
+   686→            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
+   687→              <Download className="w-3.5 h-3.5" />Export
+   688→            </Button>
+   689→            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Item</Button>
+   690→          </PaneHeader>
+   691→          {/* Column header */}
+   692→          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
+   693→            <div className="w-6" />
+   694→            <div className="w-7" />
+   695→            <div className="w-16 px-2">Code</div>
+   696→            <div className="flex-1 px-2">Description</div>
+   697→            <div className="w-24 px-2 text-right">Qty</div>
+   698→            <div className="w-14 px-2">UOM</div>
+   699→            <div className="w-28 px-2 text-right">Rate (NPR)</div>
+   700→            <div className="w-28 px-2 text-right">Amount (NPR)</div>
+   701→            <div className="w-24 px-2">Type</div>
+   702→            <div className="w-10 text-center">RA</div>
+   703→          </div>
+   704→          <PaneBody className="px-0">
+   705→            <DndContext
+   706→              sensors={sensors}
+   707→              collisionDetection={closestCenter}
+   708→              onDragStart={handleDragStart}
+   709→              onDragOver={handleDragOver}
+   710→              onDragEnd={handleDragEnd}
+   711→              onDragCancel={handleDragCancel}
+   712→            >
+   713→              {renderRows(boqData)}
+   714→              <DragOverlay>
+   715→                {draggedItem ? (
+   716→                  <div className="flex items-center h-9 px-4 pane border border-primary rounded-md shadow-lg text-xs gap-2">
+   717→                    <GripVertical className="w-3 h-3 text-primary" />
+   718→                    <span className="font-mono text-muted-foreground">{draggedItem.code}</span>
+   719→                    <span className="font-medium truncate">{draggedItem.desc}</span>
+   720→                    <Badge variant="secondary" className="text-[9px] ml-2">{draggedItem.type}</Badge>
+   721→                  </div>
+   722→                ) : null}
+   723→              </DragOverlay>
+   724→            </DndContext>
+   725→          </PaneBody>
+   726→          <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs text-muted-foreground bg-secondary/30">
+   727→            <span className="flex items-center gap-1.5">
+   728→              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+   729→              {allFlat.filter(i => i.type !== 'Heading').length} line items · live totals
+   730→            </span>
+   731→            <div className="flex-1" />
+   732→            <span>Contract Total: <span className="font-mono font-bold text-foreground tabular-nums">NPR {contractTotal.toLocaleString()}</span></span>
+   733→          </div>
+   734→        </>
+   735→      }
+   736→      rightPane={
+   737→        selectedLeaf.type === 'Priced' ? (
+   738→          <RaInspector item={selectedLeaf} />
+   739→        ) : (
+   740→          <NonPricedInspector item={selectedLeaf} />
+   741→        )
+   742→      }
+   743→      leftPaneWidth="280px"
+   744→      rightPaneWidth="380px"
+   745→    />
+   746→
+   747→      {/* Context Menu */}
+   748→      {contextMenu && (
+   749→        <>
+   750→          <Toaster richColors position="top-center" />
+   751→          <div
+   752→            className="fixed z-50 pane border border-[var(--pane-divider)] rounded-lg shadow-2xl overflow-hidden py-1 w-52 animate-in fade-in zoom-in-95 duration-100"
+   753→            style={{ left: Math.min(contextMenu.x, window.innerWidth - 220), top: Math.min(contextMenu.y, window.innerHeight - 280) }}
+   754→            onClick={(e) => e.stopPropagation()}
+   755→          >
+   756→            <ContextMenuItem icon={<Edit3 className="w-3.5 h-3.5" />} label="Edit item" onClick={() => { setContextMenu(null); toast.info('Edit mode', { description: 'Double-click cells to edit' }) }} />
+   757→            <ContextMenuItem icon={<Copy className="w-3.5 h-3.5" />} label="Duplicate" shortcut="⌘D" onClick={() => { duplicateItem(contextMenu.itemId); setContextMenu(null) }} />
+   758→            <ContextMenuItem icon={<FilePlus className="w-3.5 h-3.5" />} label="Add child item" onClick={() => { addChildItem(contextMenu.itemId); setContextMenu(null) }} />
+   759→            <div className="my-1 h-px bg-[var(--pane-divider)]" />
+   760→            <ContextMenuItem icon={<FileSpreadsheet className="w-3.5 h-3.5" />} label="Export RA (DoR)" onClick={() => { exportRa(contextMenu.itemId); setContextMenu(null) }} />
+   761→            <ContextMenuItem icon={<Link2 className="w-3.5 h-3.5" />} label="Link to Schedule" onClick={() => { setContextMenu(null); toast.info('Link Schedule', { description: 'Open task picker' }) }} />
+   762→            <ContextMenuItem icon={<History className="w-3.5 h-3.5" />} label="View audit log" onClick={() => { setContextMenu(null); toast.info('Audit log', { description: 'Opening revision history' }) }} />
+   763→            <div className="my-1 h-px bg-[var(--pane-divider)]" />
+   764→            <ContextMenuItem icon={<Trash2 className="w-3.5 h-3.5" />} label="Delete" danger onClick={() => { deleteItem(contextMenu.itemId); setContextMenu(null) }} />
+   765→          </div>
+   766→        </>
+   767→      )}
+   768→    </>
+   769→  )
+   770→}
+   771→
+   772→function ContextMenuItem({ icon, label, shortcut, onClick, danger }: {
+   773→  icon: React.ReactNode; label: string; shortcut?: string; onClick: () => void; danger?: boolean
+   774→}) {
+   775→  return (
+   776→    <button
+   777→      onClick={onClick}
+   778→      className={cn(
+   779→        'w-full flex items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-accent text-left transition-colors',
+   780→        danger && 'text-red-600 hover:bg-red-500/10 dark:text-red-400'
+   781→      )}
+   782→    >
+   783→      <span className={cn('text-muted-foreground', danger && 'text-red-500')}>{icon}</span>
+   784→      <span className="flex-1">{label}</span>
+   785→      {shortcut && <kbd className="text-[9px] px-1 py-0.5 rounded bg-secondary text-muted-foreground font-mono">{shortcut}</kbd>}
+   786→    </button>
+   787→  )
+   788→}
+   789→
+   790→/**
+   791→ * Draggable + Droppable wrapper for BOQ rows.
+   792→ * - All rows are draggable (useDraggable) so they can be moved.
+   793→ * - Heading rows are also droppable (useDroppable) so items can be reparented under them.
+   794→ * - Shows a drag handle (GripVertical) on hover.
+   795→ * - Highlights heading rows when another item is dragged over them.
+   796→ */
+   797→function BoqDndRow({
+   798→  item,
+   799→  isHeading,
+   800→  isDragged,
+   801→  isDragOver,
+   802→  children,
+   803→}: {
+   804→  item: BoqItem
+   805→  isHeading: boolean
+   806→  isDragged: boolean
+   807→  isDragOver: boolean
+   808→  children: React.ReactNode
+   809→}) {
+   810→  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+   811→    id: item.id,
+   812→    disabled: false,
+   813→  })
+   814→
+   815→  const droppable = useDroppable({
+   816→    id: item.id,
+   817→    disabled: !isHeading,
+   818→  })
+   819→
+   820→  return (
+   821→    <div
+   822→      ref={(node) => {
+   823→        setNodeRef(node)
+   824→        if (isHeading) droppable.setNodeRef(node)
+   825→      }}
+   826→      {...attributes}
+   827→      {...listeners}
+   828→      className={cn(
+   829→        'relative group/dnd',
+   830→        isDragging && 'opacity-40',
+   831→        isHeading && isDragOver && !isDragged && 'ring-2 ring-primary ring-inset bg-primary/5',
+   832→        droppable.isOver && isHeading && 'bg-primary/10',
+   833→      )}
+   834→    >
+   835→      {children}
+   836→      {/* Drag handle — appears on hover */}
+   837→      <div className={cn(
+   838→        'absolute left-0 top-0 bottom-0 w-5 flex items-center justify-center cursor-grab opacity-0 group-hover/dnd:opacity-100 transition-opacity',
+   839→        isDragging && 'cursor-grabbing'
+   840→      )}>
+   841→        <GripVertical className="w-3 h-3 text-muted-foreground/60" />
+   842→      </div>
+   843→    </div>
+   844→  )
+   845→}
+   846→
+   847→function BoqOutlineTree({ items, selectedId, onSelect, expanded, onToggle, depth = 0 }: {
+   848→  items: BoqItem[]; selectedId: string; onSelect: (id: string) => void;
+   849→  expanded: Set<string>; onToggle: (id: string) => void; depth?: number;
+   850→}) {
+   851→  return (
+   852→    <div className="text-xs">
+   853→      {items.map(item => {
+   854→        const isExpanded = expanded.has(item.id)
+   855→        const hasChildren = item.children && item.children.length > 0
+   856→        const isHeading = item.type === 'Heading'
+   857→        return (
+   858→          <div key={item.id}>
+   859→            <button
+   860→              onClick={() => onSelect(item.id)}
+   861→              className={cn(
+   862→                'w-full flex items-center gap-1.5 h-7 pr-2 rounded transition-colors',
+   863→                selectedId === item.id ? 'bg-accent' : 'hover:bg-accent/50'
+   864→              )}
+   865→              style={{ paddingLeft: `${depth * 12 + 8}px` }}
+   866→            >
+   867→              {hasChildren ? (
+   868→                <span onClick={(e) => { e.stopPropagation(); onToggle(item.id) }} className="cursor-pointer p-0.5">
+   869→                  {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+   870→                </span>
+   871→              ) : (
+   872→                <span className="w-4" />
+   873→              )}
+   874→              <span className={cn('font-mono text-muted-foreground text-[10px] w-7', isHeading && 'font-semibold')}>{item.code}</span>
+   875→              <span className={cn('truncate flex-1 text-left', isHeading && 'font-semibold')}>{item.desc}</span>
+   876→              {item.hasRA && <Lock className="w-2.5 h-2.5 text-emerald-500" />}
+   877→            </button>
+   878→            {hasChildren && isExpanded && (
+   879→              <BoqOutlineTree items={item.children!} selectedId={selectedId} onSelect={onSelect} expanded={expanded} onToggle={onToggle} depth={depth + 1} />
+   880→            )}
+   881→          </div>
+   882→        )
+   883→      })}
+   884→    </div>
+   885→  )
+   886→}
+   887→
+   888→interface RaRow {
+   889→  code: string; name: string; uom: string; qty: number; rate: number; source: string;
+   890→}
+   891→
+   892→const MATERIALS: RaRow[] = [
+   893→  { code: 'M-CEM-OPC', name: 'Cement OPC 53 Grade (Udaipur)', uom: 'Bag', qty: 4.5, rate: 920, source: 'Project Rate Library' },
+   894→  { code: 'M-SAND-R', name: 'River Sand (Trishuli)', uom: 'cum', qty: 0.45, rate: 3850, source: 'Project Rate Library' },
+   895→  { code: 'M-AGG-20', name: 'Coarse Aggregate 20mm', uom: 'cum', qty: 0.9, rate: 2950, source: 'Project Rate Library' },
+   896→  { code: 'M-WAT', name: 'Water (tanker)', uom: 'ltr', qty: 180, rate: 0.45, source: 'Project Rate Library' },
+   897→]
+   898→
+   899→const LABOUR: RaRow[] = [
+   900→  { code: 'L-MASN', name: 'Mason (Skilled Cat. I)', uom: 'day', qty: 0.6, rate: 1450, source: 'DoR Norm 2075' },
+   901→  { code: 'L-HEL', name: 'Mazdoor (Unskilled)', uom: 'day', qty: 1.4, rate: 950, source: 'DoR Norm 2075' },
+   902→  { code: 'L-MIX', name: 'Mixer Operator', uom: 'day', qty: 0.2, rate: 1200, source: 'DoR Norm 2075' },
+   903→]
+   904→
+   905→const EQUIPMENT: RaRow[] = [
+   906→  { code: 'E-MIX', name: 'Concrete Mixer 0.4 cum', uom: 'hr', qty: 1.8, rate: 285, source: 'Equipment Master' },
+   907→  { code: 'E-VIB', name: 'Needle Vibrator 60mm', uom: 'hr', qty: 1.2, rate: 95, source: 'Equipment Master' },
+   908→]
+   909→
+   910→function RaInspector({ item }: { item: BoqItem }) {
+   911→  // Live state for RA coefficients — drives real-time recalculation of the Financial Summary
+   912→  const [pctCosts, setPctCosts] = useState({
+   913→    labour: { on: true, pct: 2.5 },
+   914→    material: { on: true, pct: 1.5 },
+   915→    equipment: { on: true, pct: 3.5 },
+   916→    tp: { on: false, pct: 0 },
+   917→  })
+   918→  const [opOnDirect, setOpOnDirect] = useState(true)
+   919→  const [opOnPct, setOpOnPct] = useState(true)
+   920→  const [opPct, setOpPct] = useState(15)
+   921→
+   922→  // Recompute on every render — pure function of state
+   923→  const directCost = [...MATERIALS, ...LABOUR, ...EQUIPMENT].reduce((s, r) => s + r.qty * r.rate, 0)
+   924→  const labourCost = LABOUR.reduce((s, r) => s + r.qty * r.rate, 0)
+   925→  const materialCost = MATERIALS.reduce((s, r) => s + r.qty * r.rate, 0)
+   926→  const equipCost = EQUIPMENT.reduce((s, r) => s + r.qty * r.rate, 0)
+   927→
+   928→  const pctCostBase =
+   929→    (pctCosts.labour.on ? labourCost * pctCosts.labour.pct / 100 : 0) +
+   930→    (pctCosts.material.on ? materialCost * pctCosts.material.pct / 100 : 0) +
+   931→    (pctCosts.equipment.on ? equipCost * pctCosts.equipment.pct / 100 : 0) +
+   932→    (pctCosts.tp.on ? directCost * pctCosts.tp.pct / 100 : 0)
+   933→
+   934→  const opBase = (opOnDirect ? directCost : 0) + (opOnPct ? pctCostBase : 0)
+   935→  const overheadAmount = opBase * (opPct / 100)
+   936→  const totalCost = directCost + pctCostBase + overheadAmount
+   937→  const contractRate = item.rate
+   938→  const margin = contractRate - totalCost
+   939→  const marginPct = (margin / contractRate) * 100
+   940→
+   941→  return (
+   942→    <>
+   943→      <PaneHeader title={`RA Inspector · ${item.code}`} />
+   944→      <PaneBody>
+   945→        <div className="p-4 border-b border-[var(--pane-divider)]">
+   946→          <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Item</div>
+   947→          <div className="text-sm font-semibold mt-1 leading-snug">{item.desc}</div>
+   948→          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+   949→            <span>{item.qty.toLocaleString()} {item.uom}</span>
+   950→            <span>·</span>
+   951→            <span>Rate: NPR {item.rate.toLocaleString()}</span>
+   952→          </div>
+   953→        </div>
+   954→
+   955→        <Tabs defaultValue="builder" className="w-full">
+   956→          <div className="px-3 pt-2">
+   957→            <TabsList className="grid grid-cols-3 h-8 text-xs">
+   958→              <TabsTrigger value="builder" className="text-xs">RA Builder</TabsTrigger>
+   959→              <TabsTrigger value="trace" className="text-xs">Traceability</TabsTrigger>
+   960→              <TabsTrigger value="audit" className="text-xs">Audit Log</TabsTrigger>
+   961→            </TabsList>
+   962→          </div>
+   963→
+   964→          <TabsContent value="builder" className="mt-0">
+   965→            <RaSection title="Materials" icon={<Layers className="w-3.5 h-3.5" />} rows={MATERIALS} />
+   966→            <RaSection title="Labour" icon={<Layers className="w-3.5 h-3.5" />} rows={LABOUR} />
+   967→            <RaSection title="Equipment" icon={<Layers className="w-3.5 h-3.5" />} rows={EQUIPMENT} />
+   968→
+   969→            {/* % COSTS */}
+   970→            <div className="px-4 py-3 border-y border-[var(--pane-divider)]">
+   971→              <div className="flex items-center justify-between mb-2">
+   972→                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">% Costs (Indirect)</div>
+   973→                <Button variant="ghost" size="sm" className="h-6 text-xs"><Plus className="w-3 h-3" /></Button>
+   974→              </div>
+   975→              <div className="grid grid-cols-2 gap-2 text-xs">
+   976→                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+   977→                  <Checkbox
+   978→                    checked={pctCosts.labour.on}
+   979→                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, labour: { ...s.labour, on: !!v } }))}
+   980→                  />
+   981→                  <span className="flex-1">% of Labour</span>
+   982→                  <Input
+   983→                    className="h-6 w-12 text-xs"
+   984→                    type="number"
+   985→                    value={pctCosts.labour.pct}
+   986→                    onChange={(e) => setPctCosts(s => ({ ...s, labour: { ...s.labour, pct: parseFloat(e.target.value) || 0 } }))}
+   987→                  />
+   988→                </label>
+   989→                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+   990→                  <Checkbox
+   991→                    checked={pctCosts.material.on}
+   992→                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, material: { ...s.material, on: !!v } }))}
+   993→                  />
+   994→                  <span className="flex-1">% of Material</span>
+   995→                  <Input
+   996→                    className="h-6 w-12 text-xs"
+   997→                    type="number"
+   998→                    value={pctCosts.material.pct}
+   999→                    onChange={(e) => setPctCosts(s => ({ ...s, material: { ...s.material, pct: parseFloat(e.target.value) || 0 } }))}
+  1000→                  />
+  1001→                </label>
+  1002→                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+  1003→                  <Checkbox
+  1004→                    checked={pctCosts.equipment.on}
+  1005→                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, equipment: { ...s.equipment, on: !!v } }))}
+  1006→                  />
+  1007→                  <span className="flex-1">% of Equipment</span>
+  1008→                  <Input
+  1009→                    className="h-6 w-12 text-xs"
+  1010→                    type="number"
+  1011→                    value={pctCosts.equipment.pct}
+  1012→                    onChange={(e) => setPctCosts(s => ({ ...s, equipment: { ...s.equipment, pct: parseFloat(e.target.value) || 0 } }))}
+  1013→                  />
+  1014→                </label>
+  1015→                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+  1016→                  <Checkbox
+  1017→                    checked={pctCosts.tp.on}
+  1018→                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, tp: { ...s.tp, on: !!v } }))}
+  1019→                  />
+  1020→                  <span className="flex-1">T&P Charges</span>
+  1021→                  <Input
+  1022→                    className="h-6 w-12 text-xs"
+  1023→                    type="number"
+  1024→                    placeholder="—"
+  1025→                    value={pctCosts.tp.pct || ''}
+  1026→                    onChange={(e) => setPctCosts(s => ({ ...s, tp: { ...s.tp, pct: parseFloat(e.target.value) || 0 } }))}
+  1027→                  />
+  1028→                </label>
+  1029→              </div>
+  1030→            </div>
+  1031→
+  1032→            {/* O&P */}
+  1033→            <div className="px-4 py-3 border-b border-[var(--pane-divider)]">
+  1034→              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Overhead & Profit (cumulative)</div>
+  1035→              <div className="space-y-2 text-xs">
+  1036→                <label className="flex items-center gap-2">
+  1037→                  <Checkbox
+  1038→                    checked={opOnDirect}
+  1039→                    onCheckedChange={(v) => setOpOnDirect(!!v)}
+  1040→                  />
+  1041→                  <span className="flex-1">On Direct Cost</span>
+  1042→                  <span className="font-mono">NPR {directCost.toFixed(0)}</span>
+  1043→                </label>
+  1044→                <label className="flex items-center gap-2">
+  1045→                  <Checkbox
+  1046→                    checked={opOnPct}
+  1047→                    onCheckedChange={(v) => setOpOnPct(!!v)}
+  1048→                  />
+  1049→                  <span className="flex-1">On Prior % Costs</span>
+  1050→                  <span className="font-mono">NPR {pctCostBase.toFixed(0)}</span>
+  1051→                </label>
+  1052→                <div className="flex items-center gap-2 pl-6 pt-1">
+  1053→                  <span className="flex-1 text-muted-foreground">O&P %</span>
+  1054→                  <Input
+  1055→                    className="h-6 w-16 text-xs"
+  1056→                    type="number"
+  1057→                    value={opPct}
+  1058→                    onChange={(e) => setOpPct(parseFloat(e.target.value) || 0)}
+  1059→                  />
+  1060→                  <span className="text-muted-foreground">%</span>
+  1061→                </div>
+  1062→                <div className="flex justify-between pt-1 border-t border-[var(--pane-divider)]">
+  1063→                  <span className="font-medium">O&P Amount</span>
+  1064→                  <span className="font-mono font-semibold tabular-nums">NPR {overheadAmount.toFixed(0)}</span>
+  1065→                </div>
+  1066→              </div>
+  1067→            </div>
+  1068→
+  1069→            {/* Financial Summary */}
+  1070→            <div className="px-4 py-3 bg-secondary/30">
+  1071→              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+  1072→                Financial Summary & Margin
+  1073→                <span className="text-[10px] font-normal text-primary/70 normal-case tracking-normal">· recalculates live</span>
+  1074→              </div>
+  1075→              <div className="space-y-1.5 text-xs">
+  1076→                <Row label="Direct Cost" value={`NPR ${directCost.toFixed(0)}`} />
+  1077→                <Row label="% Costs" value={`NPR ${pctCostBase.toFixed(0)}`} muted />
+  1078→                <Row label="O&P" value={`NPR ${overheadAmount.toFixed(0)}`} muted />
+  1079→                <Separator className="my-2" />
+  1080→                <Row label="Total RA Cost" value={`NPR ${totalCost.toFixed(0)}`} bold />
+  1081→                <Row label="Contract BOQ Rate" value={`NPR ${contractRate.toLocaleString()}`} bold />
+  1082→                <Separator className="my-2" />
+  1083→                <div className="flex items-center justify-between">
+  1084→                  <span className="flex items-center gap-1.5">
+  1085→                    <TrendingUp className={cn('w-3.5 h-3.5', margin >= 0 ? 'delta-up' : 'delta-down')} />
+  1086→                    Actual Gross Margin
+  1087→                  </span>
+  1088→                  <span className={cn('font-mono font-bold tabular-nums', margin >= 0 ? 'delta-up' : 'delta-down')}>
+  1089→                    {marginPct >= 0 ? '+' : ''}{marginPct.toFixed(1)}%
+  1090→                  </span>
+  1091→                </div>
+  1092→                <div className="text-[10px] text-muted-foreground pl-5">
+  1093→                  Margin per {item.uom}: NPR <span className="font-mono tabular-nums">{margin.toFixed(0)}</span> · No double-count of RA O&P
+  1094→                </div>
+  1095→                {/* Visual margin bar */}
+  1096→                <div className="mt-2 pt-2 border-t border-[var(--pane-divider)]">
+  1097→                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+  1098→                    <span>Cost</span>
+  1099→                    <span>Margin</span>
+  1100→                  </div>
+  1101→                  <div className="h-2 rounded-full overflow-hidden flex bg-secondary">
+  1102→                    <div
+  1103→                      className="bg-amber-500/70 transition-all duration-300"
+  1104→                      style={{ width: `${Math.min(100, (totalCost / contractRate) * 100)}%` }}
+  1105→                    />
+  1106→                    <div
+  1107→                      className={cn('transition-all duration-300', margin >= 0 ? 'bg-emerald-500/70' : 'bg-red-500/70')}
+  1108→                      style={{ width: `${Math.max(0, Math.min(100, (margin / contractRate) * 100))}%` }}
+  1109→                    />
+  1110→                  </div>
+  1111→                  <div className="flex justify-between text-[10px] mt-1">
+  1112→                    <span className="font-mono text-amber-600">NPR {totalCost.toFixed(0)}</span>
+  1113→                    <span className={cn('font-mono', margin >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+  1114→                      {margin >= 0 ? '+' : ''}NPR {margin.toFixed(0)}
+  1115→                    </span>
+  1116→                  </div>
+  1117→                </div>
+  1118→              </div>
+  1119→            </div>
+  1120→          </TabsContent>
+  1121→
+  1122→          <TabsContent value="trace" className="mt-0 px-4 py-3 space-y-3">
+  1123→            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Traceability Matrix</div>
+  1124→            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="Schedule Task" value="T-104 · Foundation PCC" status="linked" />
+  1125→            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="Purchase Order" value="PO-2410-018 · Cement 1,200 bags" status="linked" />
+  1126→            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="DSR Actual Qty" value="142.5 / 145 cum (98.3%)" status="progress" />
+  1127→            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="GRN Receipts" value="4 GRNs · NPR 1,384,500" status="linked" />
+  1128→            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="Running Account" value="RA Bill #4 · claimed 142.5 cum" status="linked" />
+  1129→            <TraceRow icon={<AlertTriangle className="w-3.5 h-3.5" />} label="NCR Holds" value="NCR-034 · 0 billable" status="blocked" />
+  1130→          </TabsContent>
+  1131→
+  1132→          <TabsContent value="audit" className="mt-0 px-4 py-3 space-y-3">
+  1133→            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+  1134→              <History className="w-3.5 h-3.5" />Audit Log
+  1135→            </div>
+  1136→            <AuditRow who="Arjun S." action="Updated cement rate from NPR 895 → NPR 920" when="2 hrs ago" />
+  1137→            <AuditRow who="Bikash R." action="Adjusted mazdoor coefficient 1.6 → 1.4" when="Yesterday 16:42" />
+  1138→            <AuditRow who="System" action="Preset loaded: PCC-M15-Standard" when="3 days ago" />
+  1139→            <AuditRow who="Arjun S." action="Created RA from blank template" when="1 week ago" />
+  1140→          </TabsContent>
+  1141→        </Tabs>
+  1142→
+  1143→        {/* Preset bar */}
+  1144→        <div className="border-t border-[var(--pane-divider)] p-3 flex items-center gap-2 bg-secondary/20">
+  1145→          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"><FolderOpen className="w-3.5 h-3.5" />Load Preset</Button>
+  1146→          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"><Save className="w-3.5 h-3.5" />Save Preset</Button>
+  1147→          <div className="flex-1" />
+  1148→          <Button size="sm" className="h-7 text-xs gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" />Save RA</Button>
+  1149→        </div>
+  1150→      </PaneBody>
+  1151→    </>
+  1152→  )
+  1153→}
+  1154→
+  1155→function RaSection({ title, icon, rows }: { title: string; icon: React.ReactNode; rows: RaRow[] }) {
+  1156→  const sectionTotal = rows.reduce((s, r) => s + r.qty * r.rate, 0)
+  1157→  return (
+  1158→    <div className="px-4 py-3 border-b border-[var(--pane-divider)]">
+  1159→      <div className="flex items-center justify-between mb-2">
+  1160→        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">{icon}{title}</div>
+  1161→        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1"><Plus className="w-3 h-3" />Add</Button>
+  1162→      </div>
+  1163→      <div className="space-y-1.5">
+  1164→        {rows.map((r, i) => (
+  1165→          <div key={i} className="grid grid-cols-12 gap-1.5 items-center text-xs p-1.5 rounded hover:bg-accent/40">
+  1166→            <div className="col-span-7">
+  1167→              <div className="font-medium truncate">{r.name}</div>
+  1168→              <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+  1169→                <span className="font-mono">{r.code}</span>
+  1170→                <span>·</span>
+  1171→                <span>{r.source}</span>
+  1172→              </div>
+  1173→            </div>
+  1174→            <Input className="col-span-2 h-6 text-xs px-1" defaultValue={r.qty} />
+  1175→            <div className="col-span-3 flex items-center gap-1">
+  1176→              <span className="text-[10px] text-muted-foreground">{r.uom}</span>
+  1177→              <div className="flex-1 flex items-center gap-0.5">
+  1178→                <Input className="h-6 text-xs px-1 flex-1 font-mono" defaultValue={r.rate} />
+  1179→                <button className="p-0.5 hover:bg-accent rounded" title="Auto-calc from primary UOM">
+  1180→                  <Zap className="w-3 h-3 text-amber-500" />
+  1181→                </button>
+  1182→              </div>
+  1183→            </div>
+  1184→          </div>
+  1185→        ))}
+  1186→      </div>
+  1187→      <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--pane-divider)] text-xs">
+  1188→        <span className="text-muted-foreground">Section subtotal ({rows.length} resources)</span>
+  1189→        <span className="font-mono font-semibold">NPR {sectionTotal.toFixed(0)}/{rows[0]?.uom || 'unit'}</span>
+  1190→      </div>
+  1191→    </div>
+  1192→  )
+  1193→}
+  1194→
+  1195→function Row({ label, value, muted, bold }: { label: string; value: string; muted?: boolean; bold?: boolean }) {
+  1196→  return (
+  1197→    <div className="flex justify-between">
+  1198→      <span className={cn(muted && 'text-muted-foreground', bold && 'font-semibold')}>{label}</span>
+  1199→      <span className={cn('font-mono', bold && 'font-semibold')}>{value}</span>
+  1200→    </div>
+  1201→  )
+  1202→}
+  1203→
+  1204→function TraceRow({ icon, label, value, status }: { icon: React.ReactNode; label: string; value: string; status: 'linked' | 'progress' | 'blocked' }) {
+  1205→  return (
+  1206→    <div className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)] text-xs">
+  1207→      <span className="text-muted-foreground">{icon}</span>
+  1208→      <div className="flex-1 min-w-0">
+  1209→        <div className="text-muted-foreground">{label}</div>
+  1210→        <div className="truncate">{value}</div>
+  1211→      </div>
+  1212→      {status === 'linked' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+  1213→      {status === 'progress' && <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-500 border-t-transparent" />}
+  1214→      {status === 'blocked' && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
+  1215→    </div>
+  1216→  )
+  1217→}
+  1218→
+  1219→function AuditRow({ who, action, when }: { who: string; action: string; when: string }) {
+  1220→  return (
+  1221→    <div className="flex gap-2.5 text-xs">
+  1222→      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex-shrink-0 flex items-center justify-center text-white text-[10px] font-semibold">
+  1223→        {who.charAt(0)}
+  1224→      </div>
+  1225→      <div className="flex-1">
+  1226→        <div><span className="font-medium">{who}</span> <span className="text-muted-foreground">{action}</span></div>
+  1227→        <div className="text-[10px] text-muted-foreground">{when}</div>
+  1228→      </div>
+  1229→    </div>
+  1230→  )
+  1231→}
+  1232→
+  1233→function NonPricedInspector({ item }: { item: BoqItem }) {
+  1234→  return (
+  1235→    <>
+  1236→      <PaneHeader title={`Inspector · ${item.code}`} />
+  1237→      <PaneBody>
+  1238→        <div className="p-4 border-b border-[var(--pane-divider)]">
+  1239→          <Badge variant="secondary" className="text-xs">{item.type}</Badge>
+  1240→          <div className="text-sm font-semibold mt-2 leading-snug">{item.desc}</div>
+  1241→        </div>
+  1242→        <div className="p-4 text-center text-xs text-muted-foreground">
+  1243→          <Edit3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+  1244→          <div className="font-medium text-foreground">{item.type} item</div>
+  1245→          <p className="mt-1 leading-relaxed">
+  1246→            {item.type === 'Provisional Sum'
+  1247→              ? 'Lump-sum provision. Rate Analysis is hidden — amount is governed by the Engineer per Clause 13.5 of FIDIC Red Book.'
+  1248→              : item.type === 'Daywork'
+  1249→                ? 'Daywork rates apply. Quantities are measured on-site and valued at the Daywork Schedule rates included in the Contract.'
+  1250→                : 'Heading items do not carry rates or RA buildup.'}
+  1251→          </p>
+  1252→        </div>
+  1253→      </PaneBody>
+  1254→    </>
+  1255→  )
+  1256→}
+  1257→

@@ -305,3 +305,111 @@ Stage Summary:
 - Fuel burn-rate alert escalates to PM.
 - Lint: 0 errors, 0 warnings.
 - All browser-verified.
+
+---
+Task ID: 2
+Agent: Refactor Bot (boq split)
+Task: Split the 1,257-line monolithic `src/components/modules/boq.tsx` into a `boq/` folder of smaller, focused files — no functionality changes.
+
+Work Log:
+- Read full `boq.tsx` (1,257 lines) and catalogued its 5 logical sections: types/data, main BoqModule, BOQ grid (renderRows + DnD wrapper + ContextMenuItem), outline tree, and RA inspector (+ helpers).
+- Created `src/components/modules/boq/` with 5 files:
+  - `types.ts` (73 lines) — `BoqItem` interface, `BOQ_DATA` constant, `flatten()` helper. Pure module, no React.
+  - `boq-outline.tsx` (46 lines) — `BoqOutlineTree` recursive outline component (chevrons, RA lock icon, selection highlight).
+  - `boq-grid.tsx` (256 lines) — Converted the inline `renderRows` closure into a recursive `<BoqGrid>` component that accepts all needed state & callbacks via props. Exports `BoqGrid`, `BoqDndRow` (draggable+droppable row wrapper), `ContextMenuItem`, and the `BoqEditingState` / `BoqGridProps` types. Internal `BoqRow` sub-component keeps the per-row JSX identical to the original.
+  - `ra-inspector.tsx` (387 lines) — `RaInspector` (with live % costs / O&P / margin recalculation), `NonPricedInspector`, and the `RaSection`, `Row`, `TraceRow`, `AuditRow` helpers, plus the `MATERIALS` / `LABOUR` / `EQUIPMENT` constants and `RaRow` interface.
+  - `index.tsx` (587 lines) — Main `BoqModule` component (synced state, undo/redo, DnD reparenting, context menu, renders `<Workspace3Pane>`). Re-exports `BoqModule` as named and `default`.
+- All internal cross-file imports use relative paths (e.g. `import { BoqItem } from './types'`, `import { BoqGrid, ContextMenuItem } from './boq-grid'`).
+- The existing `import { BoqModule } from '@/components/modules/boq'` in `src/app/page.tsx` resolves automatically to `boq/index.tsx` — no edits needed there.
+- Deleted the original `src/components/modules/boq.tsx`.
+- Preserved every feature: inline qty/rate editing, undo/redo with ⌘Z / ⌘⇧Z shortcuts, drag-and-drop reparenting with cycle detection, context menu (Edit/Duplicate/Add child/Export RA/Link Schedule/Audit/Delete), live RA recalculation (materials/labour/equipment/% costs/cumulative O&P/margin bar), tabs (Builder/Traceability/Audit), Toaster from sonner, usePersistentState + useSyncedState hooks.
+
+Verification:
+- `bun run lint` → 0 errors, 0 warnings.
+- `dev.log` shows `✓ Compiled in 137ms` after the change; `GET / 200` responses continue normally.
+- Total split size: 1,349 lines across 5 files (vs. 1,257 in original — the small growth is from import statements and the explicit `BoqGridProps` type definition that replaces the implicit closure scope).
+
+---
+Task ID: 3
+Agent: Refactor Bot (subcontractor split)
+Task: Split the 1,087-line monolithic `src/components/modules/subcontractor.tsx` into a `subcontractor/` folder of smaller, focused files — no functionality changes.
+
+Work Log:
+- Read the full `subcontractor.tsx` (1,087 lines) and catalogued its 8 logical sections: types + INITIAL_SCS + fmt/fmtNPR helpers; main `SubcontractorModule` (left-pane list); `ScInspector` (right-pane header + 6 tabs); `SubBoqTab` (composite + conditional items + mapping table); `MaterialTab` (reconciliation table + MIN/MRN registers); `ConsumablesTab` (norm-based chargeback); `RunningBillTab` + `BillRow` (earned → deductions → net payable); `ScheduleTab` (assigned tasks + hammock tunneling note); `PerformanceTab` + `ComplianceRow` (KPIs + compliance + financial summary).
+- Created `src/components/modules/subcontractor/` with 8 files:
+  - `types.ts` (314 lines) — `ItemType`, `ScItem`, `MaterialIssue`, `MaterialReturn`, `ConsumableIssue`, `CustomDeductible`, `Subcontractor` interfaces, `INITIAL_SCS` constant (3 demo SCs: drain-construction composite, rebar-only, tunneling with conditional support), and `fmt()` / `fmtNPR()` helpers. Pure module — no React.
+  - `sub-boq-tab.tsx` (154 lines) — `SubBoqTab` composite items with progress bars + main-BOQ mapping table (coefficients × actualQty → derived BOQ quantities); conditional tunneling support items with Design Qty / Actual / Variance cards (over-support → amber RFI warning).
+  - `material-tab.tsx` (155 lines) — `MaterialTab` material reconciliation table (theoretical from composite mapping × RA coefficients vs. issued − returned, >5% variance flagged), MIN register, MRN register.
+  - `consumables-tab.tsx` (78 lines) — `ConsumablesTab` norm-based chargeback table (issued vs. norm × basis → variance) + total over-norm chargeback summary.
+  - `running-bill-tab.tsx` (153 lines) — `RunningBillTab` full bill computation (earned → advance recovery + retention + rework + TDS + material chargeback + consumable chargeback + custom deductibles → net payable with positive/negative coloring) + `BillRow` sub-component + `DEDUCTION_TYPE_ICONS` map.
+  - `schedule-tab.tsx` (54 lines) — `ScheduleTab` assigned-tasks cards with progress bars (delayed = red) + tunneling hammock-task callout.
+  - `performance-tab.tsx` (109 lines) — `PerformanceTab` KPI grid (on-time delivery / NCRs / material efficiency / incidents) + `ComplianceRow` (PAN/GST/insurance/labour license) + financial summary card.
+  - `index.tsx` (119 lines) — Main `SubcontractorModule` (left-pane list with search, Toaster, usePersistentState for `selectedId` and `scs`) + `ScInspector` (right-pane header + 6-tab Tabs). Re-exports `SubcontractorModule` as named and `default`.
+- All internal cross-file imports use relative paths (e.g. `import type { Subcontractor } from './types'`, `import { INITIAL_SCS } from './types'`, `import { SubBoqTab } from './sub-boq-tab'`).
+- The existing `import { SubcontractorModule } from '@/components/modules/subcontractor'` in `src/app/page.tsx` resolves automatically to `subcontractor/index.tsx` — no edits needed there.
+- Deleted the original `src/components/modules/subcontractor.tsx`.
+- Preserved every feature: SC list with tunneling badge, 6-tab inspector (Sub-BOQ / Material / Consumables / Bill / Schedule / Performance), composite-item mapping to main BOQ, conditional support variance tracking, MIN/MRN registers, norm-based consumable chargeback, full running-bill computation (advance recovery / retention / TDS / material & consumable chargeback / custom deductibles / net payable), schedule hammock-task callout for tunneling SCs, performance KPIs, compliance rows, financial summary, Toaster from sonner, usePersistentState hooks. `setScs` retained (unused) to match original 1:1.
+
+Verification:
+- `bun run lint` → 0 errors, 0 warnings (clean output, only `$ eslint .` printed).
+- `dev.log` shows `✓ Compiled in 536ms`, `✓ Compiled in 137ms`, `✓ Compiled in 484ms` after the change; `GET / 200` responses continue normally (63–416ms).
+- Total split size: 1,136 lines across 8 files (vs. 1,087 in original — the 49-line growth is from per-file `import` statements and `export` keywords added when splitting).
+---
+Task ID: scheduler-refactor
+Agent: Super Z (main)
+Task: Split the monolithic `src/components/modules/scheduler.tsx` (1,043 lines) into a folder `src/components/modules/scheduler/` with smaller, focused files. Pure refactor — no behavior changes.
+
+Work Log:
+- Read the full 1,043-line `scheduler.tsx` and mapped dependencies (state, DnD handlers, modals, inspector, gantt canvas).
+- Created the new folder `src/components/modules/scheduler/` with 5 files:
+  - `types.ts` (75 lines) — `Task` interface, `TASKS` constant (4 summary tasks with full hierarchy of 16 child tasks: mobilization, foundation, box culvert, pavement), `TOTAL_WEEKS` (52), `WEEK_WIDTH` (26), `flattenTasks()` helper, and `DragState` type (union of move/resize/null) shared between index and gantt-canvas. Pure module — no React.
+  - `modals.tsx` (312 lines) — `AddTaskModal` (task name input, 4-button type selector Work/Milestone/Hammock/Summary, start/duration numeric inputs with Wk preview, 6-button constraint selector ASAP/SNET/FNLT/MFO/MSO/ALAP, critical-path checkbox, live mini-bar preview, Cancel/Add Task footer with disabled-when-empty validation) + `CriticalPathBreachModal` (deadline vs. forecast finish vs. overrun grid, two resolution options — File EOT Claim per FIDIC 8.4 with no cost penalty / Accelerate Crash Schedule with NPR × 850,000-per-week variation cost pushed to Financials, FIDIC Sub-Clause 8.4 + 8.6 reference). Exports `NewTaskDraft` interface + `EMPTY_NEW_TASK` factory for the index file.
+  - `task-inspector.tsx` (226 lines) — `TaskInspector` (right-pane component with type/critical/constraint badges, 4-tab Tabs: Schedule / Assign / BOQ-RA / EVM) + 4 helper components `AssignRow` (avatar circle, role/name, hours/day with red over-allocation), `LeadRow` (Package icon colored by status ok/warn/block, material name + PO line), `EvmCard` (BCWS/BCWP/ACWP/EAC metric cards), `Kpi` (SPI/CPI with up/down trend arrow).
+  - `gantt-canvas.tsx` (226 lines) — `GanttCanvas` component encapsulating the previous IIFE: week ruler (sticky top, 52 columns with month-start bold), task rows with baseline ghost bars + main bars (Milestone = downward triangle in warning color, Hammock = violet→purple gradient, Summary = muted, Work = primary or red if critical), progress overlay, left/right resize handles with hover opacity, hover tooltip "Wk X → Wk Y · drag body to move, edges to resize", critical-path dot markers, today vertical red line with TODAY label, `<CollaboratorCursors />` for simulated WebSocket presence, and the toggleable Resource Usage panel (Mason/Mazdoor/Mixer Operator stacked bars per week, over-allocation computed). Props pass through state, expanded Set, selection, hover, dragging, drag handlers, and the canvas ref.
+  - `index.tsx` (328 lines) — Main `SchedulerModule` (state via `usePersistentState` for selectedId/expandedArr, `useSyncedState` for tasks with Supabase fieldMap, plain `useState` for showResources/showCriticalOnly/dragging/hoveredId/breachModal/breachTask/addTaskOpen/newTask). Holds `updateTaskStart`, `updateTaskDuration`, `addTask`, `toggleExpand`, `renderTaskRows` (left-pane task outline tree with expand/collapse, type icons, baseline variance strikethrough, progress %), DnD handlers `onBarMouseDown` / `onResizeMouseDown`, and the `useEffect` that wires `mousemove` (computes week delta from pixel delta / WEEK_WIDTH and applies move or resize) + `mouseup` (checks for Hammock Must-Finish-On deadline breach → opens CriticalPathBreachModal). Renders `<Workspace3Pane>` with left=outline, center=`<GanttCanvas>` + Add Task button header, right=`<TaskInspector>`, plus conditionally rendered `<AddTaskModal>` and `<CriticalPathBreachModal>` (with toast.success notifications for EOT/Accelerate actions). Re-exports `SchedulerModule` as both named and default.
+- All internal cross-file imports use relative paths (`./types`, `./gantt-canvas`, `./task-inspector`, `./modals`).
+- The existing `import { SchedulerModule } from '@/components/modules/scheduler'` in `src/app/page.tsx` resolves automatically to `scheduler/index.tsx` — no edits needed there.
+- Deleted the original `src/components/modules/scheduler.tsx`.
+- Preserved every feature: drag-to-move Gantt bars, drag-to-resize via left/right edge handles, Add Task modal with live preview, EOT / Critical Path Breach modal with FIDIC 8.4 reference, collaborator cursors, today line, baseline ghost bars, critical-path red highlighting, milestone triangles, hammock gradient bars, resource usage toggle panel, 4-tab Task Inspector (Schedule with constraints + dependencies / Assign with over-allocation auto-level / BOQ-RA with material lead-time check / EVM with BCWS-BCWP-ACWP-EAC + SPI/CPI + DSR linkage), keyboard-accessible collapse toggles, persistent state via usePersistentState + useSyncedState. The unused `visible` variable and unused `overAlloc` flag from the original were carried through verbatim (1:1 preservation).
+
+Verification:
+- `bun run lint` → 0 errors, 0 warnings (clean output, only `$ eslint .` printed, exit code 0).
+- `dev.log` shows `✓ Compiled in 536ms`, `✓ Compiled in 137ms`, `✓ Compiled in 484ms`, `✓ Compiled in 473ms` after the split; `GET / 200` responses continue normally (63–416ms render).
+- Total split size: 1,167 lines across 5 files (vs. 1,043 in original — the 124-line growth is from per-file `import` statements, prop interfaces, `NewTaskDraft`/`EMPTY_NEW_TASK` exports, and the `export default` re-export added when splitting).
+
+---
+Task ID: refactor-daily-ops-procurement
+Agent: Super Z (main)
+Task: Refactor two large Next.js module files (daily-ops.tsx 672 lines, procurement.tsx 645 lines) into folder-based module structures, preserving all functionality. Only split files — no behavior changes.
+
+Work Log:
+- Read both source files completely and identified every shared symbol (constants, interfaces, helper components) that needed to move into `types.ts` or stay in the main `index.tsx`.
+- Verified existing folder-module precedents (`scheduler/`, `boq/`, `subcontractor/`) — confirmed the convention is a `types.ts` file with no JSX, plus per-view `.tsx` files importing from `./types`.
+- Created `src/components/modules/daily-ops/` with 5 files:
+  - `types.ts` — `DsrEntry` interface, `DSR_ENTRIES` constant, `StatusDot` function. Since `StatusDot` is a React component but the file must stay `.ts` (per spec and per existing convention), wrote it using `React.createElement` instead of JSX. Extracted the status color/label lookup into a private `STATUS_MAP` record to keep `React.createElement` calls compact.
+  - `index.tsx` — `DailyOpsModule` main component (left pane: outline list with source badges, RFI/photo icons, `StatusDot`; center pane: switches between `WorkProgressView` and `DailySiteLogView`; right pane: `DsrInspector`). Re-exports `DailyOpsModule` as both named and default export.
+  - `work-progress.tsx` — `WorkProgressView` (table with planned/actual variance %, status dot, action icons) + ITR auto-prompt banner shown when the selected entry is `completed`.
+  - `daily-site-log.tsx` — `DailySiteLogView` (weather, visitors, delays, manpower, equipment with fuel burn-rate alert, geological face log with deviation alert) + private `Card` helper + private `WeatherCell` helper.
+  - `dsr-inspector.tsx` — `DsrInspector` (3 tabs: Progress / Material Reconciliation / Photos-Docs) + full RFI draft modal (auto-populated Background from DSR remarks, mandatory Question + Impact fields highlighted when empty, save confirmation state) + private `MaterialRow` helper.
+- Created `src/components/modules/procurement/` with 5 files:
+  - `types.ts` — `Tab` type, `Vendor` / `ReqItem` / `Po` interfaces, `INITIAL_REQS`, `INITIAL_POS`, `STOCK` constants. Kept `STOCK` as inferred-typed const (matching original — no `StockItem` interface was defined in the source).
+  - `index.tsx` — `ProcurementModule` main component (tab state, selected req, `reqs`/`pos` state with deep clone of initial data, override modal state, `generatePos` auto-grouping-by-vendor logic, `selectVendor` with lowest-bidder override detection, `applyVendorSelection`, `confirmOverride`, full override justification modal with FIDIC Clause 4.1 reference). Renders `<Toaster richColors position="top-center" />`. Re-exports `ProcurementModule` as both named and default export.
+  - `req-view.tsx` — `ReqCenterView` (comparative statement with interactive vendor cards, lowest-bidder trophy, override banner) + Consolidated PO Builder footer with the Generate POs button.
+  - `po-grn-views.tsx` — `PoCenterView` (PO table), `GrnCenterView` (3-way match table with interactive Approve/Hold toggle, locked when mismatch, payment gate summary banner), `StockCenterView` (live stock dashboard with low-stock highlighting), `MinCenterView` (Material Issue Notes list).
+  - `inspector.tsx` — `ProcurementInspector` (line-item traceability, override justification display when present, linked records list, action buttons) + private `LinkRow` helper.
+- Internal imports use relative paths (`./types`, `./work-progress`, etc.) as specified. External imports (`@/components/ui/*`, `@/lib/utils`, `lucide-react`, `sonner`) remain aliased.
+- Each `.tsx` view file imports only the lucide icons it actually uses (e.g., `work-progress.tsx` no longer imports `Cloud`, `Users`, `Truck`, etc. — only `Plus`, `Copy`, `Mail`, `Camera`, `CheckCircle2`).
+- Did NOT change `src/app/page.tsx` — its existing imports `@/components/modules/daily-ops` and `@/components/modules/procurement` resolve to the new `index.tsx` files automatically via Node/Next.js module resolution.
+- Deleted both original single-file modules (`daily-ops.tsx`, `procurement.tsx`) after the folder versions were in place.
+- Functionality preserved: every toast, every modal, every state setter, every prop, every CSS class, every conditional branch copied verbatim from the originals — no logic changes.
+
+Verification:
+- `bun run lint` → exit code 0, no errors, no warnings (only `$ eslint .` printed).
+- `dev.log` shows `✓ Compiled in 536ms`, `✓ Compiled in 137ms`, `✓ Compiled in 484ms`, `✓ Compiled in 473ms` after the split; `GET / 200` responses continue normally (63–416ms render). No "Module not found" or import-resolution errors.
+- File count: 10 new files (5 per module folder), 2 deletions. Total lines distributed: daily-ops 672 → 643 across 5 files; procurement 645 → 614 across 5 files. Small line reduction comes from not duplicating shared imports across view files (each view imports only what it needs).
+
+Stage Summary:
+- Two large monolithic module files refactored into maintainable folder structures matching the existing `scheduler/`, `boq/`, `subcontractor/` convention.
+- `types.ts` files contain no JSX (consistent with existing precedent), with `StatusDot` written via `React.createElement` to satisfy that constraint.
+- `index.tsx` files re-export their main module component as both named and default, so `page.tsx`'s existing named imports continue to work without changes.
+- Lint clean, dev server compiles and serves `/` with 200 responses.
