@@ -4,25 +4,30 @@ import { useState } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import {
   Search, Plus, Trophy, AlertTriangle, CheckCircle2, Package, FileText,
-  Truck, Boxes, ArrowRight, Layers, MapPin, TrendingUp,
+  Truck, Boxes, ArrowRight, Layers, MapPin, TrendingUp, X, ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import { Toaster } from '@/components/ui/sonner'
 
 type Tab = 'req' | 'po' | 'grn' | 'stock' | 'min'
 
+interface Vendor { name: string; rate: number; selected?: boolean }
 interface ReqItem {
   id: string; item: string; uom: string; qty: number;
-  vendors: { name: string; rate: number; selected?: boolean }[];
+  vendors: Vendor[];
   status: 'Draft' | 'Approved' | 'Partially PO\'d' | 'Fully PO\'d';
   source: 'Sched' | 'Manual'
+  overrideReason?: string
 }
 
-const REQS: ReqItem[] = [
+const INITIAL_REQS: ReqItem[] = [
   {
     id: 'REQ-0142', item: 'Cement OPC 53 Grade', uom: 'Bag', qty: 1200, status: 'Approved', source: 'Sched',
     vendors: [
@@ -64,78 +69,186 @@ const STOCK = [
 export function ProcurementModule() {
   const [tab, setTab] = useState<Tab>('req')
   const [selectedId, setSelectedId] = useState('REQ-0142')
+  const [reqs, setReqs] = useState<ReqItem[]>(() => JSON.parse(JSON.stringify(INITIAL_REQS)))
+  // Override modal state
+  const [overrideModal, setOverrideModal] = useState<{ reqId: string; vendorName: string; vendorRate: number; lowestRate: number } | null>(null)
+  const [overrideReason, setOverrideReason] = useState('')
+
+  // Select a vendor. If the vendor is NOT the lowest bidder, open the override modal.
+  const selectVendor = (reqId: string, vendorName: string) => {
+    const req = reqs.find(r => r.id === reqId)
+    if (!req) return
+    const vendor = req.vendors.find(v => v.name === vendorName)
+    if (!vendor) return
+    const lowest = Math.min(...req.vendors.map(v => v.rate))
+    if (vendor.rate > lowest && !vendor.selected) {
+      // Open override modal — don't select yet
+      setOverrideModal({ reqId, vendorName, vendorRate: vendor.rate, lowestRate: lowest })
+      setOverrideReason('')
+    } else {
+      // Select directly (lowest bidder or re-selecting already-selected)
+      applyVendorSelection(reqId, vendorName)
+      toast.success(`${vendorName} selected`, {
+        description: vendor.rate === lowest ? 'Lowest bidder auto-confirmed' : 'Vendor selected',
+      })
+    }
+  }
+
+  const applyVendorSelection = (reqId: string, vendorName: string) => {
+    setReqs(prev => prev.map(r => r.id === reqId ? {
+      ...r,
+      vendors: r.vendors.map(v => ({ ...v, selected: v.name === vendorName })),
+    } : r))
+  }
+
+  const confirmOverride = () => {
+    if (!overrideModal) return
+    if (!overrideReason.trim()) {
+      toast.error('Justification required', { description: 'Please provide a reason for overriding the lowest bidder.' })
+      return
+    }
+    applyVendorSelection(overrideModal.reqId, overrideModal.vendorName)
+    // Save the reason on the req
+    setReqs(prev => prev.map(r => r.id === overrideModal.reqId ? { ...r, overrideReason: overrideReason.trim() } : r))
+    toast.success('Override approved', {
+      description: `${overrideModal.vendorName} selected with justification. Audit logged.`,
+    })
+    setOverrideModal(null)
+    setOverrideReason('')
+  }
 
   return (
-    <Workspace3Pane
-      leftPane={
-        <>
-          <PaneHeader title="Procurement">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
-          </PaneHeader>
-          <div className="py-2">
-            {([
-              { id: 'req', name: 'Requisitions', count: 3, icon: FileText },
-              { id: 'po', name: 'Purchase Orders', count: 12, icon: Package },
-              { id: 'grn', name: 'GRN / 3-Way Match', count: 4, icon: CheckCircle2 },
-              { id: 'stock', name: 'Live Stock', count: 5, icon: Boxes },
-              { id: 'min', name: 'Material Issues (MIN)', count: 8, icon: ArrowRight },
-            ] as { id: Tab; name: string; count: number; icon: typeof FileText }[]).map(t => {
-              const Icon = t.icon
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 h-9 px-4 text-xs transition-colors',
-                    tab === t.id ? 'bg-accent border-l-2 border-primary' : 'hover:bg-accent/50 border-l-2 border-transparent'
-                  )}
-                >
-                  <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="flex-1 text-left">{t.name}</span>
-                  <Badge variant="secondary" className="text-[9px] h-4 px-1">{t.count}</Badge>
-                </button>
-              )
-            })}
-          </div>
-          <div className="mt-auto border-t border-[var(--pane-divider)] p-3 space-y-1 text-xs">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Procurement Snapshot</div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Open POs</span><span className="font-mono">12</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Committed cost</span><span className="font-mono">NPR 18.4M</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Stock value</span><span className="font-mono">NPR 1.92M</span></div>
-          </div>
-        </>
-      }
-      centerPane={
-        <>
-          <PaneHeader title={tab === 'req' ? 'Requisitions & Comparative Statement' : tab === 'po' ? 'Purchase Orders' : tab === 'grn' ? 'GRN & 3-Way Match' : tab === 'stock' ? 'Live Stock Dashboard' : 'Material Issue Notes'}>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Search className="w-3.5 h-3.5" />Search</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />New {tab === 'req' ? 'Requisition' : tab === 'po' ? 'Consolidated PO' : tab === 'grn' ? 'GRN' : tab === 'stock' ? 'Material' : 'MIN'}</Button>
-          </PaneHeader>
+    <>
+      <Toaster richColors position="top-center" />
+      <Workspace3Pane
+        leftPane={
+          <>
+            <PaneHeader title="Procurement">
+              <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            </PaneHeader>
+            <div className="py-2">
+              {([
+                { id: 'req', name: 'Requisitions', count: reqs.length, icon: FileText },
+                { id: 'po', name: 'Purchase Orders', count: 12, icon: Package },
+                { id: 'grn', name: 'GRN / 3-Way Match', count: 4, icon: CheckCircle2 },
+                { id: 'stock', name: 'Live Stock', count: 5, icon: Boxes },
+                { id: 'min', name: 'Material Issues (MIN)', count: 8, icon: ArrowRight },
+              ] as { id: Tab; name: string; count: number; icon: typeof FileText }[]).map(t => {
+                const Icon = t.icon
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 h-9 px-4 text-xs transition-colors',
+                      tab === t.id ? 'bg-accent border-l-2 border-primary' : 'hover:bg-accent/50 border-l-2 border-transparent'
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="flex-1 text-left">{t.name}</span>
+                    <Badge variant="secondary" className="text-[9px] h-4 px-1">{t.count}</Badge>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-auto border-t border-[var(--pane-divider)] p-3 space-y-1 text-xs">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Procurement Snapshot</div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Open POs</span><span className="font-mono">12</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Committed cost</span><span className="font-mono">NPR 18.4M</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Stock value</span><span className="font-mono">NPR 1.92M</span></div>
+            </div>
+          </>
+        }
+        centerPane={
+          <>
+            <PaneHeader title={tab === 'req' ? 'Requisitions & Comparative Statement' : tab === 'po' ? 'Purchase Orders' : tab === 'grn' ? 'GRN & 3-Way Match' : tab === 'stock' ? 'Live Stock Dashboard' : 'Material Issue Notes'}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Search className="w-3.5 h-3.5" />Search</Button>
+              <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />New {tab === 'req' ? 'Requisition' : tab === 'po' ? 'Consolidated PO' : tab === 'grn' ? 'GRN' : tab === 'stock' ? 'Material' : 'MIN'}</Button>
+            </PaneHeader>
 
-          {tab === 'req' && (
-            <ReqCenterView selectedId={selectedId} onSelect={setSelectedId} />
-          )}
-          {tab === 'po' && <PoCenterView />}
-          {tab === 'grn' && <GrnCenterView />}
-          {tab === 'stock' && <StockCenterView />}
-          {tab === 'min' && <MinCenterView />}
-        </>
-      }
-      rightPane={<ProcurementInspector tab={tab} selectedId={selectedId} />}
-      leftPaneWidth="260px"
-      rightPaneWidth="380px"
-    />
+            {tab === 'req' && (
+              <ReqCenterView reqs={reqs} selectedId={selectedId} onSelect={setSelectedId} onVendorSelect={selectVendor} />
+            )}
+            {tab === 'po' && <PoCenterView />}
+            {tab === 'grn' && <GrnCenterView />}
+            {tab === 'stock' && <StockCenterView />}
+            {tab === 'min' && <MinCenterView />}
+          </>
+        }
+        rightPane={<ProcurementInspector tab={tab} selectedId={selectedId} reqs={reqs} />}
+        leftPaneWidth="260px"
+        rightPaneWidth="380px"
+      />
+
+      {/* Override Justification Modal */}
+      {overrideModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setOverrideModal(null)}
+        >
+          <div
+            className="w-full max-w-md pane border border-[var(--pane-divider)] rounded-xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 h-12 border-b border-[var(--pane-divider)] bg-amber-500/10">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-500" />
+                <span className="text-sm font-semibold">Override Justification Required</span>
+              </div>
+              <button onClick={() => setOverrideModal(null)} className="p-1 rounded hover:bg-accent text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="text-xs text-muted-foreground">
+                You are selecting a vendor that is <span className="font-semibold text-amber-600">NPR {(overrideModal.vendorRate - overrideModal.lowestRate).toLocaleString()}</span> above the lowest bidder. FIDIC Clause 4.1 requires documented justification for non-lowest bids.
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 rounded-md border border-emerald-500/30 bg-emerald-500/5">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Lowest Bidder</div>
+                  <div className="font-mono font-bold text-emerald-600 mt-0.5">NPR {overrideModal.lowestRate.toLocaleString()}</div>
+                </div>
+                <div className="p-2.5 rounded-md border border-amber-500/30 bg-amber-500/5">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Selected Vendor</div>
+                  <div className="font-mono font-bold text-amber-600 mt-0.5">NPR {overrideModal.vendorRate.toLocaleString()}</div>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium">Justification <span className="text-red-500">*</span></label>
+                <Textarea
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  placeholder="e.g. Better delivery lead-time (3 days vs 7 days), proven quality track record, existing framework agreement..."
+                  className="mt-1 text-xs min-h-[80px]"
+                  autoFocus
+                />
+                <div className="text-[10px] text-muted-foreground mt-1">This will be permanently logged in the audit trail.</div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={() => setOverrideModal(null)}>Cancel</Button>
+                <Button size="sm" onClick={confirmOverride} className="gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Confirm Override
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
-function ReqCenterView({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
+function ReqCenterView({ reqs, selectedId, onSelect, onVendorSelect }: {
+  reqs: ReqItem[]; selectedId: string; onSelect: (id: string) => void; onVendorSelect: (reqId: string, vendorName: string) => void
+}) {
   return (
     <>
       <div className="px-4 py-3 border-b border-[var(--pane-divider)] bg-secondary/20 text-xs text-muted-foreground">
-        Selecting lowest bidder is automatic (🏆). Choosing a higher bidder requires justification.
+        Selecting lowest bidder is automatic (🏆). Choosing a higher bidder requires justification. Click a vendor card to select.
       </div>
       <div className="space-y-3 p-3">
-        {REQS.map(r => {
+        {reqs.map(r => {
           const lowest = Math.min(...r.vendors.map(v => v.rate))
           const selectedVendor = r.vendors.find(v => v.selected)
           const isOverride = selectedVendor && selectedVendor.rate > lowest
@@ -155,32 +268,37 @@ function ReqCenterView({ selectedId, onSelect }: { selectedId: string; onSelect:
                 <span className="ml-auto text-xs text-muted-foreground">{r.qty} {r.uom}</span>
               </div>
               <div className="font-medium text-sm">{r.item}</div>
-              {/* Vendor matrix */}
+              {/* Vendor matrix — now interactive */}
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {r.vendors.map((v, i) => {
                   const isLowest = v.rate === lowest
                   return (
-                    <div key={i} className={cn(
-                      'p-2 rounded border text-xs',
-                      v.selected ? 'border-primary bg-primary/5' : 'border-[var(--pane-divider)]',
-                      isLowest && !v.selected && 'border-emerald-500/40'
-                    )}>
+                    <button
+                      key={i}
+                      onClick={(e) => { e.stopPropagation(); onVendorSelect(r.id, v.name) }}
+                      className={cn(
+                        'p-2 rounded border text-xs text-left transition-all hover:shadow-sm',
+                        v.selected ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-[var(--pane-divider)] hover:border-primary/40 hover:bg-accent/30',
+                        isLowest && !v.selected && 'border-emerald-500/40'
+                      )}
+                    >
                       <div className="flex items-center justify-between">
                         <span className="font-medium truncate">{v.name}</span>
-                        {isLowest && <Trophy className="w-3 h-3 text-amber-500" />}
+                        {isLowest && <Trophy className="w-3 h-3 text-amber-500 flex-shrink-0" />}
                       </div>
                       <div className="font-mono mt-0.5">NPR {v.rate.toLocaleString()}</div>
-                      {v.selected && <div className="text-[9px] text-primary mt-0.5">✓ Selected</div>}
-                    </div>
+                      {v.selected && <div className="text-[9px] text-primary mt-0.5 font-semibold">✓ Selected</div>}
+                      {isLowest && !v.selected && <div className="text-[9px] text-emerald-600 mt-0.5">Lowest bid</div>}
+                    </button>
                   )
                 })}
               </div>
               {isOverride && (
                 <div className="mt-2 p-2 rounded bg-amber-500/10 border border-amber-500/30 text-[11px] flex items-start gap-1.5">
-                  <AlertTriangle className="w-3 h-3 text-amber-500 mt-0.5" />
+                  <AlertTriangle className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <span className="font-medium">Override justification required:</span>
-                    <span className="text-muted-foreground"> Selected vendor is NPR {(selectedVendor!.rate - lowest).toLocaleString()} above lowest. Reason: "Better delivery lead-time (3 days vs 7 days)".</span>
+                    <span className="font-medium">Override justification on file:</span>
+                    <span className="text-muted-foreground"> NPR {(selectedVendor!.rate - lowest).toLocaleString()} above lowest. "{r.overrideReason || 'Better delivery lead-time (3 days vs 7 days)'}"</span>
                   </div>
                 </div>
               )}
@@ -344,8 +462,9 @@ function MinCenterView() {
   )
 }
 
-function ProcurementInspector({ tab, selectedId }: { tab: Tab; selectedId: string }) {
-  const req = REQS.find(r => r.id === selectedId) ?? REQS[0]
+function ProcurementInspector({ tab, selectedId, reqs }: { tab: Tab; selectedId: string; reqs: ReqItem[] }) {
+  const req = reqs.find(r => r.id === selectedId) ?? reqs[0]
+  if (!req) return null
   return (
     <>
       <PaneHeader title="Inspector" />
@@ -364,6 +483,16 @@ function ProcurementInspector({ tab, selectedId }: { tab: Tab; selectedId: strin
             <div className="flex justify-between"><span className="text-muted-foreground">Lowest bid</span><span className="font-mono">NPR {Math.min(...req.vendors.map(v => v.rate)).toLocaleString()}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Selected</span><span className="font-mono font-medium">{req.vendors.find(v => v.selected)?.name}</span></div>
           </div>
+
+          {req.overrideReason && (
+            <div className="p-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px]">
+              <div className="font-medium flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                <ShieldAlert className="w-3 h-3" />Override justification on file
+              </div>
+              <div className="text-muted-foreground mt-1 italic">&quot;{req.overrideReason}&quot;</div>
+              <div className="text-[10px] text-muted-foreground mt-1">Audit logged · 30 Jul 2026 14:32 · Arjun S.</div>
+            </div>
+          )}
 
           <Separator />
 

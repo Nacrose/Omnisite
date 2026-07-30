@@ -8,6 +8,8 @@ import { CommandPalette } from '@/components/command-palette'
 import { NotificationsBell } from '@/components/notifications-bell'
 import { ProjectSwitcher } from '@/components/project-switcher'
 import { StatusBar } from '@/components/status-bar'
+import { RecentlyViewedRail } from '@/components/recently-viewed-rail'
+import { useKeyboardShortcuts } from '@/lib/use-keyboard-shortcuts'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -52,6 +54,7 @@ export default function Home() {
   const { activeModule, setActiveModule, leftPaneOpen, rightPaneOpen, toggleLeftPane, toggleRightPane, setCommandOpen, setQuickAddOpen } = useApp()
   const active = MODULES.find(m => m.id === activeModule)!
   const Renderer = MODULE_RENDERERS[activeModule]
+  useKeyboardShortcuts()
 
   return (
     <div className="flex h-screen w-screen overflow-hidden workspace-bg theme-transition">
@@ -68,6 +71,9 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Recently viewed rail */}
+        <RecentlyViewedRail />
+
         {/* Search trigger */}
         <button
           onClick={() => setCommandOpen(true)}
@@ -77,6 +83,9 @@ export default function Home() {
           <span>Search…</span>
           <kbd className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-background border border-border font-mono">⌘K</kbd>
         </button>
+        <div className="px-4 pt-1 pb-0.5 text-[9px] text-muted-foreground/50">
+          Press a letter to jump: <kbd className="px-0.5 rounded bg-secondary font-mono">B</kbd> <kbd className="px-0.5 rounded bg-secondary font-mono">S</kbd> <kbd className="px-0.5 rounded bg-secondary font-mono">D</kbd> <kbd className="px-0.5 rounded bg-secondary font-mono">F</kbd> <kbd className="px-0.5 rounded bg-secondary font-mono">N</kbd>
+        </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3">

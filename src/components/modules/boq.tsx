@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,9 +13,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Search, Plus, ChevronRight, ChevronDown, Download, Save, FolderOpen,
   Zap, Edit3, FileSpreadsheet, AlertTriangle, CheckCircle2, TrendingUp,
-  History, Link2, Lock, Layers,
+  History, Link2, Lock, Layers, Copy, Trash2, FilePlus, ArrowRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import { Toaster } from '@/components/ui/sonner'
 
 interface BoqItem {
   id: string
@@ -98,6 +100,8 @@ export function BoqModule() {
   // Convert BOQ_DATA into mutable state so Qty/Rate can be edited inline
   const [boqData, setBoqData] = useState<BoqItem[]>(() => JSON.parse(JSON.stringify(BOQ_DATA)))
   const [editing, setEditing] = useState<{ id: string; field: 'qty' | 'rate' } | null>(null)
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
 
   const allFlat = flatten(boqData)
   const selectedLeaf = allFlat.find(i => i.id === selectedId) ?? allFlat[2]
@@ -126,6 +130,97 @@ export function BoqModule() {
     })
   }
 
+  // Context menu actions
+  const duplicateItem = (id: string) => {
+    setBoqData(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+      const walk = (items: BoqItem[]): BoqItem[] => {
+        const result: BoqItem[] = []
+        for (const it of items) {
+          result.push(it)
+          if (it.id === id) {
+            const copy = JSON.parse(JSON.stringify(it)) as BoqItem
+            copy.id = `${it.id}-copy-${Date.now().toString(36)}`
+            copy.code = `${it.code}-copy`
+            copy.desc = `${it.desc} (Copy)`
+            result.push(copy)
+          }
+          if (it.children) it.children = walk(it.children)
+        }
+        return result
+      }
+      return walk(updated)
+    })
+    toast.success('Item duplicated', { description: `Copy created below ${id}` })
+  }
+
+  const deleteItem = (id: string) => {
+    setBoqData(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+      const walk = (items: BoqItem[]): BoqItem[] => {
+        return items.filter(it => {
+          if (it.id === id) return false
+          if (it.children) it.children = walk(it.children)
+          return true
+        })
+      }
+      return walk(updated)
+    })
+    toast.success('Item deleted', { description: `${id} removed from BOQ` })
+  }
+
+  const addChildItem = (parentId: string) => {
+    const newId = `${parentId}.${Date.now().toString(36)}`
+    setBoqData(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+      const walk = (items: BoqItem[]) => {
+        for (const it of items) {
+          if (it.id === parentId) {
+            if (!it.children) it.children = []
+            it.children.push({
+              id: newId,
+              code: `${it.code}.new`,
+              desc: 'New BOQ item',
+              type: 'Priced',
+              qty: 0,
+              uom: 'cum',
+              rate: 0,
+              level: it.level + 1,
+            })
+            return true
+          }
+          if (it.children && walk(it.children)) return true
+        }
+        return false
+      }
+      walk(updated)
+      return updated
+    })
+    setExpanded(prev => new Set(prev).add(parentId))
+    setSelectedId(newId)
+    toast.success('Child item added', { description: `New item under ${parentId}` })
+  }
+
+  const exportRa = (id: string) => {
+    const item = allFlat.find(i => i.id === id)
+    toast.success('RA exported (DoR format)', {
+      description: `${item?.code} — ${item?.desc} · Excel download started`,
+    })
+  }
+
+  // Close context menu on outside click / escape
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
+    document.addEventListener('click', close)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('click', close)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [contextMenu])
+
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
       const n = new Set(prev)
@@ -146,6 +241,11 @@ export function BoqModule() {
         <div
           key={item.id}
           onClick={() => setSelectedId(item.id)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setSelectedId(item.id)
+            setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id })
+          }}
           className={cn(
             'flex items-center h-9 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover transition-colors',
             isSelected && 'bg-accent'
@@ -256,6 +356,7 @@ export function BoqModule() {
   }
 
   return (
+    <>
     <Workspace3Pane
       leftPane={
         <>
@@ -333,6 +434,47 @@ export function BoqModule() {
       leftPaneWidth="280px"
       rightPaneWidth="380px"
     />
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          <Toaster richColors position="top-center" />
+          <div
+            className="fixed z-50 pane border border-[var(--pane-divider)] rounded-lg shadow-2xl overflow-hidden py-1 w-52 animate-in fade-in zoom-in-95 duration-100"
+            style={{ left: Math.min(contextMenu.x, window.innerWidth - 220), top: Math.min(contextMenu.y, window.innerHeight - 280) }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ContextMenuItem icon={<Edit3 className="w-3.5 h-3.5" />} label="Edit item" onClick={() => { setContextMenu(null); toast.info('Edit mode', { description: 'Double-click cells to edit' }) }} />
+            <ContextMenuItem icon={<Copy className="w-3.5 h-3.5" />} label="Duplicate" shortcut="⌘D" onClick={() => { duplicateItem(contextMenu.itemId); setContextMenu(null) }} />
+            <ContextMenuItem icon={<FilePlus className="w-3.5 h-3.5" />} label="Add child item" onClick={() => { addChildItem(contextMenu.itemId); setContextMenu(null) }} />
+            <div className="my-1 h-px bg-[var(--pane-divider)]" />
+            <ContextMenuItem icon={<FileSpreadsheet className="w-3.5 h-3.5" />} label="Export RA (DoR)" onClick={() => { exportRa(contextMenu.itemId); setContextMenu(null) }} />
+            <ContextMenuItem icon={<Link2 className="w-3.5 h-3.5" />} label="Link to Schedule" onClick={() => { setContextMenu(null); toast.info('Link Schedule', { description: 'Open task picker' }) }} />
+            <ContextMenuItem icon={<History className="w-3.5 h-3.5" />} label="View audit log" onClick={() => { setContextMenu(null); toast.info('Audit log', { description: 'Opening revision history' }) }} />
+            <div className="my-1 h-px bg-[var(--pane-divider)]" />
+            <ContextMenuItem icon={<Trash2 className="w-3.5 h-3.5" />} label="Delete" danger onClick={() => { deleteItem(contextMenu.itemId); setContextMenu(null) }} />
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+function ContextMenuItem({ icon, label, shortcut, onClick, danger }: {
+  icon: React.ReactNode; label: string; shortcut?: string; onClick: () => void; danger?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-accent text-left transition-colors',
+        danger && 'text-red-600 hover:bg-red-500/10 dark:text-red-400'
+      )}
+    >
+      <span className={cn('text-muted-foreground', danger && 'text-red-500')}>{icon}</span>
+      <span className="flex-1">{label}</span>
+      {shortcut && <kbd className="text-[9px] px-1 py-0.5 rounded bg-secondary text-muted-foreground font-mono">{shortcut}</kbd>}
+    </button>
   )
 }
 

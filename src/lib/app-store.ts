@@ -34,12 +34,20 @@ interface AppState {
   // Command palette
   commandOpen: boolean
   setCommandOpen: (b: boolean) => void
+  // Recently viewed modules (most recent first, max 5, no duplicates)
+  recentModules: ModuleId[]
+  pushRecent: (m: ModuleId) => void
 }
 
-export const useApp = create<AppState>((set) => ({
+export const useApp = create<AppState>((set, get) => ({
   activeModule: 'dashboard',
   activeProject: 'Kathmandu Ring Road Expansion — Package 3',
-  setActiveModule: (m) => set({ activeModule: m }),
+  setActiveModule: (m) => {
+    set({ activeModule: m })
+    // Track recent — dedupe and prepend, cap at 5
+    const prev = get().recentModules.filter(x => x !== m)
+    set({ recentModules: [m, ...prev].slice(0, 5) })
+  },
   setActiveProject: (p) => set({ activeProject: p }),
   leftPaneOpen: true,
   rightPaneOpen: true,
@@ -49,6 +57,11 @@ export const useApp = create<AppState>((set) => ({
   setQuickAddOpen: (b) => set({ quickAddOpen: b }),
   commandOpen: false,
   setCommandOpen: (b) => set({ commandOpen: b }),
+  recentModules: [],
+  pushRecent: (m) => {
+    const prev = get().recentModules.filter(x => x !== m)
+    set({ recentModules: [m, ...prev].slice(0, 5) })
+  },
 }))
 
 export const MODULES: { id: ModuleId; name: string; shortName: string; icon: string; group: string }[] = [
@@ -67,3 +80,21 @@ export const MODULES: { id: ModuleId; name: string; shortName: string; icon: str
   { id: 'time-attendance', name: 'Time & Attendance', shortName: 'Timecards', icon: 'Fingerprint', group: 'Resources' },
   { id: 'admin', name: 'Admin & Master Data', shortName: 'Admin', icon: 'Settings', group: 'Resources' },
 ]
+
+// Keyboard shortcut mapping (single key, fires when not typing in an input)
+export const KEYBOARD_SHORTCUTS: Record<string, ModuleId> = {
+  h: 'dashboard',
+  b: 'boq',
+  s: 'scheduler',
+  d: 'daily-ops',
+  e: 'equipment',
+  p: 'procurement',
+  f: 'financials',
+  u: 'subcontractor', // 's' taken by scheduler, use 'u' for sUbcontractor
+  w: 'drawings', // draWings
+  l: 'correspondence', // Letters
+  q: 'qs',
+  r: 'reports',
+  t: 'time-attendance',
+  a: 'admin',
+}

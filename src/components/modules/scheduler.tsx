@@ -15,6 +15,7 @@ import {
   Package, Activity, Milestone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CollaboratorCursors } from '@/components/collaborator-cursors'
 
 interface Task {
   id: string
@@ -429,6 +430,9 @@ export function SchedulerModule() {
                   >
                     <div className="absolute -top-0 -translate-x-1/2 px-1 py-0.5 bg-red-500 text-white text-[9px] rounded-b font-semibold">TODAY</div>
                   </div>
+
+                  {/* Live collaborator cursors (simulated WebSocket presence) */}
+                  <CollaboratorCursors />
                 </div>
 
                 {/* Resource usage panel (toggle) */}
