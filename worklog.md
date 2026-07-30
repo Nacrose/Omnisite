@@ -55,3 +55,22 @@ Stage Summary:
 - Dev server: all GET / return 200, compiles cleanly.
 - Browser-verified: live clock ticks (03:41:58 → 03:42:04), BOQ RA recalculation works (NPR 13,671 → NPR 14,859 when O&P 15%→25%), Scheduler has 12 draggable Gantt bars, T&A phone mockup clock-in button toggles green↔red, Quick Add navigates to correct modules.
 - Screenshots saved: omnisite-time-attendance.png, omnisite-boq-ra.png, omnisite-scheduler.png (in /home/z/my-project/download/)
+
+---
+Task ID: 3
+Agent: Super Z (main)
+Task: Iteration 3 — BOQ inline editing, Gantt resize handles, notifications dropdown, project switcher, global status bar.
+
+Work Log:
+- BOQ Grid Inline Editing: Converted BOQ_DATA into mutable state. Qty and Rate cells are now inline-editable inputs (type=number) for Priced/Daywork items. Provisional Sum rates are locked (shown with lock icon + read-only value). Headings show "—" placeholders. Inputs have transparent borders by default, show a hover state, and a focus ring (border-primary + ring) when active. The Amount column auto-calculates qty×rate live. The bottom bar contract total now uses tabular-nums and updates in real time. Verified: changing excavation qty from 1240 to 1500 increased contract total from NPR 64,972,600 to NPR 65,098,700 (exactly +260 × NPR 485 = +NPR 126,100). Added "Click Qty/Rate to edit" hint pill with pulsing dot. Left pane contract summary now shows live total in millions.
+- Scheduler Resize Handles: Added onResizeMouseDown handler that starts a 'resize' drag mode tracking originalDuration. The useEffect drag handler now branches on mode: 'move' updates start, 'resize' updates duration (clamped to 1..TOTAL_WEEKS-start). Both resize handles (left edge = move, right edge = resize) now have onMouseDown handlers and are 2px wide with hover:bg-white/70. Updated hint pill to "Drag bars to move · drag edges to resize". Updated hover tooltip to "drag body to move, edges to resize". Left outline now shows duration with strikethrough baseline when duration changed (e.g. "5d ̶4̶d̶"). Verified: 24 resize handles present (12 bars × 2 edges).
+- Notifications Bell: New NotificationsBell component replacing the static bell icon. Opens a 380px dropdown with 8 realistic notifications (NCR billing hold, PO approval, RFI overdue, DSR review, drawing revision, near-miss, toolbox talk, RA bill). Each item has type icon, severity color (info/warning/critical), URGENT badge for critical, unread dot, title, description, and relative time. Header shows unread count badge + "Mark all read" button. Filter tabs (All/Unread/Critical). Footer links to Correspondence. Unread badge on bell icon shows count (4). Verified: clicking bell opens dropdown, items are present, "Mark all read" works with toast.
+- Project Switcher: New ProjectSwitcher component replacing the static project name. Opens a 420px dropdown with 5 projects (Kathmandu Ring Road P3, Melamchi Water Supply, Pokhara Airport, Fast Track Expressway, Bharatpur Hospital). Each project shows code badge, name, location, value, progress bar, and status dot (active=emerald, closed=slate). Selected project shows check mark. Footer mentions "Row-Level Security enforced per project" + "+ New Project" button. Verified: switching to Melamchi project updates the top bar and shows a success toast.
+- Global Status Bar: New StatusBar component at the bottom of the main workspace (h-6, vibrancy). Shows: sync status (auto-saves every 8s with spinner → "Saved Xs ago"), real-time connected indicator with pulsing dot, collaborator count (4) with avatar dots (AS/BR/SG/RB), git branch (main), active module name, cloud region (ap-south-1), and version (v0.9.4-beta). All separated by vertical dividers. "Saved Xs ago" updates every 5 seconds.
+
+Stage Summary:
+- All 5 polish items implemented and browser-verified.
+- Lint: 0 errors, 0 warnings.
+- Dev server: all GET / return 200, compiles cleanly.
+- Browser-verified: BOQ inline editing changes total from NPR 64,972,600 → NPR 65,098,700 when qty 1240→1500; scheduler has 24 resize handles; notifications dropdown opens with 8 items + URGENT badges; project switcher switches active project with toast; status bar shows live "Saved Xs ago" + collaborators + version.
+- Screenshots saved: omnisite-boq-inline-edit.png, omnisite-notifications.png, omnisite-project-switcher.png

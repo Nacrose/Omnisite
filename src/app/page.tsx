@@ -5,10 +5,13 @@ import { ModuleIcon } from '@/components/module-icon'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { QuickAddMenu } from '@/components/quick-add-menu'
 import { CommandPalette } from '@/components/command-palette'
+import { NotificationsBell } from '@/components/notifications-bell'
+import { ProjectSwitcher } from '@/components/project-switcher'
+import { StatusBar } from '@/components/status-bar'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Search, Plus, Bell, ChevronDown, PanelLeft, PanelRight,
+  Search, Plus, ChevronDown, PanelLeft, PanelRight,
   Building2, CircleUser, Wifi,
 } from 'lucide-react'
 import { DashboardModule } from '@/components/modules/dashboard'
@@ -46,7 +49,7 @@ const MODULE_RENDERERS: Record<ModuleId, () => React.ReactNode> = {
 const MODULE_GROUPS = ['Overview', 'Pre-Construction', 'Site Execution', 'Project Controls', 'Documents', 'Resources']
 
 export default function Home() {
-  const { activeModule, setActiveModule, activeProject, leftPaneOpen, rightPaneOpen, toggleLeftPane, toggleRightPane, setCommandOpen, setQuickAddOpen } = useApp()
+  const { activeModule, setActiveModule, leftPaneOpen, rightPaneOpen, toggleLeftPane, toggleRightPane, setCommandOpen, setQuickAddOpen } = useApp()
   const active = MODULES.find(m => m.id === activeModule)!
   const Renderer = MODULE_RENDERERS[activeModule]
 
@@ -134,10 +137,7 @@ export default function Home() {
             <span className="text-sm font-semibold">{active.name}</span>
             <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">·</span>
-            <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 max-w-[280px]">
-              <span className="truncate">{activeProject}</span>
-              <ChevronDown className="w-3 h-3" />
-            </button>
+            <ProjectSwitcher />
           </div>
 
           <div className="flex-1" />
@@ -160,10 +160,7 @@ export default function Home() {
               <Search className="w-4 h-4" />
             </button>
 
-            <button className="relative p-2 rounded-md hover:bg-accent text-muted-foreground">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[var(--critical)]" />
-            </button>
+            <NotificationsBell />
 
             <ThemeSwitcher />
 
@@ -204,6 +201,9 @@ export default function Home() {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* Bottom status bar */}
+        <StatusBar />
       </div>
 
       <QuickAddMenu />

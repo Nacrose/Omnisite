@@ -95,8 +95,36 @@ export function BoqModule() {
   const [selectedId, setSelectedId] = useState('1.1.3')
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['1', '1.1', '2', '2.1', '3']))
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const allFlat = flatten(BOQ_DATA)
+  // Convert BOQ_DATA into mutable state so Qty/Rate can be edited inline
+  const [boqData, setBoqData] = useState<BoqItem[]>(() => JSON.parse(JSON.stringify(BOQ_DATA)))
+  const [editing, setEditing] = useState<{ id: string; field: 'qty' | 'rate' } | null>(null)
+
+  const allFlat = flatten(boqData)
   const selectedLeaf = allFlat.find(i => i.id === selectedId) ?? allFlat[2]
+
+  // Live contract total — sum of qty × rate for all non-heading items
+  const contractTotal = allFlat
+    .filter(i => i.type !== 'Heading')
+    .reduce((sum, i) => sum + i.qty * i.rate, 0)
+
+  // Update a single BOQ item's qty or rate
+  const updateItem = (id: string, field: 'qty' | 'rate', value: number) => {
+    setBoqData(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+      const walk = (items: BoqItem[]) => {
+        for (const it of items) {
+          if (it.id === id) {
+            it[field] = Math.max(0, value)
+            return true
+          }
+          if (it.children && walk(it.children)) return true
+        }
+        return false
+      }
+      walk(updated)
+      return updated
+    })
+  }
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
@@ -150,12 +178,56 @@ export function BoqModule() {
           <div className={cn('flex-1 min-w-0 truncate', isHeading && 'font-semibold')}>
             {item.desc}
           </div>
-          <div className="w-24 flex-shrink-0 text-right pr-2">{item.qty > 0 ? item.qty.toLocaleString() : '—'}</div>
-          <div className="w-14 flex-shrink-0 text-muted-foreground">{item.uom || '—'}</div>
-          <div className="w-28 flex-shrink-0 text-right pr-2 font-mono">
-            {item.rate > 0 ? item.rate.toLocaleString() : '—'}
+          {/* Qty cell — inline editable for non-heading items */}
+          <div className="w-24 flex-shrink-0 pr-2">
+            {isHeading || item.type === 'Provisional Sum' ? (
+              <span className="text-right block text-muted-foreground">{item.qty > 0 ? item.qty.toLocaleString() : '—'}</span>
+            ) : (
+              <input
+                type="number"
+                value={item.qty || ''}
+                onChange={(e) => updateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
+                onFocus={() => setEditing({ id: item.id, field: 'qty' })}
+                onBlur={() => setEditing(null)}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
+                  editing?.id === item.id && editing.field === 'qty'
+                    ? 'border-primary bg-background ring-1 ring-primary/30'
+                    : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
+                )}
+              />
+            )}
           </div>
-          <div className="w-28 flex-shrink-0 text-right pr-3 font-mono font-medium">
+          <div className="w-14 flex-shrink-0 text-muted-foreground">{item.uom || '—'}</div>
+          {/* Rate cell — inline editable for non-heading items (locked for Provisional Sum) */}
+          <div className="w-28 flex-shrink-0 pr-2">
+            {isHeading ? (
+              <span className="text-right block font-mono text-muted-foreground">—</span>
+            ) : item.type === 'Provisional Sum' ? (
+              <div className="flex items-center justify-end gap-1 text-muted-foreground">
+                <Lock className="w-2.5 h-2.5" />
+                <span className="font-mono">{item.rate.toLocaleString()}</span>
+              </div>
+            ) : (
+              <input
+                type="number"
+                value={item.rate || ''}
+                onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                onFocus={() => setEditing({ id: item.id, field: 'rate' })}
+                onBlur={() => setEditing(null)}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
+                  editing?.id === item.id && editing.field === 'rate'
+                    ? 'border-primary bg-background ring-1 ring-primary/30'
+                    : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
+                )}
+              />
+            )}
+          </div>
+          {/* Amount cell — auto-calculated, live updates */}
+          <div className="w-28 flex-shrink-0 text-right pr-3 font-mono font-medium tabular-nums">
             {item.qty * item.rate > 0 ? (item.qty * item.rate).toLocaleString() : '—'}
           </div>
           <div className="w-24 flex-shrink-0 pr-2">
@@ -197,12 +269,12 @@ export function BoqModule() {
             </div>
           </div>
           <PaneBody className="py-2">
-            <BoqOutlineTree items={BOQ_DATA} selectedId={selectedId} onSelect={setSelectedId} expanded={expanded} onToggle={toggleExpand} />
+            <BoqOutlineTree items={boqData} selectedId={selectedId} onSelect={setSelectedId} expanded={expanded} onToggle={toggleExpand} />
           </PaneBody>
           <div className="border-t border-[var(--pane-divider)] p-3 space-y-2">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Contract Summary</div>
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between"><span className="text-muted-foreground">Total Contract Value</span><span className="font-mono font-semibold">NPR 487.4M</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total Contract Value</span><span className="font-mono font-semibold tabular-nums">NPR {(contractTotal / 1_000_000).toFixed(1)}M</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Priced items</span><span className="font-mono">82</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Provisional Sums</span><span className="font-mono">7</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Daywork items</span><span className="font-mono">3</span></div>
@@ -213,6 +285,10 @@ export function BoqModule() {
       centerPane={
         <>
           <PaneHeader title={`BOQ Grid · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}>
+            <span className="hidden lg:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Click Qty/Rate to edit
+            </span>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
               <FileSpreadsheet className="w-3.5 h-3.5" />Export RA (DoR Format)
             </Button>
@@ -235,12 +311,15 @@ export function BoqModule() {
             <div className="w-10 text-center">RA</div>
           </div>
           <PaneBody className="px-0">
-            {renderRows(BOQ_DATA)}
+            {renderRows(boqData)}
           </PaneBody>
           <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs text-muted-foreground bg-secondary/30">
-            <span>{allFlat.filter(i => i.type !== 'Heading').length} line items · 3 headings expanded</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {allFlat.filter(i => i.type !== 'Heading').length} line items · live totals
+            </span>
             <div className="flex-1" />
-            <span>Contract Total: <span className="font-mono font-semibold text-foreground">NPR 487,428,500</span></span>
+            <span>Contract Total: <span className="font-mono font-bold text-foreground tabular-nums">NPR {contractTotal.toLocaleString()}</span></span>
           </div>
         </>
       }

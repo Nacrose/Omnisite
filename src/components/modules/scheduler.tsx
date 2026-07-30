@@ -91,7 +91,11 @@ export function SchedulerModule() {
   const [showCriticalOnly, setShowCriticalOnly] = useState(false)
   // Convert TASKS into mutable state so bars can be dragged to move dates
   const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(JSON.stringify(TASKS)))
-  const [dragging, setDragging] = useState<{ id: string; startX: number; originalStart: number } | null>(null)
+  const [dragging, setDragging] = useState<
+    | { id: string; startX: number; originalStart: number; mode: 'move' }
+    | { id: string; startX: number; originalDuration: number; mode: 'resize' }
+    | null
+  >(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   const flat = flattenTasks(tasks)
@@ -109,6 +113,25 @@ export function SchedulerModule() {
         for (const t of items) {
           if (t.id === id) {
             t.start = Math.max(0, Math.min(TOTAL_WEEKS - t.duration, newStart))
+            return true
+          }
+          if (t.children && walk(t.children)) return true
+        }
+        return false
+      }
+      walk(updated)
+      return updated
+    })
+  }
+
+  // Update a task's duration when resized
+  const updateTaskDuration = (id: string, newDuration: number) => {
+    setTasks(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as Task[]
+      const walk = (items: Task[]) => {
+        for (const t of items) {
+          if (t.id === id) {
+            t.duration = Math.max(1, Math.min(TOTAL_WEEKS - t.start, newDuration))
             return true
           }
           if (t.children && walk(t.children)) return true
@@ -160,7 +183,14 @@ export function SchedulerModule() {
               {t.type === 'Summary' && <Layers className="w-3.5 h-3.5 text-muted-foreground" />}
             </div>
             <div className={cn('flex-1 min-w-0 truncate', t.type === 'Summary' && 'font-semibold')}>{t.name}</div>
-            <div className="w-16 flex-shrink-0 text-right pr-2">{t.duration}d</div>
+            <div className="w-16 flex-shrink-0 text-right pr-2">
+              <span className="font-mono tabular-nums">{t.duration}d</span>
+              {t.baseline && t.baseline[1] - t.baseline[0] !== t.duration && t.type !== 'Summary' && (
+                <span className="text-[9px] text-muted-foreground line-through ml-1">
+                  {t.baseline[1] - t.baseline[0]}d
+                </span>
+              )}
+            </div>
             <div className="w-14 flex-shrink-0 text-right pr-2 font-mono">{t.progress}%</div>
           </div>
         )
@@ -181,7 +211,16 @@ export function SchedulerModule() {
     e.stopPropagation()
     e.preventDefault()
     setSelectedId(t.id)
-    setDragging({ id: t.id, startX: e.clientX, originalStart: t.start })
+    setDragging({ id: t.id, startX: e.clientX, originalStart: t.start, mode: 'move' })
+  }
+
+  // Mouse handler for resize (right-edge drag) on Gantt bars
+  const onResizeMouseDown = (e: React.MouseEvent, t: Task) => {
+    if (t.type === 'Milestone' || t.type === 'Summary') return
+    e.stopPropagation()
+    e.preventDefault()
+    setSelectedId(t.id)
+    setDragging({ id: t.id, startX: e.clientX, originalDuration: t.duration, mode: 'resize' })
   }
 
   useEffect(() => {
@@ -189,7 +228,11 @@ export function SchedulerModule() {
     const onMove = (e: MouseEvent) => {
       const deltaPx = e.clientX - dragging.startX
       const deltaWeeks = Math.round(deltaPx / WEEK_WIDTH)
-      updateTaskStart(dragging.id, dragging.originalStart + deltaWeeks)
+      if (dragging.mode === 'move') {
+        updateTaskStart(dragging.id, dragging.originalStart + deltaWeeks)
+      } else {
+        updateTaskDuration(dragging.id, dragging.originalDuration + deltaWeeks)
+      }
     }
     const onUp = () => setDragging(null)
     window.addEventListener('mousemove', onMove)
@@ -230,7 +273,7 @@ export function SchedulerModule() {
           <PaneHeader title="Gantt Canvas · W1 to W52">
             <span className="hidden md:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              Drag bars to reschedule
+              Drag bars to move · drag edges to resize
             </span>
             <label className="flex items-center gap-1.5 text-xs">
               <Switch checked={showResources} onCheckedChange={setShowResources} />
@@ -345,17 +388,23 @@ export function SchedulerModule() {
                                 >
                                   <div className="absolute inset-y-0 left-0 bg-black/20" style={{ width: `${t.progress}%` }} />
                                   <span className="relative z-10 truncate pointer-events-none">{t.duration}d · {t.progress}%</span>
-                                  {/* Resize handles */}
+                                  {/* Resize handles — left edge moves, right edge resizes duration */}
                                   {t.type !== 'Summary' && (
                                     <>
-                                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-white/40 opacity-0 group-hover:opacity-100 cursor-ew-resize transition-opacity" />
-                                      <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white/40 opacity-0 group-hover:opacity-100 cursor-ew-resize transition-opacity" />
+                                      <div
+                                        className="absolute left-0 top-0 bottom-0 w-2 bg-white/40 opacity-0 group-hover:opacity-100 cursor-ew-resize transition-opacity hover:bg-white/70"
+                                        onMouseDown={(e) => onBarMouseDown(e, t)}
+                                      />
+                                      <div
+                                        className="absolute right-0 top-0 bottom-0 w-2 bg-white/40 opacity-0 group-hover:opacity-100 cursor-ew-resize transition-opacity hover:bg-white/70"
+                                        onMouseDown={(e) => onResizeMouseDown(e, t)}
+                                      />
                                     </>
                                   )}
                                   {/* Hover tooltip */}
                                   {isHovered && !isDragging && (
                                     <div className="absolute -top-7 left-1/2 -translate-x-1/2 pane border border-[var(--pane-divider)] rounded px-1.5 py-0.5 text-[9px] text-foreground whitespace-nowrap shadow-md z-40 pointer-events-none">
-                                      Wk {t.start + 1} → Wk {t.start + t.duration + 1} · drag to move
+                                      Wk {t.start + 1} → Wk {t.start + t.duration + 1} · drag body to move, edges to resize
                                     </div>
                                   )}
                                 </div>
