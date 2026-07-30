@@ -321,10 +321,31 @@ const EQUIPMENT: RaRow[] = [
 ]
 
 function RaInspector({ item }: { item: BoqItem }) {
+  // Live state for RA coefficients — drives real-time recalculation of the Financial Summary
+  const [pctCosts, setPctCosts] = useState({
+    labour: { on: true, pct: 2.5 },
+    material: { on: true, pct: 1.5 },
+    equipment: { on: true, pct: 3.5 },
+    tp: { on: false, pct: 0 },
+  })
+  const [opOnDirect, setOpOnDirect] = useState(true)
+  const [opOnPct, setOpOnPct] = useState(true)
+  const [opPct, setOpPct] = useState(15)
+
+  // Recompute on every render — pure function of state
   const directCost = [...MATERIALS, ...LABOUR, ...EQUIPMENT].reduce((s, r) => s + r.qty * r.rate, 0)
-  const pctCostBase = directCost * 0.035 // T&P 3.5% of labour+equip
-  const overheadPct = 0.15
-  const overheadAmount = (directCost + pctCostBase) * overheadPct
+  const labourCost = LABOUR.reduce((s, r) => s + r.qty * r.rate, 0)
+  const materialCost = MATERIALS.reduce((s, r) => s + r.qty * r.rate, 0)
+  const equipCost = EQUIPMENT.reduce((s, r) => s + r.qty * r.rate, 0)
+
+  const pctCostBase =
+    (pctCosts.labour.on ? labourCost * pctCosts.labour.pct / 100 : 0) +
+    (pctCosts.material.on ? materialCost * pctCosts.material.pct / 100 : 0) +
+    (pctCosts.equipment.on ? equipCost * pctCosts.equipment.pct / 100 : 0) +
+    (pctCosts.tp.on ? directCost * pctCosts.tp.pct / 100 : 0)
+
+  const opBase = (opOnDirect ? directCost : 0) + (opOnPct ? pctCostBase : 0)
+  const overheadAmount = opBase * (opPct / 100)
   const totalCost = directCost + pctCostBase + overheadAmount
   const contractRate = item.rate
   const margin = contractRate - totalCost
@@ -366,24 +387,57 @@ function RaInspector({ item }: { item: BoqItem }) {
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
-                  <Checkbox defaultChecked />
+                  <Checkbox
+                    checked={pctCosts.labour.on}
+                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, labour: { ...s.labour, on: !!v } }))}
+                  />
                   <span className="flex-1">% of Labour</span>
-                  <Input className="h-6 w-12 text-xs" defaultValue="2.5" />
+                  <Input
+                    className="h-6 w-12 text-xs"
+                    type="number"
+                    value={pctCosts.labour.pct}
+                    onChange={(e) => setPctCosts(s => ({ ...s, labour: { ...s.labour, pct: parseFloat(e.target.value) || 0 } }))}
+                  />
                 </label>
                 <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
-                  <Checkbox defaultChecked />
+                  <Checkbox
+                    checked={pctCosts.material.on}
+                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, material: { ...s.material, on: !!v } }))}
+                  />
                   <span className="flex-1">% of Material</span>
-                  <Input className="h-6 w-12 text-xs" defaultValue="1.5" />
+                  <Input
+                    className="h-6 w-12 text-xs"
+                    type="number"
+                    value={pctCosts.material.pct}
+                    onChange={(e) => setPctCosts(s => ({ ...s, material: { ...s.material, pct: parseFloat(e.target.value) || 0 } }))}
+                  />
                 </label>
                 <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
-                  <Checkbox defaultChecked />
+                  <Checkbox
+                    checked={pctCosts.equipment.on}
+                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, equipment: { ...s.equipment, on: !!v } }))}
+                  />
                   <span className="flex-1">% of Equipment</span>
-                  <Input className="h-6 w-12 text-xs" defaultValue="3.5" />
+                  <Input
+                    className="h-6 w-12 text-xs"
+                    type="number"
+                    value={pctCosts.equipment.pct}
+                    onChange={(e) => setPctCosts(s => ({ ...s, equipment: { ...s.equipment, pct: parseFloat(e.target.value) || 0 } }))}
+                  />
                 </label>
                 <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
-                  <Checkbox />
+                  <Checkbox
+                    checked={pctCosts.tp.on}
+                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, tp: { ...s.tp, on: !!v } }))}
+                  />
                   <span className="flex-1">T&P Charges</span>
-                  <Input className="h-6 w-12 text-xs" placeholder="—" />
+                  <Input
+                    className="h-6 w-12 text-xs"
+                    type="number"
+                    placeholder="—"
+                    value={pctCosts.tp.pct || ''}
+                    onChange={(e) => setPctCosts(s => ({ ...s, tp: { ...s.tp, pct: parseFloat(e.target.value) || 0 } }))}
+                  />
                 </label>
               </div>
             </div>
@@ -393,30 +447,44 @@ function RaInspector({ item }: { item: BoqItem }) {
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Overhead & Profit (cumulative)</div>
               <div className="space-y-2 text-xs">
                 <label className="flex items-center gap-2">
-                  <Checkbox defaultChecked />
+                  <Checkbox
+                    checked={opOnDirect}
+                    onCheckedChange={(v) => setOpOnDirect(!!v)}
+                  />
                   <span className="flex-1">On Direct Cost</span>
                   <span className="font-mono">NPR {directCost.toFixed(0)}</span>
                 </label>
                 <label className="flex items-center gap-2">
-                  <Checkbox defaultChecked />
+                  <Checkbox
+                    checked={opOnPct}
+                    onCheckedChange={(v) => setOpOnPct(!!v)}
+                  />
                   <span className="flex-1">On Prior % Costs</span>
                   <span className="font-mono">NPR {pctCostBase.toFixed(0)}</span>
                 </label>
                 <div className="flex items-center gap-2 pl-6 pt-1">
                   <span className="flex-1 text-muted-foreground">O&P %</span>
-                  <Input className="h-6 w-16 text-xs" defaultValue="15" />
+                  <Input
+                    className="h-6 w-16 text-xs"
+                    type="number"
+                    value={opPct}
+                    onChange={(e) => setOpPct(parseFloat(e.target.value) || 0)}
+                  />
                   <span className="text-muted-foreground">%</span>
                 </div>
                 <div className="flex justify-between pt-1 border-t border-[var(--pane-divider)]">
                   <span className="font-medium">O&P Amount</span>
-                  <span className="font-mono font-semibold">NPR {overheadAmount.toFixed(0)}</span>
+                  <span className="font-mono font-semibold tabular-nums">NPR {overheadAmount.toFixed(0)}</span>
                 </div>
               </div>
             </div>
 
             {/* Financial Summary */}
             <div className="px-4 py-3 bg-secondary/30">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Financial Summary & Margin</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+                Financial Summary & Margin
+                <span className="text-[10px] font-normal text-primary/70 normal-case tracking-normal">· recalculates live</span>
+              </div>
               <div className="space-y-1.5 text-xs">
                 <Row label="Direct Cost" value={`NPR ${directCost.toFixed(0)}`} />
                 <Row label="% Costs" value={`NPR ${pctCostBase.toFixed(0)}`} muted />
@@ -430,12 +498,35 @@ function RaInspector({ item }: { item: BoqItem }) {
                     <TrendingUp className={cn('w-3.5 h-3.5', margin >= 0 ? 'delta-up' : 'delta-down')} />
                     Actual Gross Margin
                   </span>
-                  <span className={cn('font-mono font-bold', margin >= 0 ? 'delta-up' : 'delta-down')}>
+                  <span className={cn('font-mono font-bold tabular-nums', margin >= 0 ? 'delta-up' : 'delta-down')}>
                     {marginPct >= 0 ? '+' : ''}{marginPct.toFixed(1)}%
                   </span>
                 </div>
                 <div className="text-[10px] text-muted-foreground pl-5">
-                  Margin per {item.uom}: NPR {margin.toFixed(0)} · No double-count of RA O&P
+                  Margin per {item.uom}: NPR <span className="font-mono tabular-nums">{margin.toFixed(0)}</span> · No double-count of RA O&P
+                </div>
+                {/* Visual margin bar */}
+                <div className="mt-2 pt-2 border-t border-[var(--pane-divider)]">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                    <span>Cost</span>
+                    <span>Margin</span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden flex bg-secondary">
+                    <div
+                      className="bg-amber-500/70 transition-all duration-300"
+                      style={{ width: `${Math.min(100, (totalCost / contractRate) * 100)}%` }}
+                    />
+                    <div
+                      className={cn('transition-all duration-300', margin >= 0 ? 'bg-emerald-500/70' : 'bg-red-500/70')}
+                      style={{ width: `${Math.max(0, Math.min(100, (margin / contractRate) * 100))}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] mt-1">
+                    <span className="font-mono text-amber-600">NPR {totalCost.toFixed(0)}</span>
+                    <span className={cn('font-mono', margin >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+                      {margin >= 0 ? '+' : ''}NPR {margin.toFixed(0)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

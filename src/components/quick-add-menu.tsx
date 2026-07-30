@@ -1,22 +1,22 @@
 'use client'
 
-import { useApp } from '@/lib/app-store'
+import { useApp, ModuleId } from '@/lib/app-store'
 import { X, ClipboardList, Mail, Landmark, Truck, FileStack, ShieldAlert, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
-const ACTIONS = [
-  { id: 'dsr', label: 'Daily Site Report', icon: ClipboardList, color: 'text-emerald-500', desc: 'Log today\'s progress' },
-  { id: 'rfi', label: 'RFI', icon: Mail, color: 'text-sky-500', desc: 'Request for Information' },
-  { id: 'expense', label: 'Quick Expense', icon: Landmark, color: 'text-amber-500', desc: 'Record indirect cost' },
-  { id: 'equipment', label: 'Equipment Log', icon: Truck, color: 'text-violet-500', desc: 'Update fleet status' },
-  { id: 'drawing', label: 'Upload Drawing', icon: FileStack, color: 'text-rose-500', desc: 'Add to register' },
-  { id: 'ncr', label: 'NCR / Incident', icon: ShieldAlert, color: 'text-red-500', desc: 'Quality/Safety issue' },
-  { id: 'worker', label: 'Add Worker', icon: UserPlus, color: 'text-cyan-500', desc: 'New staff on project' },
+const ACTIONS: { id: string; label: string; icon: typeof ClipboardList; color: string; desc: string; module: ModuleId }[] = [
+  { id: 'dsr', label: 'Daily Site Report', icon: ClipboardList, color: 'text-emerald-500', desc: 'Log today\'s progress', module: 'daily-ops' },
+  { id: 'rfi', label: 'RFI', icon: Mail, color: 'text-sky-500', desc: 'Request for Information', module: 'correspondence' },
+  { id: 'expense', label: 'Quick Expense', icon: Landmark, color: 'text-amber-500', desc: 'Record indirect cost', module: 'financials' },
+  { id: 'equipment', label: 'Equipment Log', icon: Truck, color: 'text-violet-500', desc: 'Update fleet status', module: 'equipment' },
+  { id: 'drawing', label: 'Upload Drawing', icon: FileStack, color: 'text-rose-500', desc: 'Add to register', module: 'drawings' },
+  { id: 'ncr', label: 'NCR / Incident', icon: ShieldAlert, color: 'text-red-500', desc: 'Quality/Safety issue', module: 'qs' },
+  { id: 'worker', label: 'Add Worker', icon: UserPlus, color: 'text-cyan-500', desc: 'New staff on project', module: 'time-attendance' },
 ]
 
 export function QuickAddMenu() {
-  const { quickAddOpen, setQuickAddOpen } = useApp()
+  const { quickAddOpen, setQuickAddOpen, setActiveModule } = useApp()
 
   return (
     <>
@@ -27,7 +27,7 @@ export function QuickAddMenu() {
           onClick={() => setQuickAddOpen(false)}
         >
           <div
-            className="w-full max-w-md pane border border-[var(--pane-divider)] rounded-xl shadow-2xl overflow-hidden"
+            className="w-full max-w-md pane border border-[var(--pane-divider)] rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 h-12 border-b border-[var(--pane-divider)]">
@@ -46,14 +46,15 @@ export function QuickAddMenu() {
                   <button
                     key={a.id}
                     onClick={() => {
+                      setActiveModule(a.module)
                       toast.success(`${a.label} draft created`, {
-                        description: a.desc,
+                        description: `Navigated to ${a.desc}`,
                       })
                       setQuickAddOpen(false)
                     }}
                     className="flex flex-col items-start gap-1.5 p-3 rounded-lg border border-[var(--pane-divider)] hover:bg-accent hover:border-primary/30 transition-all text-left group"
                   >
-                    <Icon className={`w-5 h-5 ${a.color}`} />
+                    <Icon className={`w-5 h-5 ${a.color} group-hover:scale-110 transition-transform`} />
                     <div>
                       <div className="text-sm font-medium">{a.label}</div>
                       <div className="text-xs text-muted-foreground">{a.desc}</div>

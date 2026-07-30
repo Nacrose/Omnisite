@@ -35,3 +35,23 @@ Stage Summary:
 - Production-ready Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui stack.
 - Lint clean, dev server compiles in ~140ms, all routes return 200.
 - Screenshot saved at /home/z/my-project/download/omnisite-dashboard.png
+
+---
+Task ID: 2
+Agent: Super Z (main)
+Task: Iteration 2 — Add interactive polish: live clock, RA live recalculation, draggable Gantt bars, mobile phone mockup, Quick Add navigation, page transitions.
+
+Work Log:
+- Dashboard: Added live ticking clock (updates every second) with date in the header strip; KPI cards now animate in with Framer Motion staggered fade-up + subtle scale-on-hover.
+- BOQ RA Builder: Replaced static % Costs / O&P inputs with React state. All four % Costs checkboxes (Labour/Material/Equipment/T&P), their percentage inputs, the O&P "On Direct Cost" / "On Prior % Costs" checkboxes, and the O&P % input now drive live recalculation of pctCostBase, overheadAmount, totalCost, margin, and marginPct. Added a visual margin bar (amber cost + emerald/red margin) with smooth transitions. Verified: changing O&P from 15% to 25% updates Total RA Cost from NPR 13,671 to NPR 14,859 in real time.
+- Scheduler: Converted TASKS into mutable state. Added drag-to-move interaction on Gantt bars — mouseDown on a bar starts a drag, mouseMove updates the task's start week (clamped to 0..TOTAL_WEEKS-duration), mouseUp ends. Bars show cursor-grab normally and cursor-grabbing with a ring + shadow while dragging. Added hover tooltip showing "Wk X → Wk Y · drag to move". Added baseline-variance badge (+Nw / -Nw) on the task name in the left column. Added "Drag bars to reschedule" hint pill with pulsing dot in the Gantt header.
+- Time & Attendance: Built a full phone mockup component (180px wide, slate-900 bezel with notch and home indicator) showing the OmniSite Mobile foreman experience. Includes a live clock, GPS/geo-fence status card (amber when not clocked in, emerald when clocked in with "Within site perimeter" + distance), a large circular clock-in button that toggles between emerald (Tap to Clock In) and red (Tap to Clock Out) with a pulsing ping ring, and a status footer. Verified: clicking the button toggles state and updates all UI.
+- Quick Add Menu: Each action now navigates to its relevant module (DSR → daily-ops, RFI → correspondence, Expense → financials, Equipment → equipment, Drawing → drawings, NCR → qs, Worker → time-attendance) and shows a toast confirming the navigation. Added animate-in entrance animation. Verified: clicking "Daily Site Report" navigates to the Daily Operations module.
+- Page Transitions: Wrapped the module viewport in AnimatePresence with a motion.div that fades and slides up on enter, fades and slides up on exit (180ms ease-out). Each module switch now has a subtle transition.
+
+Stage Summary:
+- All 6 polish items implemented and browser-verified.
+- Lint: 0 errors, 0 warnings.
+- Dev server: all GET / return 200, compiles cleanly.
+- Browser-verified: live clock ticks (03:41:58 → 03:42:04), BOQ RA recalculation works (NPR 13,671 → NPR 14,859 when O&P 15%→25%), Scheduler has 12 draggable Gantt bars, T&A phone mockup clock-in button toggles green↔red, Quick Add navigates to correct modules.
+- Screenshots saved: omnisite-time-attendance.png, omnisite-boq-ra.png, omnisite-scheduler.png (in /home/z/my-project/download/)

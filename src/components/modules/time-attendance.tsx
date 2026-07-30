@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,6 +81,13 @@ export function TimeAttendanceModule() {
               )
             })}
           </PaneBody>
+          {/* Mobile app preview — phone mockup */}
+          <div className="border-t border-[var(--pane-divider)] p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Smartphone className="w-3 h-3" />Mobile App · Foreman view
+            </div>
+            <PhoneMockup />
+          </div>
           <div className="border-t border-[var(--pane-divider)] p-3 space-y-1.5 text-xs">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Today&apos;s Snapshot</div>
             <div className="flex justify-between"><span className="text-muted-foreground">On site now</span><span className="font-mono font-semibold text-emerald-600">{totalOnSite}</span></div>
@@ -253,5 +260,107 @@ function WorkerInspector({ worker }: { worker: Worker }) {
         </div>
       </PaneBody>
     </>
+  )
+}
+
+/**
+ * Phone mockup — demonstrates the mobile-first Time & Attendance experience.
+ * Foreman taps "Clock In" on mobile; GPS is captured; if outside site perimeter,
+ * geo-fence alert fires.
+ */
+function PhoneMockup() {
+  const [clockedIn, setClockedIn] = useState(false)
+  const [time, setTime] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  return (
+    <div className="flex justify-center">
+      <div className="w-[180px] rounded-[28px] border-[6px] border-slate-800 dark:border-slate-700 bg-slate-900 dark:bg-slate-950 shadow-xl overflow-hidden relative">
+        {/* Notch */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-4 bg-slate-800 dark:bg-slate-700 rounded-b-2xl z-10" />
+
+        {/* Screen */}
+        <div className="bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-3 pt-5 h-[320px] flex flex-col">
+          {/* Status bar */}
+          <div className="flex items-center justify-between text-[8px] text-slate-600 dark:text-slate-300 font-medium mb-2">
+            <span>{time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span className="flex items-center gap-0.5">
+              <span className="w-2 h-1.5 bg-slate-600 dark:bg-slate-300 rounded-sm" />
+              <span className="w-3 h-1.5 border border-slate-600 dark:border-slate-300 rounded-sm relative">
+                <span className="absolute inset-0.5 bg-emerald-500 rounded-sm" />
+              </span>
+            </span>
+          </div>
+
+          {/* App header */}
+          <div className="text-center mb-3">
+            <div className="text-[9px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">OmniSite Mobile</div>
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5">Foreman · Ram Bahadur</div>
+          </div>
+
+          {/* Geo-fence status */}
+          <div className={cn(
+            'rounded-lg p-2 mb-2 text-center border',
+            clockedIn
+              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
+              : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
+          )}>
+            <MapPin className={cn('w-4 h-4 mx-auto mb-0.5', clockedIn ? 'text-emerald-600' : 'text-amber-600')} />
+            <div className="text-[9px] font-medium text-slate-700 dark:text-slate-200">
+              {clockedIn ? 'Within site perimeter' : 'GPS ready · 27.7°N 85.3°E'}
+            </div>
+            <div className="text-[8px] text-slate-500 mt-0.5">
+              {clockedIn ? 'Distance: 35m from site center' : 'Site radius: 500m'}
+            </div>
+          </div>
+
+          {/* Clock-in button */}
+          <button
+            onClick={() => setClockedIn(v => !v)}
+            className={cn(
+              'mx-auto w-32 h-32 rounded-full flex flex-col items-center justify-center text-white font-bold shadow-lg transition-all active:scale-95',
+              clockedIn
+                ? 'bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/30'
+                : 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/30'
+            )}
+          >
+            <div className="text-[9px] uppercase tracking-wider opacity-80">
+              {clockedIn ? 'Tap to Clock Out' : 'Tap to Clock In'}
+            </div>
+            <div className="text-lg font-mono tabular-nums mt-0.5">
+              {time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </div>
+            <div className="text-[8px] opacity-80 mt-0.5">
+              {clockedIn ? 'On site · 4h 18m' : 'Shift starts 08:00'}
+            </div>
+            {/* Pulsing ring */}
+            <span className={cn(
+              'absolute inset-0 rounded-full animate-ping',
+              clockedIn ? 'bg-red-500/20' : 'bg-emerald-500/20'
+            )} />
+          </button>
+
+          {/* Status footer */}
+          <div className="mt-auto text-center text-[8px] text-slate-500 dark:text-slate-400">
+            {clockedIn ? (
+              <div className="flex items-center justify-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Clocked in at {time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            ) : (
+              <div>Tap the button to start your shift</div>
+            )}
+          </div>
+        </div>
+
+        {/* Home indicator */}
+        <div className="bg-slate-900 dark:bg-slate-950 pt-1 pb-1.5 flex justify-center">
+          <div className="w-20 h-1 bg-slate-600 rounded-full" />
+        </div>
+      </div>
+    </div>
   )
 }

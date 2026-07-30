@@ -1,5 +1,7 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
@@ -69,7 +71,12 @@ const GANTT_MINI_TASKS = [
 ]
 
 export function DashboardModule() {
-  const today = new Date()
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
   return (
     <div className="h-full overflow-y-auto workspace-bg">
       <div className="max-w-[1600px] mx-auto p-6 space-y-5">
@@ -82,7 +89,14 @@ export function DashboardModule() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm"><Calendar className="w-4 h-4 mr-1.5" />{today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</Button>
+            <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-[var(--pane-divider)] bg-card text-sm">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <span className="font-mono font-medium tabular-nums">
+                {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span>{now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+            </div>
             <Button variant="outline" size="sm"><Cloud className="w-4 h-4 mr-1.5" />24°C · Partly Cloudy</Button>
             <Button size="sm"><Plus className="w-4 h-4 mr-1.5" />New Report</Button>
           </div>
@@ -90,18 +104,25 @@ export function DashboardModule() {
 
         {/* KPI strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {KPIs.map(k => (
-            <Card key={k.label} className="p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{k.label}</span>
-                <span className={`text-xs font-medium flex items-center gap-0.5 ${k.trend === 'up' ? 'delta-up' : 'delta-down'}`}>
-                  {k.trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {k.delta}
-                </span>
-              </div>
-              <div className="text-2xl font-bold mt-1 tracking-tight">{k.value}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{k.desc}</div>
-            </Card>
+          {KPIs.map((k, i) => (
+            <motion.div
+              key={k.label}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 60, duration: 0.4, ease: 'easeOut' }}
+            >
+              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer group">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{k.label}</span>
+                  <span className={`text-xs font-medium flex items-center gap-0.5 ${k.trend === 'up' ? 'delta-up' : 'delta-down'}`}>
+                    {k.trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                    {k.delta}
+                  </span>
+                </div>
+                <div className="text-2xl font-bold mt-1 tracking-tight group-hover:scale-[1.02] origin-left transition-transform">{k.value}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{k.desc}</div>
+              </Card>
+            </motion.div>
           ))}
         </div>
 

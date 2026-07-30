@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -89,12 +89,36 @@ export function SchedulerModule() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['T-100', 'T-200', 'T-300', 'T-400']))
   const [showResources, setShowResources] = useState(false)
   const [showCriticalOnly, setShowCriticalOnly] = useState(false)
-  const flat = flattenTasks(TASKS)
+  // Convert TASKS into mutable state so bars can be dragged to move dates
+  const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(JSON.stringify(TASKS)))
+  const [dragging, setDragging] = useState<{ id: string; startX: number; originalStart: number } | null>(null)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  const flat = flattenTasks(tasks)
   const visible = flat.filter(({ task }) => {
     if (task.type === 'Work' || task.type === 'Milestone' || task.type === 'Hammock') return true
     return true
   })
   const selectedTask = flat.find(f => f.task.id === selectedId)?.task ?? flat[0].task
+
+  // Update a task's start date when dragged
+  const updateTaskStart = (id: string, newStart: number) => {
+    setTasks(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as Task[]
+      const walk = (items: Task[]) => {
+        for (const t of items) {
+          if (t.id === id) {
+            t.start = Math.max(0, Math.min(TOTAL_WEEKS - t.duration, newStart))
+            return true
+          }
+          if (t.children && walk(t.children)) return true
+        }
+        return false
+      }
+      walk(updated)
+      return updated
+    })
+  }
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
@@ -143,13 +167,38 @@ export function SchedulerModule() {
         if (hasChildren && isExpanded) walk(t.children!, depth + 1)
       }
     }
-    walk(TASKS, 0)
+    walk(tasks, 0)
     return rows
   }
 
   // Gantt canvas
   const todayWeek = 16
   const canvasRef = useRef<HTMLDivElement>(null)
+
+  // Mouse handlers for drag-to-move on Gantt bars
+  const onBarMouseDown = (e: React.MouseEvent, t: Task) => {
+    if (t.type === 'Milestone' || t.type === 'Summary') return
+    e.stopPropagation()
+    e.preventDefault()
+    setSelectedId(t.id)
+    setDragging({ id: t.id, startX: e.clientX, originalStart: t.start })
+  }
+
+  useEffect(() => {
+    if (!dragging) return
+    const onMove = (e: MouseEvent) => {
+      const deltaPx = e.clientX - dragging.startX
+      const deltaWeeks = Math.round(deltaPx / WEEK_WIDTH)
+      updateTaskStart(dragging.id, dragging.originalStart + deltaWeeks)
+    }
+    const onUp = () => setDragging(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [dragging])
 
   return (
     <Workspace3Pane
@@ -179,6 +228,10 @@ export function SchedulerModule() {
       centerPane={
         <>
           <PaneHeader title="Gantt Canvas · W1 to W52">
+            <span className="hidden md:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              Drag bars to reschedule
+            </span>
             <label className="flex items-center gap-1.5 text-xs">
               <Switch checked={showResources} onCheckedChange={setShowResources} />
               <span className="text-muted-foreground">Resource usage</span>
@@ -225,10 +278,13 @@ export function SchedulerModule() {
                         const isExpanded = expanded.has(t.id)
                         const hasChildren = t.children && t.children.length > 0
                         const isSelected = t.id === selectedId
+                        const isHovered = hoveredId === t.id
+                        const isDragging = dragging?.id === t.id
                         const left = t.start * WEEK_WIDTH
                         const width = Math.max(t.duration * WEEK_WIDTH, t.type === 'Milestone' ? 12 : 6)
                         const baseLeft = t.baseline[0] * WEEK_WIDTH
                         const baseWidth = Math.max((t.baseline[1] - t.baseline[0]) * WEEK_WIDTH, 4)
+                        const varianceWeeks = t.start - t.baseline[0]
                         rows.push(
                           <div
                             key={t.id}
@@ -249,6 +305,11 @@ export function SchedulerModule() {
                               </div>
                               <span className="w-16 font-mono text-muted-foreground text-[10px]">{t.id}</span>
                               <span className={cn('truncate', t.type === 'Summary' && 'font-semibold', t.critical && 'text-red-600 dark:text-red-400')}>{t.name}</span>
+                              {varianceWeeks !== 0 && t.type === 'Work' && (
+                                <span className={cn('ml-2 text-[9px] font-mono px-1 rounded', varianceWeeks > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300')}>
+                                  {varianceWeeks > 0 ? '+' : ''}{varianceWeeks}w
+                                </span>
+                              )}
                             </div>
                             <div className="relative h-8 gantt-grid" style={{ width: TOTAL_WEEKS * WEEK_WIDTH }}>
                               {/* Baseline ghost */}
@@ -269,19 +330,34 @@ export function SchedulerModule() {
                                 />
                               ) : (
                                 <div
+                                  onMouseDown={(e) => onBarMouseDown(e, t)}
+                                  onMouseEnter={() => setHoveredId(t.id)}
+                                  onMouseLeave={() => setHoveredId(null)}
                                   className={cn(
-                                    'absolute top-1.5 h-5 rounded-sm flex items-center px-1.5 text-[9px] text-white font-medium overflow-hidden shadow-sm group',
-                                    t.type === 'Summary' && 'bg-muted-foreground/60',
+                                    'absolute top-1.5 h-5 rounded-sm flex items-center px-1.5 text-[9px] text-white font-medium overflow-hidden shadow-sm group transition-shadow',
+                                    isDragging && 'shadow-lg ring-2 ring-white/50 cursor-grabbing scale-y-110 z-30',
+                                    !isDragging && 'cursor-grab hover:shadow-md',
+                                    t.type === 'Summary' && 'bg-muted-foreground/60 cursor-default',
                                     t.type === 'Hammock' && 'bg-gradient-to-r from-violet-500 to-purple-500',
                                     t.type === 'Work' && (t.critical ? 'bg-red-500' : 'bg-primary'),
                                   )}
-                                  style={{ left, width, cursor: 'ew-resize' }}
+                                  style={{ left, width }}
                                 >
                                   <div className="absolute inset-y-0 left-0 bg-black/20" style={{ width: `${t.progress}%` }} />
-                                  <span className="relative z-10 truncate">{t.duration}d · {t.progress}%</span>
+                                  <span className="relative z-10 truncate pointer-events-none">{t.duration}d · {t.progress}%</span>
                                   {/* Resize handles */}
-                                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/30 opacity-0 group-hover:opacity-100 cursor-ew-resize" />
-                                  <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/30 opacity-0 group-hover:opacity-100 cursor-ew-resize" />
+                                  {t.type !== 'Summary' && (
+                                    <>
+                                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-white/40 opacity-0 group-hover:opacity-100 cursor-ew-resize transition-opacity" />
+                                      <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white/40 opacity-0 group-hover:opacity-100 cursor-ew-resize transition-opacity" />
+                                    </>
+                                  )}
+                                  {/* Hover tooltip */}
+                                  {isHovered && !isDragging && (
+                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 pane border border-[var(--pane-divider)] rounded px-1.5 py-0.5 text-[9px] text-foreground whitespace-nowrap shadow-md z-40 pointer-events-none">
+                                      Wk {t.start + 1} → Wk {t.start + t.duration + 1} · drag to move
+                                    </div>
+                                  )}
                                 </div>
                               )}
                               {/* Critical path dependency arrow (simple visual) */}
@@ -294,7 +370,7 @@ export function SchedulerModule() {
                         if (hasChildren && isExpanded) walk(t.children!, depth + 1)
                       }
                     }
-                    walk(TASKS, 0)
+                    walk(tasks, 0)
                     return rows
                   })()}
                   {/* Today vertical line */}
