@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -178,7 +178,7 @@ export function ProcurementModule() {
   return (
     <>
       <Toaster richColors position="top-center" />
-      <Workspace3Pane
+      <Workspace2Pane
         leftPane={
           <>
             <PaneHeader title="Procurement">

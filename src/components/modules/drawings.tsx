@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -53,7 +53,7 @@ export function DrawingsModule() {
   const selected = DWS.find(d => d.id === selectedId) ?? DWS[0]
 
   return (
-    <Workspace3Pane
+    <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Disciplines">

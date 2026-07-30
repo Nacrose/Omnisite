@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +36,7 @@ export function CorrespondenceModule() {
   const filtered = filter === 'All' ? LETTERS : LETTERS.filter(l => l.type === filter)
 
   return (
-    <Workspace3Pane
+    <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Categories">

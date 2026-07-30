@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -68,7 +68,7 @@ export function TimeAttendanceModule() {
   const geoFenceBreaches = workerList.filter(w => w.geoFence === false && w.status === 'on-site').length
 
   return (
-    <Workspace3Pane
+    <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Trades">

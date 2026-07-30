@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,7 +46,7 @@ export function DailyOpsModule() {
   const selected = DSR_ENTRIES.find(d => d.id === selectedId) ?? DSR_ENTRIES[0]
 
   return (
-    <Workspace3Pane
+    <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Site Execution">
