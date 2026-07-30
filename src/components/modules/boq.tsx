@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Search, Plus, ChevronRight, ChevronDown, Download, Save, FolderOpen,
   Zap, Edit3, FileSpreadsheet, AlertTriangle, CheckCircle2, TrendingUp,
-  History, Link2, Lock, Layers, Copy, Trash2, FilePlus, ArrowRight,
+  History, Link2, Lock, Layers, Copy, Trash2, FilePlus, ArrowRight, Undo2, Redo2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -102,6 +102,62 @@ export function BoqModule() {
   const [editing, setEditing] = useState<{ id: string; field: 'qty' | 'rate' } | null>(null)
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
+  // Undo/redo history stacks (deep snapshots of boqData)
+  const [undoStack, setUndoStack] = useState<BoqItem[][]>([])
+  const [redoStack, setRedoStack] = useState<BoqItem[][]>([])
+  const canUndo = undoStack.length > 0
+  const canRedo = redoStack.length > 0
+
+  // Helper: commit a new boqData state, pushing the current state to undo stack and clearing redo
+  const commitBoqData = (updater: (prev: BoqItem[]) => BoqItem[]) => {
+    setBoqData(prev => {
+      const next = updater(prev)
+      setUndoStack(u => [...u, JSON.parse(JSON.stringify(prev))])
+      setRedoStack([])
+      return next
+    })
+  }
+
+  const undo = () => {
+    if (undoStack.length === 0) return
+    setUndoStack(u => {
+      const prev = u[u.length - 1]
+      setRedoStack(r => [...r, JSON.parse(JSON.stringify(boqData))])
+      setBoqData(prev)
+      return u.slice(0, -1)
+    })
+    toast.success('Undo', { description: `Reverted (${undoStack.length - 1} actions left)` })
+  }
+
+  const redo = () => {
+    if (redoStack.length === 0) return
+    setRedoStack(r => {
+      const next = r[r.length - 1]
+      setUndoStack(u => [...u, JSON.parse(JSON.stringify(boqData))])
+      setBoqData(next)
+      return r.slice(0, -1)
+    })
+    toast.success('Redo', { description: `${redoStack.length - 1} actions left` })
+  }
+
+  // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        const target = e.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+        e.preventDefault()
+        undo()
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        const target = e.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+        e.preventDefault()
+        redo()
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [undo, redo])
 
   const allFlat = flatten(boqData)
   const selectedLeaf = allFlat.find(i => i.id === selectedId) ?? allFlat[2]
@@ -113,7 +169,7 @@ export function BoqModule() {
 
   // Update a single BOQ item's qty or rate
   const updateItem = (id: string, field: 'qty' | 'rate', value: number) => {
-    setBoqData(prev => {
+    commitBoqData(prev => {
       const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
       const walk = (items: BoqItem[]) => {
         for (const it of items) {
@@ -132,7 +188,7 @@ export function BoqModule() {
 
   // Context menu actions
   const duplicateItem = (id: string) => {
-    setBoqData(prev => {
+    commitBoqData(prev => {
       const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
       const walk = (items: BoqItem[]): BoqItem[] => {
         const result: BoqItem[] = []
@@ -155,7 +211,7 @@ export function BoqModule() {
   }
 
   const deleteItem = (id: string) => {
-    setBoqData(prev => {
+    commitBoqData(prev => {
       const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
       const walk = (items: BoqItem[]): BoqItem[] => {
         return items.filter(it => {
@@ -171,7 +227,7 @@ export function BoqModule() {
 
   const addChildItem = (parentId: string) => {
     const newId = `${parentId}.${Date.now().toString(36)}`
-    setBoqData(prev => {
+    commitBoqData(prev => {
       const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
       const walk = (items: BoqItem[]) => {
         for (const it of items) {
@@ -390,6 +446,34 @@ export function BoqModule() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Click Qty/Rate to edit
             </span>
+            {/* Undo/Redo buttons */}
+            <div className="flex items-center gap-0.5 border-r border-[var(--pane-divider)] pr-1.5 mr-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn('h-7 w-7 p-0', !canUndo && 'opacity-40 cursor-not-allowed')}
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (⌘Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn('h-7 w-7 p-0', !canRedo && 'opacity-40 cursor-not-allowed')}
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (⌘⇧Z)"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </Button>
+              {(canUndo || canRedo) && (
+                <span className="text-[9px] text-muted-foreground font-mono px-1">
+                  {undoStack.length}/{undoStack.length + redoStack.length}
+                </span>
+              )}
+            </div>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
               <FileSpreadsheet className="w-3.5 h-3.5" />Export RA (DoR Format)
             </Button>

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
   Plus, Search, FileText, FileStack, Upload, Link2, History, Download, Eye, Maximize2,
+  ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -123,6 +124,10 @@ export function DrawingsModule() {
 }
 
 function DrawingInspector({ dwg }: { dwg: Dwg }) {
+  const [page, setPage] = useState(1)
+  const [zoom, setZoom] = useState(1)
+  const totalPages = dwg.size === 'A1' ? 4 : dwg.size === 'A2' ? 2 : 1
+
   return (
     <>
       <PaneHeader title={`PDF Inspector · ${dwg.number}`} />
@@ -136,22 +141,107 @@ function DrawingInspector({ dwg }: { dwg: Dwg }) {
           <div className="text-xs text-muted-foreground mt-1 font-mono">{dwg.number} · {dwg.size} · {dwg.date}</div>
         </div>
 
-        {/* PDF Viewer mock */}
-        <div className="aspect-[1.414/1] bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 m-4 rounded-md flex items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 grid-bg opacity-30" />
-          <div className="text-center relative z-10">
-            <FileText className="w-12 h-12 mx-auto text-muted-foreground/40" />
-            <div className="text-xs text-muted-foreground mt-2">PDF Preview · {dwg.number}</div>
-            <div className="text-[10px] text-muted-foreground">Revision {dwg.revision}</div>
+        {/* PDF Viewer with page navigation + zoom */}
+        <div className="m-4">
+          {/* Viewer area */}
+          <div
+            className="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 rounded-md flex items-center justify-center relative overflow-hidden border border-[var(--pane-divider)]"
+            style={{ height: `${300 * zoom}px` }}
+          >
+            <div className="absolute inset-0 grid-bg opacity-30" />
+            {/* Simulated page content — scales with zoom */}
+            <div className="relative z-10 transition-transform" style={{ transform: `scale(${zoom})` }}>
+              <div className="bg-white dark:bg-slate-100 shadow-lg rounded-sm p-6" style={{ width: '210px', height: '148px' }}>
+                <div className="text-[6px] text-slate-400 uppercase tracking-wider mb-1">{dwg.number} · Rev {dwg.revision}</div>
+                <div className="text-[8px] font-bold text-slate-900 mb-1">{dwg.title}</div>
+                <div className="border-t border-slate-300 my-1" />
+                {/* Simulated drawing content */}
+                <svg viewBox="0 0 180 90" className="w-full h-20">
+                  <rect x="10" y="10" width="160" height="70" fill="none" stroke="#475569" strokeWidth="0.5" />
+                  <line x1="10" y1="45" x2="170" y2="45" stroke="#475569" strokeWidth="0.3" strokeDasharray="2 1" />
+                  <rect x="30" y="20" width="40" height="25" fill="none" stroke="#0ea5e9" strokeWidth="0.5" />
+                  <rect x="80" y="20" width="40" height="25" fill="none" stroke="#0ea5e9" strokeWidth="0.5" />
+                  <circle cx="100" cy="60" r="8" fill="none" stroke="#475569" strokeWidth="0.5" />
+                  <text x="50" y="35" fontSize="4" fill="#475569">SECTION A-A</text>
+                  <text x="90" y="35" fontSize="4" fill="#475569">DETAIL 1</text>
+                  <text x="92" y="63" fontSize="3" fill="#475569">Ø 600</text>
+                  <line x1="10" y1="80" x2="170" y2="80" stroke="#475569" strokeWidth="0.3" />
+                  <text x="10" y="88" fontSize="3" fill="#94a3b8">SCALE 1:50</text>
+                  <text x="130" y="88" fontSize="3" fill="#94a3b8">SHEET {page}/{totalPages}</text>
+                </svg>
+              </div>
+            </div>
+
+            {/* Top-right controls */}
+            <div className="absolute top-2 right-2 flex gap-1">
+              <Button size="sm" variant="secondary" className="h-7 w-7 p-0" title="Fullscreen"><Maximize2 className="w-3.5 h-3.5" /></Button>
+            </div>
+
+            {/* Markup toolbar */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 pane border border-[var(--pane-divider)] rounded-md p-1 shadow-md">
+              {['✎', '▢', '◯', '↔', 'T'].map(t => (
+                <button key={t} className="w-7 h-7 rounded text-sm hover:bg-accent flex items-center justify-center">{t}</button>
+              ))}
+            </div>
           </div>
-          <div className="absolute top-2 right-2 flex gap-1">
-            <Button size="sm" variant="secondary" className="h-7 w-7 p-0"><Maximize2 className="w-3.5 h-3.5" /></Button>
-          </div>
-          {/* Markup toolbar */}
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 pane border border-[var(--pane-divider)] rounded-md p-1 shadow-md">
-            {['✎', '▢', '◯', '↔', 'T'].map(t => (
-              <button key={t} className="w-7 h-7 rounded text-sm hover:bg-accent flex items-center justify-center">{t}</button>
-            ))}
+
+          {/* Page navigation + zoom controls */}
+          <div className="flex items-center justify-between mt-2 px-1">
+            {/* Page nav */}
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-7 p-0"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </Button>
+              <span className="text-xs font-mono tabular-nums px-1">
+                {page} / {totalPages}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-7 p-0"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+
+            {/* Zoom controls */}
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-7 p-0"
+                onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}
+                disabled={zoom <= 0.5}
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </Button>
+              <span className="text-[10px] font-mono tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-7 p-0"
+                onClick={() => setZoom(z => Math.min(2, z + 0.25))}
+                disabled={zoom >= 2}
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[10px]"
+                onClick={() => setZoom(1)}
+              >
+                Reset
+              </Button>
+            </div>
           </div>
         </div>
 

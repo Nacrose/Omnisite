@@ -9,6 +9,7 @@ import { NotificationsBell } from '@/components/notifications-bell'
 import { ProjectSwitcher } from '@/components/project-switcher'
 import { StatusBar } from '@/components/status-bar'
 import { RecentlyViewedRail } from '@/components/recently-viewed-rail'
+import { HelpModal } from '@/components/help-modal'
 import { useKeyboardShortcuts } from '@/lib/use-keyboard-shortcuts'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -217,6 +218,7 @@ export default function Home() {
 
       <QuickAddMenu />
       <CommandPalette />
+      <HelpModal />
     </div>
   )
 }

@@ -15,6 +15,10 @@ interface Letter {
   id: string; number: string; date: string; type: 'Incoming' | 'Outgoing' | 'Site Instruction'; from: string; to: string; subject: string; replyBy?: string; replyTo?: string; hasVariation?: boolean;
 }
 
+// Fixed "today" reference to avoid hydration mismatch from new Date() during render.
+// In production this would come from the server context.
+const TODAY = new Date('2026-07-30T10:00:00')
+
 const LETTERS: Letter[] = [
   { id: 'L-001', number: 'CL/DOR/2026-087', date: '28 Jul 2026', type: 'Incoming', from: 'DoR — Supervision Consultant', to: 'OmniSite Contractor', subject: 'Approval — PCC mix design for foundation', replyBy: '02 Aug 2026' },
   { id: 'L-002', number: 'OMS/2026-142', date: '29 Jul 2026', type: 'Outgoing', from: 'OmniSite Contractor', to: 'DoR — Supervision Consultant', subject: 'RE: PCC mix design — additional test results attached', replyTo: 'L-001' },
@@ -81,7 +85,7 @@ export function CorrespondenceModule() {
           </div>
           <PaneBody className="px-0">
             {filtered.map(l => {
-              const replyOverdue = l.replyBy && new Date(l.replyBy) < new Date() && l.type === 'Incoming' && !l.replyTo
+              const replyOverdue = l.replyBy && new Date(l.replyBy) < TODAY && l.type === 'Incoming' && !l.replyTo
               return (
                 <div
                   key={l.id}
@@ -144,10 +148,10 @@ export function CorrespondenceModule() {
               <Separator />
 
               {selected.replyBy && (
-                <div className={cn('p-2.5 rounded-md text-[11px]', selected.replyTo ? 'bg-emerald-500/10 border border-emerald-500/30' : new Date(selected.replyBy) < new Date() ? 'bg-red-500/10 border border-red-500/30' : 'bg-amber-500/10 border border-amber-500/30')}>
+                <div className={cn('p-2.5 rounded-md text-[11px]', selected.replyTo ? 'bg-emerald-500/10 border border-emerald-500/30' : new Date(selected.replyBy) < TODAY ? 'bg-red-500/10 border border-red-500/30' : 'bg-amber-500/10 border border-amber-500/30')}>
                   <div className="flex items-center gap-1.5 font-medium">
                     <Clock className="w-3.5 h-3.5" />
-                    {selected.replyTo ? `Replied via ${selected.replyTo}` : new Date(selected.replyBy) < new Date() ? `Overdue by ${Math.ceil((new Date().getTime() - new Date(selected.replyBy).getTime()) / 86400000)} days` : `Reply required by ${selected.replyBy}`}
+                    {selected.replyTo ? `Replied via ${selected.replyTo}` : new Date(selected.replyBy) < TODAY ? `Overdue by ${Math.ceil((TODAY.getTime() - new Date(selected.replyBy).getTime()) / 86400000)} days` : `Reply required by ${selected.replyBy}`}
                   </div>
                 </div>
               )}

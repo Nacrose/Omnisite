@@ -71,10 +71,12 @@ const GANTT_MINI_TASKS = [
 ]
 
 export function DashboardModule() {
-  const [now, setNow] = useState(new Date())
+  const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
+    // Use setTimeout to defer the initial time set — avoids synchronous setState in effect
+    const initial = setTimeout(() => setNow(new Date()), 0)
     const t = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(t)
+    return () => { clearTimeout(initial); clearInterval(t) }
   }, [])
 
   return (
@@ -92,10 +94,10 @@ export function DashboardModule() {
             <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-[var(--pane-divider)] bg-card text-sm">
               <Clock className="w-4 h-4 text-muted-foreground" />
               <span className="font-mono font-medium tabular-nums">
-                {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                {now ? now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
               </span>
               <span className="text-muted-foreground">·</span>
-              <span>{now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              <span>{now ? now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>
             </div>
             <Button variant="outline" size="sm"><Cloud className="w-4 h-4 mr-1.5" />24°C · Partly Cloudy</Button>
             <Button size="sm"><Plus className="w-4 h-4 mr-1.5" />New Report</Button>

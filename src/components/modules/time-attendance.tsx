@@ -270,10 +270,11 @@ function WorkerInspector({ worker }: { worker: Worker }) {
  */
 function PhoneMockup() {
   const [clockedIn, setClockedIn] = useState(false)
-  const [time, setTime] = useState(new Date())
+  const [time, setTime] = useState<Date | null>(null)
   useEffect(() => {
+    const initial = setTimeout(() => setTime(new Date()), 0)
     const t = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(t)
+    return () => { clearTimeout(initial); clearInterval(t) }
   }, [])
 
   return (
@@ -286,7 +287,7 @@ function PhoneMockup() {
         <div className="bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-3 pt-5 h-[320px] flex flex-col">
           {/* Status bar */}
           <div className="flex items-center justify-between text-[8px] text-slate-600 dark:text-slate-300 font-medium mb-2">
-            <span>{time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>{time ? time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
             <span className="flex items-center gap-0.5">
               <span className="w-2 h-1.5 bg-slate-600 dark:bg-slate-300 rounded-sm" />
               <span className="w-3 h-1.5 border border-slate-600 dark:border-slate-300 rounded-sm relative">
@@ -331,7 +332,7 @@ function PhoneMockup() {
               {clockedIn ? 'Tap to Clock Out' : 'Tap to Clock In'}
             </div>
             <div className="text-lg font-mono tabular-nums mt-0.5">
-              {time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {time ? time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </div>
             <div className="text-[8px] opacity-80 mt-0.5">
               {clockedIn ? 'On site · 4h 18m' : 'Shift starts 08:00'}
@@ -348,7 +349,7 @@ function PhoneMockup() {
             {clockedIn ? (
               <div className="flex items-center justify-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Clocked in at {time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                Clocked in at {time ? time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
               </div>
             ) : (
               <div>Tap the button to start your shift</div>
