@@ -1,13 +1,27 @@
 'use client'
 
-import { useApp } from '@/lib/app-store'
-import { useState, useEffect, useRef } from 'react'
-import { Search, CornerDownLeft, Hash } from 'lucide-react'
-import { MODULES } from '@/lib/app-store'
+import { useApp, MODULES } from '@/lib/app-store'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Search, CornerDownLeft, Hash, ArrowRight } from 'lucide-react'
 import { ModuleIcon } from '@/components/module-icon'
+import { searchAll, SearchResult } from '@/lib/search-index'
 import { cn } from '@/lib/utils'
 
 type CmdEntry = { id: string; label: string; hint?: string; icon: string; action: () => void }
+
+const TYPE_COLORS: Record<SearchResult['type'], string> = {
+  'Module': 'text-primary',
+  'BOQ Item': 'text-blue-500',
+  'Task': 'text-violet-500',
+  'Drawing': 'text-rose-500',
+  'Letter': 'text-sky-500',
+  'Q&S Item': 'text-amber-500',
+  'Equipment': 'text-orange-500',
+  'Worker': 'text-cyan-500',
+  'Requisition': 'text-emerald-500',
+  'Subcontractor': 'text-purple-500',
+  'CBS Node': 'text-teal-500',
+}
 
 export function CommandPalette() {
   const { commandOpen, setCommandOpen, setActiveModule, setQuickAddOpen } = useApp()
@@ -33,7 +47,7 @@ export function CommandPalette() {
     }
   }, [commandOpen])
 
-  // Reset query/selection only when transitioning from closed → open (derived from prop, no setState in effect).
+  // Reset query/selection on open
   const [wasOpen, setWasOpen] = useState(false)
   if (commandOpen && !wasOpen) {
     setWasOpen(true)
@@ -43,9 +57,11 @@ export function CommandPalette() {
     setWasOpen(false)
   }
 
-  if (!commandOpen) return null
+  // Global search results
+  const searchResults = useMemo(() => searchAll(query, 30), [query])
 
-  const actions: CmdEntry[] = [
+  // Default actions (shown when query is empty)
+  const defaultActions: CmdEntry[] = [
     ...MODULES.map(m => ({
       id: `nav-${m.id}`,
       label: m.name,
@@ -59,12 +75,48 @@ export function CommandPalette() {
     { id: 'qa-equipment', label: 'Quick Add: Equipment Log', icon: 'Truck', action: () => { setQuickAddOpen(true); setCommandOpen(false) } },
   ]
 
-  const filtered = actions.filter(a => a.label.toLowerCase().includes(query.toLowerCase()))
+  // Filtered default actions (when query is short)
+  const filteredActions = query.trim()
+    ? defaultActions.filter(a => a.label.toLowerCase().includes(query.toLowerCase()))
+    : defaultActions
+
+  // Combined list: search results first, then filtered actions
+  const allItems: (SearchResult | CmdEntry)[] = [
+    ...searchResults,
+    ...filteredActions.filter(a => !searchResults.some(r => r.id === a.id)),
+  ]
+
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => Math.min(s + 1, filtered.length - 1)) }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => Math.min(s + 1, allItems.length - 1)) }
     if (e.key === 'ArrowUp') { e.preventDefault(); setSelected(s => Math.max(s - 1, 0)) }
-    if (e.key === 'Enter') { e.preventDefault(); filtered[selected]?.action() }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const item = allItems[selected]
+      if (!item) return
+      if ('action' in item) {
+        item.action()
+      } else {
+        // SearchResult — navigate to its module
+        setActiveModule(item.module)
+        setCommandOpen(false)
+      }
+    }
   }
+
+  if (!commandOpen) return null
+
+  // Group search results by type for display
+  const groupedResults = new Map<string, SearchResult[]>()
+  for (const r of searchResults) {
+    const arr = groupedResults.get(r.type) || []
+    arr.push(r)
+    groupedResults.set(r.type, arr)
+  }
+
+  const typeOrder: SearchResult['type'][] = ['Module', 'BOQ Item', 'Task', 'Drawing', 'Letter', 'Q&S Item', 'Equipment', 'Worker', 'Requisition', 'Subcontractor', 'CBS Node']
+  const sortedTypes = typeOrder.filter(t => groupedResults.has(t))
+
+  let runningIndex = 0
 
   return (
     <div
@@ -75,6 +127,7 @@ export function CommandPalette() {
         className="w-full max-w-xl pane border border-[var(--pane-divider)] rounded-xl shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
+        {/* Search input */}
         <div className="flex items-center gap-3 px-4 h-14 border-b border-[var(--pane-divider)]">
           <Search className="w-4 h-4 text-muted-foreground" />
           <input
@@ -82,35 +135,103 @@ export function CommandPalette() {
             value={query}
             onChange={e => { setQuery(e.target.value); setSelected(0) }}
             onKeyDown={handleKey}
-            placeholder="Search modules, actions, documents…"
+            placeholder="Search BOQ, tasks, drawings, letters, NCRs, equipment, workers…"
             className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
           />
           <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground font-mono">ESC</kbd>
         </div>
-        <div className="max-h-80 overflow-y-auto py-2">
-          {filtered.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">No results for “{query}”</div>
+
+        <div className="max-h-[420px] overflow-y-auto py-2">
+          {/* No results */}
+          {allItems.length === 0 && (
+            <div className="px-4 py-12 text-center">
+              <Search className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
+              <div className="text-sm text-muted-foreground">No results for &ldquo;{query}&rdquo;</div>
+              <div className="text-xs text-muted-foreground/70 mt-1">Try searching for item codes, task IDs, drawing numbers, or names</div>
+            </div>
           )}
-          {filtered.map((a, i) => (
-            <button
-              key={a.id}
-              onMouseEnter={() => setSelected(i)}
-              onClick={() => a.action()}
-              className={cn(
-                'w-full flex items-center gap-3 px-4 py-2 text-sm text-left transition-colors',
-                i === selected ? 'bg-accent' : 'hover:bg-accent/50'
+
+          {/* Global search results — grouped by type */}
+          {query.trim() && sortedTypes.map(type => {
+            const items = groupedResults.get(type)!
+            return (
+              <div key={type}>
+                <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 bg-secondary/20">
+                  {type} · {items.length}
+                </div>
+                {items.map(r => {
+                  const idx = runningIndex++
+                  const isSelected = idx === selected
+                  return (
+                    <button
+                      key={r.id}
+                      onMouseEnter={() => setSelected(idx)}
+                      onClick={() => { setActiveModule(r.module); setCommandOpen(false) }}
+                      className={cn(
+                        'w-full flex items-center gap-3 px-4 py-2 text-sm text-left transition-colors',
+                        isSelected ? 'bg-accent' : 'hover:bg-accent/50'
+                      )}
+                    >
+                      <ModuleIcon name={r.icon} className={cn('w-4 h-4 flex-shrink-0', TYPE_COLORS[r.type])} />
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate font-medium">{r.title}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{r.subtitle}</div>
+                      </div>
+                      <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                      {isSelected && <CornerDownLeft className="w-3.5 h-3.5 text-muted-foreground" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
+
+          {/* Actions (Quick Add + Modules) — shown when no query or as additional results */}
+          {(!query.trim() || filteredActions.length > 0) && (
+            <div>
+              {query.trim() && sortedTypes.length > 0 && (
+                <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 bg-secondary/20">
+                  Actions · {filteredActions.length}
+                </div>
               )}
-            >
-              <ModuleIcon name={a.icon} className="w-4 h-4 text-muted-foreground" />
-              <span className="flex-1">{a.label}</span>
-              {a.hint && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Hash className="w-3 h-3" />{a.hint}
-                </span>
-              )}
-              {i === selected && <CornerDownLeft className="w-3.5 h-3.5 text-muted-foreground" />}
-            </button>
-          ))}
+              {filteredActions.map(a => {
+                const idx = runningIndex++
+                const isSelected = idx === selected
+                return (
+                  <button
+                    key={a.id}
+                    onMouseEnter={() => setSelected(idx)}
+                    onClick={() => a.action()}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-4 py-2 text-sm text-left transition-colors',
+                      isSelected ? 'bg-accent' : 'hover:bg-accent/50'
+                    )}
+                  >
+                    <ModuleIcon name={a.icon} className="w-4 h-4 text-muted-foreground" />
+                    <span className="flex-1">{a.label}</span>
+                    {a.hint && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Hash className="w-3 h-3" />{a.hint}
+                      </span>
+                    )}
+                    {isSelected && <CornerDownLeft className="w-3.5 h-3.5 text-muted-foreground" />}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Footer hint */}
+          {allItems.length > 0 && (
+            <div className="px-4 py-2 border-t border-[var(--pane-divider)] mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-3">
+                <span className="flex items-center gap-1"><kbd className="px-1 rounded bg-secondary font-mono">↑↓</kbd> navigate</span>
+                <span className="flex items-center gap-1"><kbd className="px-1 rounded bg-secondary font-mono">↵</kbd> select</span>
+                <span className="flex items-center gap-1"><kbd className="px-1 rounded bg-secondary font-mono">esc</kbd> close</span>
+              </span>
+              <span>{allItems.length} results</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

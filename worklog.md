@@ -175,3 +175,21 @@ Stage Summary:
 - In production (preview URL through Caddy), the real WebSocket will connect and show actual other users' cursors.
 - Lint: 0 errors, 0 warnings.
 - Screenshot saved: omnisite-websocket-presence.png
+
+---
+Task ID: 9
+Agent: Super Z (main)
+Task: Iteration 9 — Global search in the command palette across all module data.
+
+Work Log:
+- Created search-index.ts: A centralized search index that aggregates searchable items from all 14 modules. Includes: 12 BOQ items (code, description, qty, UOM), 14 schedule tasks (ID, name), 4 drawings (number, title, revision), 5 letters (number, subject), 7 Q&S items (ID, title), 5 equipment units (ID, name), 6 workers (ID, name, trade), 3 requisitions (ID, item), 3 subcontractors (ID, name, scope), 9 CBS nodes (code, name). Each item is mapped to a SearchResult with title, subtitle, type, module, icon, and keywords. The searchAll() function uses a simple relevance scoring: title match = 3 points, keyword match = 2 points, subtitle match = 1 point. Returns top 30 results sorted by score.
+- Rewrote CommandPalette: Now shows global search results alongside module navigation and Quick Add actions. When the user types a query, results are grouped by type (BOQ Item, Task, Drawing, Letter, Q&S Item, Equipment, Worker, Requisition, Subcontractor, CBS Node) with type headers showing the count. Each result has a color-coded icon (blue for BOQ, violet for tasks, rose for drawings, etc.). Clicking any result navigates to its parent module. Keyboard navigation (↑↓ arrows + Enter) works across all results. The footer shows navigation hints and total result count. When the query is empty, the palette shows the default modules + Quick Add actions (same as before).
+- Browser-verified: searched "excavation" → found BOQ item "Excavation in ordinary soil", task "Excavation ch. 0+000 to 1+200", and letter "Extra excavation at chainage 2+850"; searched "NCR" → found NCR-034 and NCR-033; searched "cement" → found BOQ cement item and REQ-0142 requisition; searched "rebar" and clicked NCR-034 → navigated to Q&S module; searched "concrete" → found Concrete Mixer equipment with grouped type headers and result count.
+
+Stage Summary:
+- Global search indexes 73 items across 11 types from all modules.
+- Results grouped by type with color-coded icons and count headers.
+- Clicking any result navigates to its parent module.
+- Keyboard navigation works across all results.
+- Lint: 0 errors, 0 warnings.
+- Screenshot saved: omnisite-global-search.png
