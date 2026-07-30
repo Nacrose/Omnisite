@@ -121,50 +121,6 @@ export function QsModule() {
           </div>
         </>
       }
-      centerPane={
-        <>
-          <PaneHeader title="Q&S Register">
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />New {filter === 'All' ? 'Record' : filter}</Button>
-          </PaneHeader>
-          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-            <div className="w-20 px-2">ID</div>
-            <div className="w-20 px-2">Type</div>
-            <div className="flex-1 px-2">Title</div>
-            <div className="w-32 px-2">Linked BOQ</div>
-            <div className="w-24 px-2">Date</div>
-            <div className="w-24 px-2">Severity</div>
-            <div className="w-28 px-2">Status</div>
-          </div>
-          <PaneBody className="px-0">
-            {filtered.map(it => (
-              <div
-                key={it.id}
-                onClick={() => setSelectedId(it.id)}
-                className={cn('flex items-center h-12 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover', selectedId === it.id && 'bg-accent', it.billingHold && 'bg-red-500/5')}
-              >
-                <div className="w-20 px-2 font-mono text-muted-foreground">{it.id}</div>
-                <div className="w-20 px-2">
-                  <Badge variant="outline" className={cn('text-[9px]', it.type === 'ITR' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', it.type === 'NCR' && 'border-red-500/40 text-red-700 dark:text-red-300', it.type === 'Punch' && 'border-amber-500/40 text-amber-700 dark:text-amber-300', it.type === 'Incident' && 'border-red-500/40 text-red-700 dark:text-red-300', it.type === 'Near-Miss' && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{it.type}</Badge>
-                </div>
-                <div className="flex-1 px-2 min-w-0">
-                  <div className="font-medium truncate">{it.title}</div>
-                  {it.billingHold && <div className="text-[10px] text-red-600 flex items-center gap-1"><Lock className="w-2.5 h-2.5" />Billing hold active · Max billable = 0</div>}
-                </div>
-                <div className="w-32 px-2 font-mono text-[10px] text-muted-foreground">{it.linkedBoq || '—'}</div>
-                <div className="w-24 px-2 text-muted-foreground">{it.date}</div>
-                <div className="w-24 px-2">
-                  {it.severity && (
-                    <Badge variant="outline" className={cn('text-[9px]', it.severity === 'high' && 'border-red-500/40 text-red-700 dark:text-red-300', it.severity === 'medium' && 'border-amber-500/40 text-amber-700 dark:text-amber-300', it.severity === 'low' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300')}>{it.severity}</Badge>
-                  )}
-                </div>
-                <div className="w-28 px-2">
-                  <Badge variant="secondary" className={cn('text-[10px]', it.status === 'Approved' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', it.status === 'Rejected' && 'bg-red-500/15 text-red-700 dark:text-red-300', it.status === 'Open' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300', it.status === 'CAP Submitted' && 'bg-sky-500/15 text-sky-700 dark:text-sky-300', it.status === 'Consultant Sign-off' && 'bg-violet-500/15 text-violet-700 dark:text-violet-300', it.status === 'Closed' && 'bg-slate-400/15')}>{it.status}</Badge>
-                </div>
-              </div>
-            ))}
-          </PaneBody>
-        </>
-      }
       rightPane={<QsInspector item={selected} onAdvance={advanceNcr} onSaveCap={saveCap} />}
       leftPaneWidth="240px"
       rightPaneWidth="380px"

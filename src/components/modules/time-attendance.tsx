@@ -107,59 +107,6 @@ export function TimeAttendanceModule() {
           </div>
         </>
       }
-      centerPane={
-        <>
-          <PaneHeader title="Timecard Grid · Today">
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Smartphone className="w-3.5 h-3.5" />Mobile App</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Add Worker</Button>
-          </PaneHeader>
-          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-            <div className="w-16 px-2">ID</div>
-            <div className="flex-1 px-2">Worker</div>
-            <div className="w-32 px-2">Trade</div>
-            <div className="w-16 px-2 text-center">Status</div>
-            <div className="w-16 px-2 text-center">Clock In</div>
-            <div className="w-16 px-2 text-center">Clock Out</div>
-            <div className="w-16 px-2 text-right">Hours</div>
-            <div className="w-20 px-2 text-center">Geo-fence</div>
-            <div className="w-44 px-2">Task Allocation</div>
-          </div>
-          <PaneBody className="px-0">
-            {workerList.map(w => (
-              <div
-                key={w.id}
-                onClick={() => setSelectedId(w.id)}
-                className={cn('flex items-center h-14 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover', selectedId === w.id && 'bg-accent')}
-              >
-                <div className="w-16 px-2 font-mono text-muted-foreground">{w.id}</div>
-                <div className="flex-1 px-2 min-w-0">
-                  <div className="font-medium truncate">{w.name}</div>
-                  <div className="text-[10px] text-muted-foreground">{w.phone}</div>
-                </div>
-                <div className="w-32 px-2 text-muted-foreground truncate">{w.trade}</div>
-                <div className="w-16 px-2 text-center">
-                  <Badge variant="secondary" className={cn('text-[9px]', w.status === 'on-site' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', w.status === 'off-site' && 'bg-slate-400/15', w.status === 'break' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300')}>{w.status}</Badge>
-                </div>
-                <div className="w-16 px-2 text-center font-mono">{w.clockIn || '—'}</div>
-                <div className="w-16 px-2 text-center font-mono text-muted-foreground">{w.clockOut || '—'}</div>
-                <div className="w-16 px-2 text-right font-mono font-medium">{w.todayHours}h</div>
-                <div className="w-20 px-2 text-center">
-                  {w.geoFence === false && w.status === 'on-site'
-                    ? <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />
-                    : <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />}
-                </div>
-                <div className="w-44 px-2">
-                  <div className="flex flex-wrap gap-0.5">
-                    {w.allocated.map((a, i) => (
-                      <Badge key={i} variant="outline" className="text-[9px] h-4 px-1">{a.hours}h · {a.task.split(' ')[0]}</Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </PaneBody>
-        </>
-      }
       rightPane={<WorkerInspector worker={selected} />}
       leftPaneWidth="240px"
       rightPaneWidth="380px"

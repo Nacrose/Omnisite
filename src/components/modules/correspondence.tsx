@@ -71,56 +71,6 @@ export function CorrespondenceModule() {
           </PaneBody>
         </>
       }
-      centerPane={
-        <>
-          <PaneHeader title={`Letter Register · ${filtered.length} items`}>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />New Letter</Button>
-          </PaneHeader>
-          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-            <div className="w-32 px-2">Letter #</div>
-            <div className="w-24 px-2">Date</div>
-            <div className="w-20 px-2">Type</div>
-            <div className="flex-1 px-2">Subject</div>
-            <div className="w-44 px-2">From / To</div>
-            <div className="w-28 px-2">Reply Due</div>
-          </div>
-          <PaneBody className="px-0">
-            {filtered.map(l => {
-              const replyOverdue = l.replyBy && new Date(l.replyBy) < TODAY && l.type === 'Incoming' && !l.replyTo
-              return (
-                <div
-                  key={l.id}
-                  onClick={() => setSelectedId(l.id)}
-                  className={cn('flex items-center h-12 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover', selectedId === l.id && 'bg-accent', replyOverdue && 'bg-red-500/5')}
-                >
-                  <div className="w-32 px-2 font-mono text-[10px] text-muted-foreground truncate">{l.number}</div>
-                  <div className="w-24 px-2 text-muted-foreground">{l.date}</div>
-                  <div className="w-20 px-2">
-                    <Badge variant="outline" className={cn('text-[9px]', l.type === 'Incoming' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', l.type === 'Outgoing' && 'border-sky-500/40 text-sky-700 dark:text-sky-300', l.type === 'Site Instruction' && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{l.type === 'Site Instruction' ? 'SI' : l.type}</Badge>
-                  </div>
-                  <div className="flex-1 px-2 min-w-0">
-                    <div className="font-medium truncate">{l.subject}</div>
-                    {l.hasVariation && <div className="text-[10px] text-amber-600 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5" />Carries variation cost/schedule impact</div>}
-                  </div>
-                  <div className="w-44 px-2 text-[10px] text-muted-foreground truncate">
-                    <div>{l.from}</div>
-                    <div className="opacity-70">→ {l.to}</div>
-                  </div>
-                  <div className="w-28 px-2">
-                    {l.replyBy && (
-                      <span className={cn('text-[10px] flex items-center gap-1', replyOverdue ? 'text-red-500 font-medium' : 'text-muted-foreground')}>
-                        {replyOverdue && <AlertTriangle className="w-2.5 h-2.5" />}
-                        {l.replyBy}
-                      </span>
-                    )}
-                    {l.replyTo && <span className="text-[10px] text-emerald-600">Replied → {l.replyTo}</span>}
-                  </div>
-                </div>
-              )
-            })}
-          </PaneBody>
-        </>
-      }
       rightPane={
         <>
           <PaneHeader title={`Letter Inspector · ${selected.number}`} />

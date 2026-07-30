@@ -78,44 +78,6 @@ export function DrawingsModule() {
           </PaneBody>
         </>
       }
-      centerPane={
-        <>
-          <PaneHeader title="Drawing Register · ISO 19650">
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Download className="w-3.5 h-3.5" />Export</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Upload className="w-3.5 h-3.5" />Upload Drawing</Button>
-          </PaneHeader>
-          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-            <div className="w-40 px-2">Dwg Number</div>
-            <div className="flex-1 px-2">Title</div>
-            <div className="w-16 px-2">Rev</div>
-            <div className="w-24 px-2">Date</div>
-            <div className="w-12 px-2 text-center">Size</div>
-            <div className="w-44 px-2">Status</div>
-            <div className="w-20 px-2 text-center">Links</div>
-          </div>
-          <PaneBody className="px-0">
-            {DWS.map(d => (
-              <div
-                key={d.id}
-                onClick={() => setSelectedId(d.id)}
-                className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover', selectedId === d.id && 'bg-accent')}
-              >
-                <div className="w-40 px-2 font-mono text-[10px] text-muted-foreground truncate">{d.number}</div>
-                <div className="flex-1 px-2 font-medium truncate">{d.title}</div>
-                <div className="w-16 px-2 font-mono font-semibold">{d.revision}</div>
-                <div className="w-24 px-2 text-muted-foreground">{d.date}</div>
-                <div className="w-12 px-2 text-center text-muted-foreground">{d.size}</div>
-                <div className="w-44 px-2">
-                  <Badge variant="secondary" className={cn('text-[10px]', d.status === 'Approved for Construction' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', d.status === 'Pending' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300', d.status === 'Superseded' && 'bg-slate-400/15', d.status === 'Rejected' && 'bg-red-500/15 text-red-700 dark:text-red-300')}>{d.status}</Badge>
-                </div>
-                <div className="w-20 px-2 text-center">
-                  <Badge variant="outline" className="text-[9px]">{d.links.length} refs</Badge>
-                </div>
-              </div>
-            ))}
-          </PaneBody>
-        </>
-      }
       rightPane={<DrawingInspector dwg={selected} />}
       leftPaneWidth="220px"
       rightPaneWidth="380px"

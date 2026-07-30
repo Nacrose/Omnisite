@@ -376,53 +376,6 @@ export function SubcontractorModule() {
             </PaneBody>
           </>
         }
-        centerPane={
-          <>
-            <PaneHeader title={`SC Register · ${scs.length} active`}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><FileText className="w-3.5 h-3.5" />Export</Button>
-              <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Add Subcontractor</Button>
-            </PaneHeader>
-            <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-              <div className="w-16 px-2">SC #</div>
-              <div className="flex-1 px-2">Subcontractor</div>
-              <div className="w-28 px-2 text-right">Agreement</div>
-              <div className="w-28 px-2 text-right">Earned</div>
-              <div className="w-20 px-2 text-right">Advance</div>
-              <div className="w-20 px-2 text-right">Retention</div>
-              <div className="w-20 px-2 text-right">Rework</div>
-              <div className="w-28 px-2 text-right">Net Payable</div>
-            </div>
-            <PaneBody className="px-0">
-              {scs.map(s => {
-                const earned = s.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
-                const retention = earned * (s.retentionPct / 100)
-                const netPayable = earned - s.advancePaid - retention - s.reworkCost - s.customDeductibles.reduce((sum, d) => sum + d.amount, 0)
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => setSelectedId(s.id)}
-                    className={cn('flex items-center h-14 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover', selectedId === s.id && 'bg-accent')}
-                  >
-                    <div className="w-16 px-2 font-mono text-muted-foreground">{s.id}</div>
-                    <div className="flex-1 px-2 min-w-0">
-                      <div className="font-medium truncate flex items-center gap-1.5">
-                        {s.isTunneling && <Mountain className="w-3 h-3 text-violet-500 flex-shrink-0" />}
-                        {s.name}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground truncate">{s.scope}</div>
-                    </div>
-                    <div className="w-28 px-2 text-right font-mono">{s.agreementValue > 0 ? fmtNPR(s.agreementValue) : 'Variable'}</div>
-                    <div className="w-28 px-2 text-right font-mono font-medium">{fmtNPR(earned)}</div>
-                    <div className="w-20 px-2 text-right font-mono text-muted-foreground">{fmt(s.advancePaid)}</div>
-                    <div className="w-20 px-2 text-right font-mono text-muted-foreground">{fmt(retention)}</div>
-                    <div className={cn('w-20 px-2 text-right font-mono', s.reworkCost > 0 && 'text-red-500')}>{s.reworkCost > 0 ? fmt(s.reworkCost) : '—'}</div>
-                    <div className={cn('w-28 px-2 text-right font-mono font-bold', netPayable < 0 && 'text-amber-600')}>{fmtNPR(netPayable)}</div>
-                  </div>
-                )
-              })}
-            </PaneBody>
-          </>
-        }
         rightPane={<ScInspector sc={selected} activeTab={activeTab} setActiveTab={setActiveTab} />}
         leftPaneWidth="240px"
         rightPaneWidth="440px"
