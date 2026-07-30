@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
+import { usePersistentState } from '@/lib/use-persistent-state'
 
 interface BoqItem {
   id: string
@@ -94,17 +95,21 @@ function flatten(items: BoqItem[]): BoqItem[] {
 }
 
 export function BoqModule() {
-  const [selectedId, setSelectedId] = useState('1.1.3')
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['1', '1.1', '2', '2.1', '3']))
+  // Persistent state — survives page refreshes via localStorage
+  const [selectedId, setSelectedId] = usePersistentState('omnisite-boq-selected', '1.1.3')
+  const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-boq-expanded', ['1', '1.1', '2', '2.1', '3'])
+  const [boqData, setBoqData] = usePersistentState<BoqItem[]>('omnisite-boq-data', () => JSON.parse(JSON.stringify(BOQ_DATA)))
+  // Non-persistent UI state
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  // Convert BOQ_DATA into mutable state so Qty/Rate can be edited inline
-  const [boqData, setBoqData] = useState<BoqItem[]>(() => JSON.parse(JSON.stringify(BOQ_DATA)))
   const [editing, setEditing] = useState<{ id: string; field: 'qty' | 'rate' } | null>(null)
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
   // Undo/redo history stacks (deep snapshots of boqData)
   const [undoStack, setUndoStack] = useState<BoqItem[][]>([])
   const [redoStack, setRedoStack] = useState<BoqItem[][]>([])
+
+  // Convert expanded array to Set for O(1) lookups
+  const expanded = new Set(expandedArr)
   const canUndo = undoStack.length > 0
   const canRedo = redoStack.length > 0
 
@@ -252,7 +257,7 @@ export function BoqModule() {
       walk(updated)
       return updated
     })
-    setExpanded(prev => new Set(prev).add(parentId))
+    setExpandedArr(prev => prev.includes(parentId) ? prev : [...prev, parentId])
     setSelectedId(newId)
     toast.success('Child item added', { description: `New item under ${parentId}` })
   }
@@ -278,10 +283,9 @@ export function BoqModule() {
   }, [contextMenu])
 
   const toggleExpand = (id: string) => {
-    setExpanded(prev => {
-      const n = new Set(prev)
-      if (n.has(id)) n.delete(id); else n.add(id)
-      return n
+    setExpandedArr(prev => {
+      const arr = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      return arr
     })
   }
 

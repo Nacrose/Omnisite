@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Wifi, Users, Save, GitBranch, CheckCircle2, Cloud, Activity } from 'lucide-react'
+import { Wifi, Users, Save, GitBranch, CheckCircle2, Cloud, Activity, RotateCcw } from 'lucide-react'
 import { useApp } from '@/lib/app-store'
+import { clearAllPersistentState } from '@/lib/use-persistent-state'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import { Toaster } from '@/components/ui/sonner'
 
 export function StatusBar() {
   const { activeModule } = useApp()
@@ -36,6 +39,17 @@ export function StatusBar() {
     const t = setInterval(updateAgo, 5000)
     return () => clearInterval(t)
   }, [lastSaved])
+
+  const handleReset = () => {
+    if (confirm('Reset all data to defaults? This will clear all your edits to BOQ, Schedule, and Financials.')) {
+      clearAllPersistentState()
+      // Also clear the Zustand persist storage
+      try { localStorage.removeItem('omnisite-app-store') } catch (e) { /* ignore */ }
+      try { localStorage.removeItem('omnisite-theme') } catch (e) { /* ignore */ }
+      toast.success('Data reset to defaults', { description: 'Page reloading…' })
+      setTimeout(() => window.location.reload(), 800)
+    }
+  }
 
   return (
     <footer className="h-6 flex-shrink-0 flex items-center gap-4 px-3 border-t border-[var(--pane-divider)] vibrancy text-[10px] text-muted-foreground">
@@ -118,7 +132,20 @@ export function StatusBar() {
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 
-      <span className="font-mono">v0.9.4-beta</span>
+      {/* Reset button */}
+      <button
+        onClick={handleReset}
+        className="flex items-center gap-1 hover:text-foreground transition-colors"
+        title="Reset all data to defaults"
+      >
+        <RotateCcw className="w-3 h-3" />
+        <span>Reset</span>
+      </button>
+
+      <div className="w-px h-3 bg-[var(--pane-divider)]" />
+
+      <span className="font-mono">v0.9.5-beta</span>
+      <Toaster richColors position="top-center" />
     </footer>
   )
 }

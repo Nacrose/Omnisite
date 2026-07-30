@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CollaboratorCursors } from '@/components/collaborator-cursors'
+import { usePersistentState } from '@/lib/use-persistent-state'
 
 interface Task {
   id: string
@@ -86,18 +87,21 @@ function flattenTasks(items: Task[]): { task: Task; depth: number }[] {
 }
 
 export function SchedulerModule() {
-  const [selectedId, setSelectedId] = useState('T-203')
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['T-100', 'T-200', 'T-300', 'T-400']))
+  // Persistent state — survives page refreshes via localStorage
+  const [selectedId, setSelectedId] = usePersistentState('omnisite-scheduler-selected', 'T-203')
+  const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-scheduler-expanded', ['T-100', 'T-200', 'T-300', 'T-400'])
+  const [tasks, setTasks] = usePersistentState<Task[]>('omnisite-scheduler-tasks', () => JSON.parse(JSON.stringify(TASKS)))
+  // Non-persistent UI state
   const [showResources, setShowResources] = useState(false)
   const [showCriticalOnly, setShowCriticalOnly] = useState(false)
-  // Convert TASKS into mutable state so bars can be dragged to move dates
-  const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(JSON.stringify(TASKS)))
   const [dragging, setDragging] = useState<
     | { id: string; startX: number; originalStart: number; mode: 'move' }
     | { id: string; startX: number; originalDuration: number; mode: 'resize' }
     | null
   >(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  // Convert expanded array to Set for O(1) lookups
+  const expanded = new Set(expandedArr)
   // Add Task modal state
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [newTask, setNewTask] = useState({
@@ -178,11 +182,7 @@ export function SchedulerModule() {
   }
 
   const toggleExpand = (id: string) => {
-    setExpanded(prev => {
-      const n = new Set(prev)
-      if (n.has(id)) n.delete(id); else n.add(id)
-      return n
-    })
+    setExpandedArr(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   const renderTaskRows = () => {

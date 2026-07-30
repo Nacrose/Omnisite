@@ -1,6 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 export type ModuleId =
   | 'dashboard'
@@ -39,30 +40,46 @@ interface AppState {
   pushRecent: (m: ModuleId) => void
 }
 
-export const useApp = create<AppState>((set, get) => ({
-  activeModule: 'dashboard',
-  activeProject: 'Kathmandu Ring Road Expansion — Package 3',
-  setActiveModule: (m) => {
-    set({ activeModule: m })
-    // Track recent — dedupe and prepend, cap at 5
-    const prev = get().recentModules.filter(x => x !== m)
-    set({ recentModules: [m, ...prev].slice(0, 5) })
-  },
-  setActiveProject: (p) => set({ activeProject: p }),
-  leftPaneOpen: true,
-  rightPaneOpen: true,
-  toggleLeftPane: () => set((s) => ({ leftPaneOpen: !s.leftPaneOpen })),
-  toggleRightPane: () => set((s) => ({ rightPaneOpen: !s.rightPaneOpen })),
-  quickAddOpen: false,
-  setQuickAddOpen: (b) => set({ quickAddOpen: b }),
-  commandOpen: false,
-  setCommandOpen: (b) => set({ commandOpen: b }),
-  recentModules: [],
-  pushRecent: (m) => {
-    const prev = get().recentModules.filter(x => x !== m)
-    set({ recentModules: [m, ...prev].slice(0, 5) })
-  },
-}))
+export const useApp = create<AppState>()(
+  persist(
+    (set, get) => ({
+      activeModule: 'dashboard',
+      activeProject: 'Kathmandu Ring Road Expansion — Package 3',
+      setActiveModule: (m) => {
+        set({ activeModule: m })
+        // Track recent — dedupe and prepend, cap at 5
+        const prev = get().recentModules.filter(x => x !== m)
+        set({ recentModules: [m, ...prev].slice(0, 5) })
+      },
+      setActiveProject: (p) => set({ activeProject: p }),
+      leftPaneOpen: true,
+      rightPaneOpen: true,
+      toggleLeftPane: () => set((s) => ({ leftPaneOpen: !s.leftPaneOpen })),
+      toggleRightPane: () => set((s) => ({ rightPaneOpen: !s.rightPaneOpen })),
+      quickAddOpen: false,
+      setQuickAddOpen: (b) => set({ quickAddOpen: b }),
+      commandOpen: false,
+      setCommandOpen: (b) => set({ commandOpen: b }),
+      recentModules: [],
+      pushRecent: (m) => {
+        const prev = get().recentModules.filter(x => x !== m)
+        set({ recentModules: [m, ...prev].slice(0, 5) })
+      },
+    }),
+    {
+      name: 'omnisite-app-store',
+      storage: createJSONStorage(() => localStorage),
+      // Only persist these fields (not the transient UI open/close states)
+      partialize: (state) => ({
+        activeModule: state.activeModule,
+        activeProject: state.activeProject,
+        recentModules: state.recentModules,
+        leftPaneOpen: state.leftPaneOpen,
+        rightPaneOpen: state.rightPaneOpen,
+      }),
+    }
+  )
+)
 
 export const MODULES: { id: ModuleId; name: string; shortName: string; icon: string; group: string }[] = [
   { id: 'dashboard', name: 'Global Dashboard', shortName: 'Home', icon: 'LayoutDashboard', group: 'Overview' },

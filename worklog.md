@@ -133,3 +133,24 @@ Stage Summary:
 - Dev server: all GET / return 200, compiles cleanly.
 - Browser-verified: Financials has 21 editable inputs; Add Task modal opens with all fields + live preview; Dashboard SPI card click navigates to Scheduler; added "Test Task — Curing" to scheduler successfully.
 - Screenshots saved: omnisite-financials-edit.png, omnisite-add-task.png, omnisite-dashboard-clickable.png
+
+---
+Task ID: 7
+Agent: Super Z (main)
+Task: Iteration 7 — localStorage persistence so all edits survive page refreshes.
+
+Work Log:
+- Created usePersistentState hook: A drop-in replacement for useState that JSON-serializes state to localStorage on every change and hydrates from localStorage on first mount. SSR-safe (returns initial value on server). Also created clearAllPersistentState() and useResetState() helpers for the reset flow. Handles Sets by storing them as arrays (JSON.stringify(new Set()) returns "{}").
+- BOQ Persistence: Replaced useState with usePersistentState for boqData (omnisite-boq-data), selectedId (omnisite-boq-selected), and expandedArr (omnisite-boq-expanded, stored as string array, converted to Set for lookups). toggleExpand and addChildItem updated to use setExpandedArr. Undo/redo stacks and context menu remain non-persistent (transient UI state). Verified: changed excavation qty from 1240 to 1500 → total went from NPR 64,972,600 to NPR 65,098,700 → localStorage showed qty=1500 for item 1.1.1 → after page refresh, total was still NPR 65,098,700.
+- Scheduler Persistence: Replaced useState with usePersistentState for tasks (omnisite-scheduler-tasks), selectedId (omnisite-scheduler-selected), and expandedArr (omnisite-scheduler-expanded). toggleExpand updated. Drag/resize and Add Task modal state remain non-persistent. Verified: added "Persistence Test Task" via the modal → localStorage showed task T-519 with start=18 dur=5 → after page refresh, the task was still in the scheduler.
+- Financials Persistence: Replaced useState with usePersistentState for cbsData (omnisite-financials-cbs), selectedCode (omnisite-financials-selected), and expandedArr (omnisite-financials-expanded). toggleExpand updated. Inline editing state remains non-persistent.
+- App Store Persistence: Added Zustand persist middleware to the app-store. Uses createJSONStorage with localStorage under key "omnisite-app-store". partialize config ensures only these fields persist: activeModule, activeProject, recentModules, leftPaneOpen, rightPaneOpen. Transient UI states (quickAddOpen, commandOpen) are excluded. Verified: localStorage showed activeModule=scheduler, recentModules=[scheduler,boq], activeProject, and pane states.
+- Reset to Defaults: Added a "Reset" button (RotateCcw icon) to the status bar. Clicking it shows a confirm dialog. On confirm, it calls clearAllPersistentState() (clears all omnisite-* localStorage keys), also clears the Zustand persist storage and theme, shows a success toast, and reloads the page after 800ms. Version bumped to v0.9.5-beta.
+
+Stage Summary:
+- All state now persists across page refreshes via localStorage.
+- 3 module-level persistent states (BOQ, Scheduler, Financials) + 1 app-level persistent store (Zustand persist).
+- Reset button in status bar clears all data and reloads.
+- Lint: 0 errors, 0 warnings.
+- Browser-verified: BOQ qty edit survived refresh (NPR 65,098,700 persisted); Scheduler added task survived refresh (T-519 "Persistence Test Task" persisted); App store persisted activeModule, recentModules, activeProject, pane states.
+- Screenshot saved: omnisite-persistence.png

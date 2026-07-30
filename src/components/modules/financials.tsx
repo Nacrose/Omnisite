@@ -13,6 +13,7 @@ import {
   DollarSign, FileSpreadsheet, CheckCircle2, Camera, Receipt, Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePersistentState } from '@/lib/use-persistent-state'
 
 interface CbsNode {
   code: string; name: string; budget: number; committed: number; actual: number; forecast: number; marginPct: number; level: number; children?: CbsNode[]
@@ -56,11 +57,14 @@ function flattenCbs(items: CbsNode[]): CbsNode[] {
 }
 
 export function FinancialsModule() {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['1', '2']))
-  const [selectedCode, setSelectedCode] = useState('1.1')
-  // Convert CBS into mutable state so Committed/Actual/Forecast can be edited inline
-  const [cbsData, setCbsData] = useState<CbsNode[]>(() => JSON.parse(JSON.stringify(CBS)))
+  // Persistent state — survives page refreshes via localStorage
+  const [selectedCode, setSelectedCode] = usePersistentState('omnisite-financials-selected', '1.1')
+  const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-financials-expanded', ['1', '2'])
+  const [cbsData, setCbsData] = usePersistentState<CbsNode[]>('omnisite-financials-cbs', () => JSON.parse(JSON.stringify(CBS)))
+  // Non-persistent UI state
   const [editing, setEditing] = useState<{ code: string; field: 'committed' | 'actual' | 'forecast' } | null>(null)
+  // Convert expanded array to Set for O(1) lookups
+  const expanded = new Set(expandedArr)
 
   const flat = flattenCbs(cbsData)
   const selected = flat.find(c => c.code === selectedCode) ?? flat[0]
@@ -98,11 +102,7 @@ export function FinancialsModule() {
   }
 
   const toggleExpand = (code: string) => {
-    setExpanded(prev => {
-      const n = new Set(prev)
-      if (n.has(code)) n.delete(code); else n.add(code)
-      return n
-    })
+    setExpandedArr(prev => prev.includes(code) ? prev.filter(x => x !== code) : [...prev, code])
   }
 
   const renderCbsRows = (items: CbsNode[], depth: number): React.ReactNode[] => {
