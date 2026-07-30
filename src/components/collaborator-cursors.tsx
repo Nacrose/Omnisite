@@ -1,94 +1,98 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-
-interface Cursor {
-  id: string
-  name: string
-  initials: string
-  color: string
-  x: number
-  y: number
-  targetX: number
-  targetY: number
-  message?: string
-}
-
-const INITIAL_CURSORS: Cursor[] = [
-  { id: 'c1', name: 'Bikash Rai', initials: 'BR', color: '#3b82f6', x: 30, y: 20, targetX: 30, targetY: 20, message: 'reviewing T-203' },
-  { id: 'c2', name: 'Sita Gurung', initials: 'SG', color: '#10b981', x: 60, y: 50, targetX: 60, targetY: 50, message: 'editing DSR' },
-  { id: 'c3', name: 'Ram Bahadur', initials: 'RB', color: '#8b5cf6', x: 45, y: 75, targetX: 45, targetY: 75 },
-]
+import { useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { usePresence } from '@/lib/use-presence'
 
 /**
- * Simulated live collaborator cursors — represents WebSocket presence.
- * Cursors wander randomly within a bounded area, simulating other users
- * interacting with the same canvas in real-time.
+ * Live collaborator cursors — powered by the real WebSocket presence service.
+ * Renders remote users' cursors on the Gantt canvas. The local user's cursor
+ * position is broadcast to other connected clients via sendCursor().
  */
 export function CollaboratorCursors() {
-  const [cursors, setCursors] = useState<Cursor[]>(INITIAL_CURSORS)
+  const { cursors, sendCursor, stopCursor, isConnected } = usePresence()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const lastSentRef = useRef<number>(0)
 
-  // Every 3-5 seconds, pick a new random target for each cursor
+  // Track local mouse movement and broadcast cursor position
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCursors(prev => prev.map(c => ({
-        ...c,
-        targetX: 15 + Math.random() * 70, // 15%-85% width
-        targetY: 10 + Math.random() * 80, // 10%-90% height
-      })))
-    }, 3500)
-    return () => clearInterval(interval)
-  }, [])
+    const container = containerRef.current
+    if (!container) return
 
-  // Animate towards target every 50ms
-  useEffect(() => {
-    const tick = setInterval(() => {
-      setCursors(prev => prev.map(c => ({
-        ...c,
-        x: c.x + (c.targetX - c.x) * 0.08,
-        y: c.y + (c.targetY - c.y) * 0.08,
-      })))
-    }, 50)
-    return () => clearInterval(tick)
-  }, [])
+    const handleMove = (e: MouseEvent) => {
+      const now = Date.now()
+      if (now - lastSentRef.current < 50) return // throttle to 20fps for sending
+      lastSentRef.current = now
+      const rect = container.getBoundingClientRect()
+      const x = ((e.clientX - rect.left) / rect.width) * 100
+      const y = ((e.clientY - rect.top) / rect.height) * 100
+      sendCursor(x, y, 'gantt')
+    }
+
+    const handleLeave = () => stopCursor()
+
+    container.addEventListener('mousemove', handleMove)
+    container.addEventListener('mouseleave', handleLeave)
+    return () => {
+      container.removeEventListener('mousemove', handleMove)
+      container.removeEventListener('mouseleave', handleLeave)
+    }
+  }, [sendCursor, stopCursor])
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-30">
-      {cursors.map(c => (
-        <div
-          key={c.id}
-          className="absolute transition-all duration-100 ease-out"
-          style={{ left: `${c.x}%`, top: `${c.y}%` }}
-        >
-          {/* Cursor pointer SVG */}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            style={{ filter: `drop-shadow(0 1px 2px rgba(0,0,0,0.3))` }}
-          >
-            <path
-              d="M2 2L14 8L8 9L6 14L2 2Z"
-              fill={c.color}
-              stroke="white"
-              strokeWidth="1"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {/* Name label */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="absolute top-4 left-3 px-1.5 py-0.5 rounded text-[9px] text-white font-medium whitespace-nowrap shadow-sm flex items-center gap-1"
-            style={{ background: c.color }}
-          >
-            {c.initials} · {c.name.split(' ')[0]}
-            {c.message && <span className="opacity-70">— {c.message}</span>}
-          </motion.div>
+    <div ref={containerRef} className="absolute inset-0 pointer-events-none z-30">
+      {/* Connection indicator */}
+      {!isConnected && (
+        <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[9px] text-amber-700 dark:text-amber-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          Simulated presence
         </div>
-      ))}
+      )}
+      {isConnected && cursors.length === 0 && (
+        <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[9px] text-emerald-700 dark:text-emerald-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Live · move your mouse to share cursor
+        </div>
+      )}
+
+      {/* Remote cursors */}
+      <AnimatePresence>
+        {cursors.map(c => (
+          <motion.div
+            key={c.id}
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute transition-all duration-75 ease-out"
+            style={{ left: `${c.x}%`, top: `${c.y}%` }}
+          >
+            {/* Cursor pointer SVG */}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+            >
+              <path
+                d="M2 2L14 8L8 9L6 14L2 2Z"
+                fill={c.color}
+                stroke="white"
+                strokeWidth="1"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {/* Name label */}
+            <div
+              className="absolute top-4 left-3 px-1.5 py-0.5 rounded text-[9px] text-white font-medium whitespace-nowrap shadow-sm flex items-center gap-1"
+              style={{ background: c.color }}
+            >
+              {c.initials} · {c.name.split(' ')[0]}
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   )
 }

@@ -4,15 +4,16 @@ import { useState, useEffect } from 'react'
 import { Wifi, Users, Save, GitBranch, CheckCircle2, Cloud, Activity, RotateCcw } from 'lucide-react'
 import { useApp } from '@/lib/app-store'
 import { clearAllPersistentState } from '@/lib/use-persistent-state'
+import { usePresence } from '@/lib/use-presence'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
 export function StatusBar() {
   const { activeModule } = useApp()
+  const { users, isConnected } = usePresence()
   const [lastSaved, setLastSaved] = useState(Date.now())
   const [savedAgo, setSavedAgo] = useState('just now')
-  const [collaboratorCount] = useState(4)
   const [isSyncing, setIsSyncing] = useState(false)
 
   // Auto-save tick: every 8 seconds, briefly show "syncing" then "saved"
@@ -43,13 +44,17 @@ export function StatusBar() {
   const handleReset = () => {
     if (confirm('Reset all data to defaults? This will clear all your edits to BOQ, Schedule, and Financials.')) {
       clearAllPersistentState()
-      // Also clear the Zustand persist storage
       try { localStorage.removeItem('omnisite-app-store') } catch (e) { /* ignore */ }
       try { localStorage.removeItem('omnisite-theme') } catch (e) { /* ignore */ }
       toast.success('Data reset to defaults', { description: 'Page reloading…' })
       setTimeout(() => window.location.reload(), 800)
     }
   }
+
+  // Real collaborator count = remote users + 1 (us)
+  const collaboratorCount = users.length + 1
+  // Show up to 4 avatar dots (including us)
+  const visibleUsers = users.slice(0, 3)
 
   return (
     <footer className="h-6 flex-shrink-0 flex items-center gap-4 px-3 border-t border-[var(--pane-divider)] vibrancy text-[10px] text-muted-foreground">
@@ -70,40 +75,52 @@ export function StatusBar() {
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 
-      {/* Real-time connection */}
+      {/* Real-time connection — now reflects actual WebSocket status */}
       <span className="flex items-center gap-1.5">
         <div className="relative">
-          <Wifi className="w-3 h-3" />
-          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <Wifi className={cn('w-3 h-3', !isConnected && 'text-amber-500')} />
+          <div className={cn(
+            'absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full animate-pulse',
+            isConnected ? 'bg-emerald-500' : 'bg-amber-500'
+          )} />
         </div>
-        <span>Real-time connected</span>
+        <span>
+          {isConnected ? 'Real-time connected' : 'Live preview (simulated)'}
+        </span>
       </span>
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 
-      {/* Collaborators */}
+      {/* Collaborators — now reflects real presence */}
       <span className="flex items-center gap-1.5">
         <Users className="w-3 h-3" />
-        <span>{collaboratorCount} collaborators</span>
-        {/* Avatar dots */}
+        <span>{collaboratorCount} collaborator{collaboratorCount !== 1 ? 's' : ''}</span>
+        {/* Avatar dots — us + remote users */}
         <div className="flex -space-x-1.5 ml-1">
-          {[
-            { c: 'from-orange-400 to-rose-500', i: 'AS' },
-            { c: 'from-sky-400 to-blue-600', i: 'BR' },
-            { c: 'from-emerald-400 to-green-600', i: 'SG' },
-            { c: 'from-violet-400 to-purple-600', i: 'RB' },
-          ].map((u, i) => (
+          {/* Us (always first) */}
+          <div
+            className="w-4 h-4 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white text-[7px] font-semibold ring-1 ring-background"
+            title="You · Arjun Sharma"
+          >
+            AS
+          </div>
+          {/* Remote users */}
+          {visibleUsers.map((u) => (
             <div
-              key={i}
-              className={cn(
-                'w-4 h-4 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[7px] font-semibold ring-1 ring-background',
-                u.c
-              )}
-              title={u.i}
+              key={u.id}
+              className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[7px] font-semibold ring-1 ring-background"
+              style={{ background: u.color }}
+              title={`${u.name} · viewing ${u.module}`}
             >
-              {u.i}
+              {u.initials}
             </div>
           ))}
+          {/* Overflow indicator */}
+          {users.length > 3 && (
+            <div className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center text-muted-foreground text-[7px] font-semibold ring-1 ring-background">
+              +{users.length - 3}
+            </div>
+          )}
         </div>
       </span>
 
@@ -144,7 +161,7 @@ export function StatusBar() {
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 
-      <span className="font-mono">v0.9.5-beta</span>
+      <span className="font-mono">v0.9.6-beta</span>
       <Toaster richColors position="top-center" />
     </footer>
   )

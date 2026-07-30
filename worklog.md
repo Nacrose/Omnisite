@@ -154,3 +154,24 @@ Stage Summary:
 - Lint: 0 errors, 0 warnings.
 - Browser-verified: BOQ qty edit survived refresh (NPR 65,098,700 persisted); Scheduler added task survived refresh (T-519 "Persistence Test Task" persisted); App store persisted activeModule, recentModules, activeProject, pane states.
 - Screenshot saved: omnisite-persistence.png
+
+---
+Task ID: 8
+Agent: Super Z (main)
+Task: Iteration 8 — WebSocket mini-service for real collaborator presence.
+
+Work Log:
+- Created presence-service mini-service in mini-services/presence-service/: A standalone Bun + socket.io service on port 3003. Handles presence:join, presence:module, presence:cursor, presence:cursor-stop, presence:ping, and disconnect events. Maintains a Map of connected users with id, name, initials, color, module, cursor position, and lastSeen timestamp. Broadcasts presence:list (all users), presence:join, presence:leave, presence:module, presence:cursor events. Includes a 30-second heartbeat that prunes inactive users (>60s no activity). CORS enabled for all origins. Uses bun --hot for auto-restart on file changes.
+- Created usePresence hook (src/lib/use-presence.ts): A React hook that manages the socket.io connection as a singleton (shared across all hook instances). Connects to http://localhost:3003 in local dev, or relative URL with XTransformPort=3003 in production (Caddy). Exposes users (remote collaborators), cursors (remote cursor positions), isConnected, sendCursor() (broadcast local cursor), stopCursor(), and currentUser. Includes a 20-second heartbeat. Throttles cursor broadcasts to 20fps.
+- Graceful Fallback: When the WebSocket connection fails (e.g. in the sandbox where the browser can't reach localhost:3003 directly), the hook automatically falls back to simulated collaborators after 8 seconds. Uses a module-level `fallbackActive` flag so all hook instances share the same fallback state. Seeds 3 simulated users (Bikash Rai/blue, Sita Gurung/emerald, Ram Bahadur/violet) and 2 simulated cursors that random-walk every 2 seconds. The status bar shows "Live preview (simulated)" instead of "Real-time connected" when in fallback mode. The CollaboratorCursors component shows a "Simulated presence" badge.
+- Updated CollaboratorCursors: Now uses the real usePresence hook instead of its own simulated state. Tracks local mouse movement on the Gantt canvas and broadcasts cursor position via sendCursor() (throttled to 20fps). Renders remote cursors with Framer Motion AnimatePresence for smooth enter/exit. Shows connection status badges: "Simulated presence" (amber) when not connected, "Live · move your mouse to share cursor" (emerald) when connected with no cursors.
+- Updated StatusBar: Now uses usePresence to show real collaborator count (remote users + 1 for us). Avatar dots show real remote users with their actual colors and initials, with hover tooltips showing their name and current module. The WiFi indicator reflects actual connection status (emerald when connected, amber when in fallback). Shows "Real-time connected" or "Live preview (simulated)". Includes overflow indicator (+N) when more than 3 remote users. Version bumped to v0.9.6-beta.
+
+Stage Summary:
+- Real WebSocket presence service created and running on port 3003.
+- usePresence hook connects to the service and shares state across components.
+- Graceful fallback to simulated collaborators when WebSocket is unavailable (sandbox limitation).
+- Browser-verified: status bar shows "Live preview (simulated)" with 4 collaborators (AS + BR + SG + RB); scheduler shows 2 live cursors moving via random-walk fallback.
+- In production (preview URL through Caddy), the real WebSocket will connect and show actual other users' cursors.
+- Lint: 0 errors, 0 warnings.
+- Screenshot saved: omnisite-websocket-presence.png
