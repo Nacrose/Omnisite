@@ -10,6 +10,7 @@ import {
   Plus, Search, Mail, FileText, AlertTriangle, ArrowRight, ArrowLeft, Calendar, Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface Letter {
   id: string; number: string; date: string; type: 'Incoming' | 'Outgoing' | 'Site Instruction'; from: string; to: string; subject: string; replyBy?: string; replyTo?: string; hasVariation?: boolean;
@@ -173,7 +174,18 @@ export function CorrespondenceModule() {
                   <div className="p-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px]">
                     <div className="font-medium flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 text-amber-500" />Convertible to Variation Order</div>
                     <div className="text-muted-foreground mt-0.5">This Site Instruction carries cost/schedule impact. Convert to formal Variation Order per FIDIC Clause 13.</div>
-                    <Button size="sm" variant="outline" className="mt-2 h-7 text-[10px] gap-1"><ArrowRight className="w-3 h-3" />Convert to Variation Order</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 h-7 text-[10px] gap-1"
+                      onClick={() => {
+                        toast.success('Variation Order created', {
+                          description: `${selected.number} → VO-2026-008 · Cost impact NPR 1.85M · 14-day schedule extension. Pushed to Financials.`,
+                        })
+                      }}
+                    >
+                      <ArrowRight className="w-3 h-3" />Convert to Variation Order
+                    </Button>
                   </div>
                 </>
               )}

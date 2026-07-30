@@ -15,6 +15,7 @@ import {
   Mountain, TrendingUp, Thermometer, Droplets, Wind, Calendar, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface DsrEntry {
   id: string
@@ -137,12 +138,27 @@ function StatusDot({ status }: { status: DsrEntry['status'] }) {
 function WorkProgressView({ entries, selectedId, onSelect }: {
   entries: DsrEntry[]; selectedId: string; onSelect: (id: string) => void
 }) {
+  const selected = entries.find(e => e.id === selectedId)
   return (
     <>
       <PaneHeader title="Work Progress · Auto-generated from Schedule">
         <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Ad-Hoc Entry</Button>
         <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Copy className="w-3.5 h-3.5" />Copy Yesterday</Button>
       </PaneHeader>
+
+      {/* ITR auto-prompt when selected entry is completed */}
+      {selected?.status === 'completed' && (
+        <div className="px-4 py-2 border-b border-[var(--pane-divider)] bg-emerald-500/10 flex items-center gap-2 text-xs">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+          <span className="flex-1">
+            <span className="font-medium">ITR auto-prompted:</span>
+            <span className="text-muted-foreground"> {selected.id} marked completed → Inspection Test Request ITR-{Math.floor(Math.random() * 9000) + 1000} auto-generated for consultant approval.</span>
+          </span>
+          <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => toast.success('Opening ITR', { description: 'Redirecting to Q&S module' })}>
+            View ITR
+          </Button>
+        </div>
+      )}
       <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
         <div className="w-20 px-2">DSR #</div>
         <div className="flex-1 px-2">Task</div>
@@ -292,6 +308,21 @@ function DailySiteLogView() {
                 </div>
               )
             })}
+            {/* Fuel alert summary */}
+            {[
+              { name: 'JCB 3DX (Excavator)', burn: 4.0, norm: 3.5 },
+            ].filter(e => e.burn > e.norm).length > 0 && (
+              <div className="p-2 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="font-medium text-red-600">Fuel burn-rate alert — possible theft or excessive idling</div>
+                  <div className="text-muted-foreground mt-0.5">JCB 3DX burned 4.0 l/hr vs RA norm of 3.5 l/hr (14% over). Alert sent to PM and storekeeper. Recommend operator log review and fuel dipstick check.</div>
+                </div>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => toast.error('Alert escalated', { description: 'Fuel anomaly reported to PM and Security.' })}>
+                  Escalate
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
 

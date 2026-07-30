@@ -12,11 +12,12 @@ import { Switch } from '@/components/ui/switch'
 import {
   Search, Plus, ChevronRight, ChevronDown, Flag, Link2, AlertTriangle,
   Calendar, Clock, Users, Layers, Zap, Gauge, TrendingUp, TrendingDown,
-  Package, Activity, Milestone, X,
+  Package, Activity, Milestone, X, ArrowRight, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CollaboratorCursors } from '@/components/collaborator-cursors'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { toast } from 'sonner'
 
 interface Task {
   id: string
@@ -100,6 +101,9 @@ export function SchedulerModule() {
     | null
   >(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  // EOT / Critical Path Breach modal
+  const [breachModal, setBreachModal] = useState(false)
+  const [breachTask, setBreachTask] = useState<Task | null>(null)
   // Convert expanded array to Set for O(1) lookups
   const expanded = new Set(expandedArr)
   // Add Task modal state
@@ -268,7 +272,23 @@ export function SchedulerModule() {
         updateTaskDuration(dragging.id, dragging.originalDuration + deltaWeeks)
       }
     }
-    const onUp = () => setDragging(null)
+    const onUp = () => {
+      // Check for Critical Path Breach on drag end
+      const updated = tasks.find(t => t.id === dragging?.id)
+      if (updated && updated.type === 'Hammock' && updated.constraints?.includes('Must Finish On')) {
+        // Extract deadline from constraint string like "Must Finish On: Wk 32"
+        const match = updated.constraints.match(/Wk (\d+)/)
+        if (match) {
+          const deadlineWeek = parseInt(match[1])
+          const finishWeek = updated.start + updated.duration
+          if (finishWeek > deadlineWeek) {
+            setBreachTask(updated)
+            setBreachModal(true)
+          }
+        }
+      }
+      setDragging(null)
+    }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
@@ -670,7 +690,129 @@ export function SchedulerModule() {
           </div>
         </div>
       )}
+
+      {/* Critical Path Breach / EOT Modal */}
+      {breachModal && breachTask && (
+        <CriticalPathBreachModal
+          task={breachTask}
+          onClose={() => { setBreachModal(false); setBreachTask(null) }}
+          onEotClaim={() => {
+            toast.success('EOT Claim initiated', { description: `${breachTask.id} — Extension of Time claim drafted in Correspondence module.` })
+            setBreachModal(false); setBreachTask(null)
+          }}
+          onAccelerate={() => {
+            toast.success('Acceleration plan initiated', { description: `${breachTask.id} — Resource acceleration plan drafted. Additional cost will be pushed to Financials.` })
+            setBreachModal(false); setBreachTask(null)
+          }}
+        />
+      )}
     </>
+  )
+}
+
+// ─── Critical Path Breach Modal ──────────────────────────────────────────────
+
+function CriticalPathBreachModal({ task, onClose, onEotClaim, onAccelerate }: {
+  task: Task
+  onClose: () => void
+  onEotClaim: () => void
+  onAccelerate: () => void
+}) {
+  const match = task.constraints?.match(/Wk (\d+)/)
+  const deadlineWeek = match ? parseInt(match[1]) : 0
+  const finishWeek = task.start + task.duration
+  const overrunWeeks = finishWeek - deadlineWeek
+  const overrunDays = overrunWeeks * 7
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg pane border border-red-500/40 rounded-xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 h-12 border-b border-[var(--pane-divider)] bg-red-500/10">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-500" />
+            <span className="text-sm font-semibold text-red-600">⚠️ Critical Path Breach</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-accent text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Breach details */}
+          <div className="p-3 rounded-md bg-red-500/10 border border-red-500/30 text-xs space-y-1.5">
+            <div className="font-medium text-red-600">{task.id} — {task.name}</div>
+            <div className="text-muted-foreground">
+              This Hammock task (quantity-driven) has expanded beyond its Must Finish On deadline.
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-2">
+              <div className="text-center">
+                <div className="text-[10px] text-muted-foreground">Deadline</div>
+                <div className="font-mono font-bold">Wk {deadlineWeek}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-muted-foreground">Forecast Finish</div>
+                <div className="font-mono font-bold text-red-600">Wk {finishWeek}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-muted-foreground">Overrun</div>
+                <div className="font-mono font-bold text-red-600">+{overrunWeeks}w ({overrunDays}d)</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Options */}
+          <div className="space-y-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Select Resolution Option</div>
+
+            {/* EOT Claim */}
+            <button
+              onClick={onEotClaim}
+              className="w-full flex items-start gap-3 p-3 rounded-lg border border-[var(--pane-divider)] hover:border-primary/40 hover:bg-accent/30 text-left transition-colors group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium">File EOT Claim</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  Extension of Time claim per FIDIC Clause 8.4. Drafts a formal letter to the Engineer with impact analysis. Timeline moves by +{overrunWeeks} weeks. No cost penalty.
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+            </button>
+
+            {/* Acceleration */}
+            <button
+              onClick={onAccelerate}
+              className="w-full flex items-start gap-3 p-3 rounded-lg border border-[var(--pane-divider)] hover:border-primary/40 hover:bg-accent/30 text-left transition-colors group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-violet-500/15 flex items-center justify-center flex-shrink-0">
+                <Zap className="w-4 h-4 text-violet-500" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium">Accelerate (Crash Schedule)</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  Add resources (extra shifts, additional equipment) to recover the {overrunWeeks}-week overrun. Estimated acceleration cost: NPR {(overrunWeeks * 850000).toLocaleString()}. Pushes to Financials as a variation.
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+            </button>
+          </div>
+
+          {/* FIDIC reference */}
+          <div className="p-2 rounded-md bg-secondary/30 text-[10px] text-muted-foreground">
+            <span className="font-medium">FIDIC Reference:</span> Sub-Clause 8.4 (Extension of Time) and Sub-Clause 8.6 (Rate of Progress). The Contractor shall be entitled to an EOT if the delay is caused by a Variation, exceptionally adverse weather, or unforeseen ground conditions.
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

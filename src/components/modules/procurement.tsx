@@ -52,7 +52,9 @@ const INITIAL_REQS: ReqItem[] = [
   },
 ]
 
-const POS = [
+interface Po { id: string; vendor: string; date: string; value: number; status: 'Delivered' | 'Partial' | 'Pending'; items: number; grn: boolean }
+
+const INITIAL_POS: Po[] = [
   { id: 'PO-2410-018', vendor: 'Udaipur Cement', date: '12 Aug 2026', value: 1104000, status: 'Delivered', items: 1, grn: true },
   { id: 'PO-2410-014', vendor: 'Trishuli Sand Suppliers', date: '08 Aug 2026', value: 173250, status: 'Partial', items: 2, grn: true },
   { id: 'PO-2410-022', vendor: 'Hetauda Aggregates', date: '15 Aug 2026', value: 285600, status: 'Pending', items: 3, grn: false },
@@ -70,9 +72,65 @@ export function ProcurementModule() {
   const [tab, setTab] = useState<Tab>('req')
   const [selectedId, setSelectedId] = useState('REQ-0142')
   const [reqs, setReqs] = useState<ReqItem[]>(() => JSON.parse(JSON.stringify(INITIAL_REQS)))
+  const [pos, setPos] = useState<Po[]>(() => JSON.parse(JSON.stringify(INITIAL_POS)))
   // Override modal state
   const [overrideModal, setOverrideModal] = useState<{ reqId: string; vendorName: string; vendorRate: number; lowestRate: number } | null>(null)
   const [overrideReason, setOverrideReason] = useState('')
+
+  // Generate POs from approved requisitions — auto-group by vendor, merge duplicates
+  const generatePos = () => {
+    const approvedReqs = reqs.filter(r => r.status === 'Approved' || r.status === 'Partially PO\'d')
+    if (approvedReqs.length === 0) {
+      toast.error('No approved requisitions', { description: 'Approve requisitions first before generating POs.' })
+      return
+    }
+
+    // Group by selected vendor
+    const vendorGroups = new Map<string, { reqs: ReqItem[]; totalValue: number; itemCount: number }>()
+    for (const r of approvedReqs) {
+      const selectedVendor = r.vendors.find(v => v.selected)
+      if (!selectedVendor) continue
+      const existing = vendorGroups.get(selectedVendor.name) || { reqs: [], totalValue: 0, itemCount: 0 }
+      existing.reqs.push(r)
+      existing.totalValue += r.qty * selectedVendor.rate
+      existing.itemCount += 1
+      vendorGroups.set(selectedVendor.name, existing)
+    }
+
+    // Create one PO per vendor
+    const newPOs: Po[] = []
+    let poNum = 19 // starting after existing PO-018
+    for (const [vendor, group] of vendorGroups) {
+      const po: Po = {
+        id: `PO-2410-${String(poNum).padStart(3, '0')}`,
+        vendor,
+        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        value: group.totalValue,
+        status: 'Pending',
+        items: group.itemCount,
+        grn: false,
+      }
+      newPOs.push(po)
+      poNum++
+    }
+
+    setPos(prev => [...newPOs, ...prev])
+
+    // Mark requisitions as Fully PO'd
+    setReqs(prev => prev.map(r => {
+      if (approvedReqs.find(ar => ar.id === r.id)) {
+        return { ...r, status: 'Fully PO\'d' as const }
+      }
+      return r
+    }))
+
+    toast.success(`${newPOs.length} PO${newPOs.length > 1 ? 's' : ''} generated`, {
+      description: newPOs.map(p => `${p.id} → ${p.vendor} · NPR ${p.value.toLocaleString()}`).join('\n'),
+    })
+
+    // Switch to PO tab to show the new POs
+    setTab('po')
+  }
 
   // Select a vendor. If the vendor is NOT the lowest bidder, open the override modal.
   const selectVendor = (reqId: string, vendorName: string) => {
@@ -129,7 +187,7 @@ export function ProcurementModule() {
             <div className="py-2">
               {([
                 { id: 'req', name: 'Requisitions', count: reqs.length, icon: FileText },
-                { id: 'po', name: 'Purchase Orders', count: 12, icon: Package },
+                { id: 'po', name: 'Purchase Orders', count: pos.length, icon: Package },
                 { id: 'grn', name: 'GRN / 3-Way Match', count: 4, icon: CheckCircle2 },
                 { id: 'stock', name: 'Live Stock', count: 5, icon: Boxes },
                 { id: 'min', name: 'Material Issues (MIN)', count: 8, icon: ArrowRight },
@@ -163,13 +221,13 @@ export function ProcurementModule() {
           <>
             <PaneHeader title={tab === 'req' ? 'Requisitions & Comparative Statement' : tab === 'po' ? 'Purchase Orders' : tab === 'grn' ? 'GRN & 3-Way Match' : tab === 'stock' ? 'Live Stock Dashboard' : 'Material Issue Notes'}>
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Search className="w-3.5 h-3.5" />Search</Button>
-              <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />New {tab === 'req' ? 'Requisition' : tab === 'po' ? 'Consolidated PO' : tab === 'grn' ? 'GRN' : tab === 'stock' ? 'Material' : 'MIN'}</Button>
+              <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => tab === 'grn' ? toast.info('GRN Receiving Form', { description: 'Select a PO, enter received qty, attach delivery note. System verifies against PO qty.' }) : undefined}><Plus className="w-3.5 h-3.5" />New {tab === 'req' ? 'Requisition' : tab === 'po' ? 'Consolidated PO' : tab === 'grn' ? 'GRN' : tab === 'stock' ? 'Material' : 'MIN'}</Button>
             </PaneHeader>
 
             {tab === 'req' && (
-              <ReqCenterView reqs={reqs} selectedId={selectedId} onSelect={setSelectedId} onVendorSelect={selectVendor} />
+              <ReqCenterView reqs={reqs} selectedId={selectedId} onSelect={setSelectedId} onVendorSelect={selectVendor} onGeneratePos={generatePos} />
             )}
-            {tab === 'po' && <PoCenterView />}
+            {tab === 'po' && <PoCenterView pos={pos} />}
             {tab === 'grn' && <GrnCenterView />}
             {tab === 'stock' && <StockCenterView />}
             {tab === 'min' && <MinCenterView />}
@@ -239,8 +297,8 @@ export function ProcurementModule() {
   )
 }
 
-function ReqCenterView({ reqs, selectedId, onSelect, onVendorSelect }: {
-  reqs: ReqItem[]; selectedId: string; onSelect: (id: string) => void; onVendorSelect: (reqId: string, vendorName: string) => void
+function ReqCenterView({ reqs, selectedId, onSelect, onVendorSelect, onGeneratePos }: {
+  reqs: ReqItem[]; selectedId: string; onSelect: (id: string) => void; onVendorSelect: (reqId: string, vendorName: string) => void; onGeneratePos: () => void
 }) {
   return (
     <>
@@ -310,17 +368,17 @@ function ReqCenterView({ reqs, selectedId, onSelect, onVendorSelect }: {
       <div className="border-t border-[var(--pane-divider)] p-3 bg-secondary/20">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold">Consolidated PO Builder</span>
-          <Button size="sm" className="h-7 text-xs gap-1.5"><Package className="w-3.5 h-3.5" />Generate 3 POs</Button>
+          <Button size="sm" className="h-7 text-xs gap-1.5" onClick={onGeneratePos}><Package className="w-3.5 h-3.5" />Generate POs</Button>
         </div>
         <div className="text-[11px] text-muted-foreground">
-          3 approved requisitions will be auto-grouped by vendor and merged into 3 POs (dedup of duplicate materials applied). Pushes "Committed Cost" to Financials.
+          {reqs.filter(r => r.status === 'Approved' || r.status === 'Partially PO\'d').length} approved requisitions will be auto-grouped by vendor and merged into POs. Pushes "Committed Cost" to Financials.
         </div>
       </div>
     </>
   )
 }
 
-function PoCenterView() {
+function PoCenterView({ pos }: { pos: Po[] }) {
   return (
     <PaneBody className="px-0">
       <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
@@ -332,7 +390,7 @@ function PoCenterView() {
         <div className="w-24 px-2">Status</div>
         <div className="w-16 px-2 text-center">GRN</div>
       </div>
-      {POS.map(p => (
+      {pos.map(p => (
         <div key={p.id} className="flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer">
           <div className="w-32 px-2 font-mono">{p.id}</div>
           <div className="flex-1 px-2 font-medium truncate">{p.vendor}</div>
@@ -352,49 +410,103 @@ function PoCenterView() {
 }
 
 function GrnCenterView() {
+  const [rows, setRows] = useState([
+    { po: 'PO-018', vendor: 'Udaipur Cement', poq: 1200, grnq: 1200, invq: 1200, pay: 'Cleared' as 'Cleared' | 'Hold' | 'Partial Hold' | 'Awaiting GRN' },
+    { po: 'PO-014', vendor: 'Trishuli Sand', poq: 45, grnq: 38, invq: 38, pay: 'Partial Hold' as const },
+    { po: 'PO-022', vendor: 'Hetauda Aggregates', poq: 96, grnq: 0, invq: 0, pay: 'Awaiting GRN' as const },
+    { po: 'PO-016', vendor: 'Ghorahi Ply', poq: 60, grnq: 60, invq: 58, pay: 'Hold' as const },
+  ])
+
+  // 3-way match check: PO qty === GRN qty === Invoice qty
+  const isMatched = (r: typeof rows[0]) => r.poq === r.grnq && r.grnq === r.invq
+  const lockedAmount = rows.filter(r => !isMatched(r) && r.grnq > 0).reduce((sum, r) => sum + r.invq * 920, 0) // simplified rate
+
+  // Toggle payment approval — only allowed if 3-way match passes
+  const toggleApproval = (po: string) => {
+    setRows(prev => prev.map(r => {
+      if (r.po !== po) return r
+      if (!isMatched(r)) {
+        toast.error('Payment locked', { description: `${po} fails 3-way match. PO ${r.poq} ≠ GRN ${r.grnq} ≠ Inv ${r.invq}. Cannot approve.` })
+        return r
+      }
+      const newPay = r.pay === 'Cleared' ? 'Hold' : 'Cleared'
+      toast.success(newPay === 'Cleared' ? 'Payment cleared' : 'Payment held', { description: `${po} — 3-way match verified` })
+      return { ...r, pay: newPay }
+    }))
+  }
+
   return (
     <PaneBody className="p-4">
       <div className="rounded-lg border border-[var(--pane-divider)] overflow-hidden">
-        <div className="px-3 py-2 border-b border-[var(--pane-divider)] bg-secondary/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          3-Way Match · PO vs GRN vs Invoice
+        <div className="px-3 py-2 border-b border-[var(--pane-divider)] bg-secondary/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+          <span>3-Way Match · PO vs GRN vs Invoice</span>
+          <span className="text-[10px] normal-case font-normal">Click ✓ to approve — locked if mismatch</span>
         </div>
         <table className="w-full text-xs">
           <thead className="bg-secondary/20">
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
               <th className="text-left p-2">PO #</th>
+              <th className="text-left p-2">Vendor</th>
               <th className="text-right p-2">PO Qty</th>
               <th className="text-right p-2">GRN Qty</th>
               <th className="text-right p-2">Invoice Qty</th>
               <th className="text-center p-2">Match</th>
               <th className="text-right p-2">Pay Status</th>
+              <th className="text-center p-2">Action</th>
             </tr>
           </thead>
           <tbody>
-            {[
-              { po: 'PO-018', poq: 1200, grnq: 1200, invq: 1200, match: true, pay: 'Cleared' },
-              { po: 'PO-014', poq: 45, grnq: 38, invq: 38, match: false, pay: 'Partial Hold' },
-              { po: 'PO-022', poq: 96, grnq: 0, invq: 0, match: false, pay: 'Awaiting GRN' },
-              { po: 'PO-016', poq: 60, grnq: 60, invq: 58, match: false, pay: 'Variance Hold' },
-            ].map((r, i) => (
-              <tr key={i} className="border-t border-[var(--pane-divider)] row-hover">
-                <td className="p-2 font-mono">{r.po}</td>
-                <td className="p-2 text-right font-mono">{r.poq}</td>
-                <td className="p-2 text-right font-mono">{r.grnq}</td>
-                <td className="p-2 text-right font-mono">{r.invq}</td>
-                <td className="p-2 text-center">
-                  {r.match
-                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
-                    : <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />}
-                </td>
-                <td className={cn('p-2 text-right text-[11px]', r.pay === 'Cleared' ? 'text-emerald-600' : 'text-amber-600')}>{r.pay}</td>
-              </tr>
-            ))}
+            {rows.map((r, i) => {
+              const matched = isMatched(r)
+              return (
+                <tr key={i} className="border-t border-[var(--pane-divider)] row-hover">
+                  <td className="p-2 font-mono">{r.po}</td>
+                  <td className="p-2 truncate">{r.vendor}</td>
+                  <td className="p-2 text-right font-mono">{r.poq}</td>
+                  <td className="p-2 text-right font-mono">{r.grnq}</td>
+                  <td className="p-2 text-right font-mono">{r.invq}</td>
+                  <td className="p-2 text-center">
+                    {matched
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                      : <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />}
+                  </td>
+                  <td className={cn('p-2 text-right text-[11px] font-medium',
+                    r.pay === 'Cleared' ? 'text-emerald-600' : 'text-amber-600')}>
+                    {r.pay}
+                  </td>
+                  <td className="p-2 text-center">
+                    <button
+                      onClick={() => toggleApproval(r.po)}
+                      disabled={!matched}
+                      className={cn(
+                        'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
+                        matched
+                          ? r.pay === 'Cleared'
+                            ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25'
+                            : 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25'
+                          : 'bg-secondary text-muted-foreground/40 cursor-not-allowed'
+                      )}
+                      title={matched ? 'Toggle payment approval' : 'Locked — 3-way match fails'}
+                    >
+                      {matched ? (r.pay === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
-      <div className="mt-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs">
-        <div className="font-medium flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 text-amber-500" />Payment gate active</div>
-        <div className="text-muted-foreground mt-0.5">2 invoices on hold pending 3-way match reconciliation. NPR 285,600 locked.</div>
+      <div className={cn('mt-3 p-3 rounded-md text-xs', lockedAmount > 0 ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-emerald-500/10 border border-emerald-500/30')}>
+        <div className={cn('font-medium flex items-center gap-1.5', lockedAmount > 0 ? 'text-amber-600' : 'text-emerald-600')}>
+          {lockedAmount > 0 ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+          {lockedAmount > 0 ? 'Payment gate active' : 'All payments cleared'}
+        </div>
+        <div className="text-muted-foreground mt-0.5">
+          {lockedAmount > 0
+            ? `${rows.filter(r => !isMatched(r) && r.grnq > 0).length} invoices on hold pending 3-way match reconciliation. NPR ${lockedAmount.toLocaleString()} locked.`
+            : 'All 3-way matches verified. All payments approved.'}
+        </div>
       </div>
     </PaneBody>
   )
