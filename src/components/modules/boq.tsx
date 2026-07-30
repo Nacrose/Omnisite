@@ -100,7 +100,7 @@ function flatten(items: BoqItem[]): BoqItem[] {
 }
 
 export function BoqModule() {
-  // Persistent state — survives page refreshes via localStorage
+  // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedId, setSelectedId] = usePersistentState('omnisite-boq-selected', '1.1.3')
   const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-boq-expanded', ['1', '1.1', '2', '2.1', '3'])
   const [boqData, setBoqData] = usePersistentState<BoqItem[]>('omnisite-boq-data', () => JSON.parse(JSON.stringify(BOQ_DATA)))
