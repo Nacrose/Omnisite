@@ -270,6 +270,34 @@
 .delta-down { color: var(--critical); }
 
 /* ============================================================
+   macOS-style Dock
+   ============================================================ */
+.dock-trigger {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  z-index: 40;
+  pointer-events: auto;
+}
+
+/* Ensure dock stays above status bar but below modals */
+.dock-container {
+  z-index: 50;
+}
+
+/* Smooth scroll for dock if it overflows */
+.dock-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.dock-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================
    Print styles — Report Designer PDF export
    When window.print() is called, hide everything except the A4 canvas.
    ============================================================ */

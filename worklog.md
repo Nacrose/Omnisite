@@ -248,3 +248,29 @@ Stage Summary:
 - Schedule linkage with progress per task.
 - Performance dashboard with KPIs and compliance tracking.
 - All state persisted to localStorage.
+
+---
+Task ID: 12
+Agent: Super Z (main)
+Task: macOS-style dock navigation with auto-hide and magnification.
+
+Work Log:
+- Created DockNav component: A bottom-positioned dock with macOS-style auto-hide behavior. The dock slides up from the bottom when the mouse enters the bottom 80px trigger zone, and auto-hides after 1.5s when the mouse moves away. Uses Framer Motion AnimatePresence for smooth slide animation (spring physics: stiffness=400, damping=30).
+- Magnification effect: Each dock icon uses Framer Motion's useMotionValue + useTransform + useSpring to create the classic macOS dock magnification — icons grow from 36px to 52px based on cursor proximity, with a smooth spring animation (stiffness=500, damping=30). The magnification is distance-based: closer to cursor = bigger.
+- Label tooltips: On hover (200ms delay), a label tooltip appears above each icon showing the full module name and group. Uses AnimatePresence for smooth fade+scale animation.
+- Dock contents: Brand (OmniSite logo), Search button (⌘K), Quick Add button (N), divider, then all 14 modules grouped by category (Overview, Pre-Construction, Site Execution, Project Controls, Documents, Resources) with dividers between groups. Each module icon shows an active indicator dot at the bottom when selected.
+- Glassy background: Uses vibrancy class (backdrop-filter: saturate(180%) blur(30px)) for the frosted glass effect. Rounded-2xl corners, pane background, border, and shadow-2xl for depth.
+- Layout change: Removed the 236px left sidebar entirely. The main workspace now spans full width, giving modules more horizontal space. The top bar now includes the OmniSite brand (moved from sidebar), breadcrumb, search, notifications, theme switcher, user avatar, and inspector toggle. The recently viewed rail was removed (the dock's visual grouping serves a similar purpose). The keyboard shortcut hint was removed (the ? help modal covers this).
+- Auto-hide behavior: Mouse position is tracked globally. When mouse Y > (window height - 80px), the dock shows immediately. When mouse Y < (window height - 120px), a 1.5s hide timer starts. The dock also shows on mouseenter and hides on mouseleave with a timer. This prevents accidental hiding while keeping the dock out of the way during normal work.
+- Browser-verified: No sidebar present; dock appears with all 14 modules + search + quick add; clicking "BOQ & Rate Analysis" in the dock navigated to BOQ module; no errors.
+- Lint: 0 errors, 0 warnings.
+- Screenshots saved: omnisite-dock.png, omnisite-dock-nav.png
+
+Stage Summary:
+- Left sidebar replaced with macOS-style bottom dock.
+- Auto-hide: dock slides down when not in use, slides up when mouse nears bottom.
+- Magnification: icons grow based on cursor proximity (36px → 52px).
+- Labels: full module name + group shown on hover.
+- Glass effect: frosted glass background with backdrop blur.
+- Full-width workspace: modules now have more horizontal space.
+- All 14 modules + Search + Quick Add accessible from the dock.
