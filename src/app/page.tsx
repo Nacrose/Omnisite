@@ -28,6 +28,7 @@ import { AdminModule } from '@/components/modules/admin'
 import { ReportsModule } from '@/components/modules/reports'
 import { QsModule } from '@/components/modules/qs'
 import { TimeAttendanceModule } from '@/components/modules/time-attendance'
+import { ChatModule } from '@/components/modules/chat'
 
 const MODULE_RENDERERS: Record<ModuleId, () => React.ReactNode> = {
   dashboard: () => <DashboardModule />,
@@ -44,6 +45,7 @@ const MODULE_RENDERERS: Record<ModuleId, () => React.ReactNode> = {
   reports: () => <ReportsModule />,
   qs: () => <QsModule />,
   'time-attendance': () => <TimeAttendanceModule />,
+  chat: () => <ChatModule />,
 }
 
 export default function Home() {

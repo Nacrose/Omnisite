@@ -18,6 +18,7 @@ export type ModuleId =
   | 'reports'
   | 'qs'
   | 'time-attendance'
+  | 'chat'
 
 interface AppState {
   activeModule: ModuleId
@@ -96,6 +97,7 @@ export const MODULES: { id: ModuleId; name: string; shortName: string; icon: str
   { id: 'reports', name: 'Report & PDF Designer', shortName: 'Reports', icon: 'FileBarChart', group: 'Documents' },
   { id: 'time-attendance', name: 'Time & Attendance', shortName: 'Timecards', icon: 'Fingerprint', group: 'Resources' },
   { id: 'admin', name: 'Admin & Master Data', shortName: 'Admin', icon: 'Settings', group: 'Resources' },
+  { id: 'chat', name: 'Messages', shortName: 'Chat', icon: 'MessageSquare', group: 'Resources' },
 ]
 
 // Keyboard shortcut mapping (single key, fires when not typing in an input)
@@ -114,4 +116,5 @@ export const KEYBOARD_SHORTCUTS: Record<string, ModuleId> = {
   r: 'reports',
   t: 'time-attendance',
   a: 'admin',
+  m: 'chat',
 }
