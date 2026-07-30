@@ -193,3 +193,27 @@ Stage Summary:
 - Keyboard navigation works across all results.
 - Lint: 0 errors, 0 warnings.
 - Screenshot saved: omnisite-global-search.png
+
+---
+Task ID: 10
+Agent: Super Z (main)
+Task: Iteration 10 — Drag-and-drop BOQ reordering (reparent items under different headings).
+
+Work Log:
+- Added @dnd-kit integration: Imported DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, and closestCenter from @dnd-kit/core. Created a BoqDndRow wrapper component that makes every row draggable (useDraggable) and every heading row also droppable (useDroppable). The wrapper shows a GripVertical drag handle on hover and highlights heading rows with a primary ring when another item is dragged over them.
+- Reparenting logic: Implemented reparentItem(draggedId, targetHeadingId) which: (1) checks for cycles (can't move a heading into its own subtree), (2) removes the dragged item from its current location in the tree, (3) updates the item's level (depth) and all its children's levels, (4) adds it to the target heading's children array, (5) auto-expands the target heading, (6) shows a success toast. Uses commitBoqData so the change is undoable and persisted to localStorage.
+- DnD event handlers: handleDragStart (sets draggedItem for the DragOverlay), handleDragOver (sets dragOverHeading for visual feedback), handleDragEnd (calls reparentItem), handleDragCancel (clears state). PointerSensor with 5px activation constraint prevents accidental drags on click.
+- DragOverlay: Shows a floating preview of the dragged item (code + description + type badge) that follows the cursor during drag. The original row becomes 40% opacity while dragging.
+- Visual feedback: Heading rows show a primary ring + light background when an item is dragged over them. The drag handle (GripVertical) appears on hover for each row.
+- Updated hint pill: Now reads "Edit Qty/Rate · drag rows to headings to reparent".
+- Browser-verified: Dragged "1.1.1 Excavation in ordinary soil" from "1.1 Foundation Works" to "2 Road Works" heading. Success toast appeared ("moved under 2"). Verified in localStorage: the item was found under "Road Works" instead of "Foundation Works". The reparenting persisted across refreshes (localStorage).
+
+Stage Summary:
+- Full drag-and-drop BOQ reparenting using @dnd-kit.
+- All rows draggable, all heading rows droppable.
+- Cycle prevention (can't move a heading into its own subtree).
+- Level/depth auto-updated for moved items and their children.
+- Visual feedback: drag handle on hover, DragOverlay preview, heading highlight on drag-over.
+- Changes persisted to localStorage and undoable (part of the existing undo/redo stack).
+- Lint: 0 errors, 0 warnings.
+- Screenshot saved: omnisite-boq-drag-drop.png

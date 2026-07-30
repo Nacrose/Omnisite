@@ -13,12 +13,17 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Search, Plus, ChevronRight, ChevronDown, Download, Save, FolderOpen,
   Zap, Edit3, FileSpreadsheet, AlertTriangle, CheckCircle2, TrendingUp,
-  History, Link2, Lock, Layers, Copy, Trash2, FilePlus, ArrowRight, Undo2, Redo2,
+  History, Link2, Lock, Layers, Copy, Trash2, FilePlus, ArrowRight, Undo2, Redo2, GripVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import {
+  DndContext, DragOverlay, useDraggable, useDroppable,
+  PointerSensor, useSensor, useSensors, closestCenter,
+} from '@dnd-kit/core'
+import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 
 interface BoqItem {
   id: string
@@ -104,6 +109,9 @@ export function BoqModule() {
   const [editing, setEditing] = useState<{ id: string; field: 'qty' | 'rate' } | null>(null)
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
+  // Drag-and-drop state
+  const [draggedItem, setDraggedItem] = useState<BoqItem | null>(null)
+  const [dragOverHeading, setDragOverHeading] = useState<string | null>(null)
   // Undo/redo history stacks (deep snapshots of boqData)
   const [undoStack, setUndoStack] = useState<BoqItem[][]>([])
   const [redoStack, setRedoStack] = useState<BoqItem[][]>([])
@@ -262,6 +270,131 @@ export function BoqModule() {
     toast.success('Child item added', { description: `New item under ${parentId}` })
   }
 
+  // ─── Drag-and-drop reparenting ────────────────────────────────────────────
+
+  // Find an item and its parent in the tree
+  const findItemAndParent = (items: BoqItem[], id: string, parent: BoqItem | null = null, depth = 0): { item: BoqItem; parent: BoqItem | null; depth: number } | null => {
+    for (const it of items) {
+      if (it.id === id) return { item: it, parent, depth }
+      if (it.children) {
+        const found = findItemAndParent(it.children, id, it, depth + 1)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  // Recursively update the level of an item and its children
+  const updateLevels = (item: BoqItem, newLevel: number): BoqItem => {
+    return {
+      ...item,
+      level: newLevel,
+      children: item.children?.map(c => updateLevels(c, newLevel + 1)),
+    }
+  }
+
+  // Reparent an item: remove from old location, add to new parent's children
+  const reparentItem = (draggedId: string, targetHeadingId: string) => {
+    if (draggedId === targetHeadingId) return // can't drop on self
+
+    // Find the dragged item and check it's not a parent of the target (no cycles)
+    const dragInfo = findItemAndParent(boqData, draggedId)
+    if (!draggedItem) return
+
+    // Check for cycle: is targetHeadingId a descendant of draggedId?
+    const isDescendant = (items: BoqItem[] | undefined, ancestorId: string, targetId: string): boolean => {
+      if (!items) return false
+      for (const it of items) {
+        if (it.id === ancestorId) {
+          // Check if targetId is in this subtree
+          const checkSubtree = (node: BoqItem): boolean => {
+            if (node.id === targetId) return true
+            return node.children?.some(c => checkSubtree(c)) || false
+          }
+          if (checkSubtree(it)) return true
+        }
+        if (it.children && isDescendant(it.children, ancestorId, targetId)) return true
+      }
+      return false
+    }
+    if (isDescendant(boqData, draggedId, targetHeadingId)) {
+      toast.error('Cannot reparent', { description: 'Cannot move a heading into its own subtree' })
+      return
+    }
+
+    commitBoqData(prev => {
+      const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+      let movedItem: BoqItem | null = null
+
+      // Step 1: Remove the dragged item from its current location
+      const removeFromTree = (items: BoqItem[]): BoqItem[] => {
+        return items.filter(it => {
+          if (it.id === draggedId) {
+            movedItem = it
+            return false
+          }
+          if (it.children) it.children = removeFromTree(it.children)
+          return true
+        })
+      }
+      const cleaned = removeFromTree(updated)
+
+      // Step 2: Find the target heading and add the item to its children
+      if (movedItem) {
+        const targetLevel = findItemAndParent(cleaned, targetHeadingId)?.depth ?? 0
+        movedItem = updateLevels(movedItem, targetLevel + 1)
+        const addToTarget = (items: BoqItem[]): boolean => {
+          for (const it of items) {
+            if (it.id === targetHeadingId) {
+              if (!it.children) it.children = []
+              it.children.push(movedItem!)
+              return true
+            }
+            if (it.children && addToTarget(it.children)) return true
+          }
+          return false
+        }
+        addToTarget(cleaned)
+      }
+
+      return cleaned
+    })
+
+    // Auto-expand the target heading
+    setExpandedArr(prev => prev.includes(targetHeadingId) ? prev : [...prev, targetHeadingId])
+    setSelectedId(draggedId)
+    toast.success('Item reparented', {
+      description: `${draggedItem?.code} moved under ${targetHeadingId}`,
+    })
+  }
+
+  // DnD sensors — require 5px movement to start drag (prevents accidental drags on click)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const item = allFlat.find(i => i.id === e.active.id)
+    setDraggedItem(item || null)
+  }
+
+  const handleDragOver = (e: { over: { id: string | number } | null }) => {
+    setDragOverHeading(e.over ? String(e.over.id) : null)
+  }
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    setDraggedItem(null)
+    setDragOverHeading(null)
+    if (!over) return
+    reparentItem(String(active.id), String(over.id))
+  }
+
+  const handleDragCancel = () => {
+    setDraggedItem(null)
+    setDragOverHeading(null)
+  }
+
   const exportRa = (id: string) => {
     const item = allFlat.find(i => i.id === id)
     toast.success('RA exported (DoR format)', {
@@ -298,8 +431,14 @@ export function BoqModule() {
       const isSelected = item.id === selectedId
 
       rows.push(
-        <div
+        <BoqDndRow
           key={item.id}
+          item={item}
+          isHeading={isHeading}
+          isDragged={draggedItem?.id === item.id}
+          isDragOver={dragOverHeading === item.id && !!draggedItem}
+        >
+        <div
           onClick={() => setSelectedId(item.id)}
           onContextMenu={(e) => {
             e.preventDefault()
@@ -406,6 +545,7 @@ export function BoqModule() {
             {!isHeading && item.hasRA && <Lock className="w-3 h-3 text-emerald-500" />}
           </div>
         </div>
+        </BoqDndRow>
       )
 
       if (hasChildren && isExpanded) {
@@ -448,7 +588,7 @@ export function BoqModule() {
           <PaneHeader title={`BOQ Grid · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}>
             <span className="hidden lg:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Click Qty/Rate to edit
+              Edit Qty/Rate · drag rows to headings to reparent
             </span>
             {/* Undo/Redo buttons */}
             <div className="flex items-center gap-0.5 border-r border-[var(--pane-divider)] pr-1.5 mr-1">
@@ -500,7 +640,26 @@ export function BoqModule() {
             <div className="w-10 text-center">RA</div>
           </div>
           <PaneBody className="px-0">
-            {renderRows(boqData)}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              {renderRows(boqData)}
+              <DragOverlay>
+                {draggedItem ? (
+                  <div className="flex items-center h-9 px-4 pane border border-primary rounded-md shadow-lg text-xs gap-2">
+                    <GripVertical className="w-3 h-3 text-primary" />
+                    <span className="font-mono text-muted-foreground">{draggedItem.code}</span>
+                    <span className="font-medium truncate">{draggedItem.desc}</span>
+                    <Badge variant="secondary" className="text-[9px] ml-2">{draggedItem.type}</Badge>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </PaneBody>
           <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs text-muted-foreground bg-secondary/30">
             <span className="flex items-center gap-1.5">
@@ -563,6 +722,63 @@ function ContextMenuItem({ icon, label, shortcut, onClick, danger }: {
       <span className="flex-1">{label}</span>
       {shortcut && <kbd className="text-[9px] px-1 py-0.5 rounded bg-secondary text-muted-foreground font-mono">{shortcut}</kbd>}
     </button>
+  )
+}
+
+/**
+ * Draggable + Droppable wrapper for BOQ rows.
+ * - All rows are draggable (useDraggable) so they can be moved.
+ * - Heading rows are also droppable (useDroppable) so items can be reparented under them.
+ * - Shows a drag handle (GripVertical) on hover.
+ * - Highlights heading rows when another item is dragged over them.
+ */
+function BoqDndRow({
+  item,
+  isHeading,
+  isDragged,
+  isDragOver,
+  children,
+}: {
+  item: BoqItem
+  isHeading: boolean
+  isDragged: boolean
+  isDragOver: boolean
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: item.id,
+    disabled: false,
+  })
+
+  const droppable = useDroppable({
+    id: item.id,
+    disabled: !isHeading,
+  })
+
+  return (
+    <div
+      ref={(node) => {
+        setNodeRef(node)
+        if (isHeading) droppable.setNodeRef(node)
+      }}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        'relative group/dnd',
+        isDragging && 'opacity-40',
+        isHeading && isDragOver && !isDragged && 'ring-2 ring-primary ring-inset bg-primary/5',
+        droppable.isOver && isHeading && 'bg-primary/10',
+      )}
+    >
+      {children}
+      {/* Drag handle — appears on hover */}
+      <div className={cn(
+        'absolute left-0 top-0 bottom-0 w-5 flex items-center justify-center cursor-grab opacity-0 group-hover/dnd:opacity-100 transition-opacity',
+        isDragging && 'cursor-grabbing'
+      )}>
+        <GripVertical className="w-3 h-3 text-muted-foreground/60" />
+      </div>
+    </div>
   )
 }
 
