@@ -73,9 +73,26 @@ export function usePresence() {
       const isLocalDev = typeof window !== 'undefined'
         && window.location.hostname === 'localhost'
         && window.location.port === '3000'
-      const socketUrl = isLocalDev
-        ? 'http://localhost:3003'
-        : undefined
+      // In production (Vercel, VPS, etc.), skip WebSocket connection entirely
+      // and use simulated fallback. The WebSocket service runs separately.
+      const isProduction = typeof window !== 'undefined'
+        && !isLocalDev
+        && !window.location.hostname.includes('localhost')
+
+      if (isProduction) {
+        // Immediately use fallback in production without a WebSocket service
+        connectionFailed = true
+        fallbackActive = true
+        setUsingFallback(true)
+        setUsers(SIMULATED_USERS)
+        setCursors({
+          'sim-br': { ...SIMULATED_CURSORS[0] },
+          'sim-sg': { ...SIMULATED_CURSORS[1] },
+        })
+        console.info('[OmniSite Presence] Production mode — using simulated collaborators (WebSocket service not configured)')
+      } else {
+        // Local dev — try to connect to the local WebSocket service
+        const socketUrl = isLocalDev ? 'http://localhost:3003' : undefined
 
       socket = io(socketUrl ?? '/', {
         path: isLocalDev ? '/socket.io/' : '/',
@@ -122,7 +139,8 @@ export function usePresence() {
       socket.on('disconnect', () => {
         setIsConnected(false)
       })
-    }
+      } // end else (local dev WebSocket)
+    } // end if (!socket)
 
     const onPresenceList = (data: { users: PresenceUser[]; count: number }) => {
       if (connectionFailed) return
