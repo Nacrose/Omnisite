@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Wifi, Users, Save, GitBranch, CheckCircle2, Cloud, Activity, RotateCcw } from 'lucide-react'
+import { Wifi, Users, Save, GitBranch, CheckCircle2, Cloud, Activity, RotateCcw, Globe, Calendar } from 'lucide-react'
 import { useApp } from '@/lib/app-store'
 import { clearAllPersistentState } from '@/lib/use-persistent-state'
 import { usePresence } from '@/lib/use-presence'
+import { useI18n } from '@/lib/i18n'
+import { getCurrentBsYear } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -12,6 +14,7 @@ import { Toaster } from '@/components/ui/sonner'
 export function StatusBar() {
   const { activeModule } = useApp()
   const { users, isConnected } = usePresence()
+  const { locale, calendar, setLocale, setCalendar, t } = useI18n()
   const [lastSaved, setLastSaved] = useState(Date.now())
   const [savedAgo, setSavedAgo] = useState('just now')
   const [isSyncing, setIsSyncing] = useState(false)
@@ -144,6 +147,36 @@ export function StatusBar() {
         <Cloud className="w-3 h-3" />
         <span>Cloud · ap-south-1</span>
       </span>
+
+      <div className="w-px h-3 bg-[var(--pane-divider)]" />
+
+      {/* Language toggle */}
+      <button
+        onClick={() => {
+          const newLocale = locale === 'en' ? 'np' : 'en'
+          setLocale(newLocale)
+          toast.success(newLocale === 'np' ? 'भाषा: नेपाली' : 'Language: English')
+        }}
+        className="flex items-center gap-1 hover:text-foreground transition-colors"
+        title={`Language: ${locale === 'en' ? 'English' : 'नेपाली'}`}
+      >
+        <Globe className="w-3 h-3" />
+        <span>{locale === 'en' ? 'EN' : 'ने'}</span>
+      </button>
+
+      {/* Calendar toggle */}
+      <button
+        onClick={() => {
+          const newCal = calendar === 'AD' ? 'BS' : 'AD'
+          setCalendar(newCal)
+          toast.success(newCal === 'BS' ? `पात्रो: बिक्रम सम्बत ${getCurrentBsYear()}` : 'Calendar: AD')
+        }}
+        className="flex items-center gap-1 hover:text-foreground transition-colors"
+        title={`Calendar: ${calendar}`}
+      >
+        <Calendar className="w-3 h-3" />
+        <span>{calendar}</span>
+      </button>
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 

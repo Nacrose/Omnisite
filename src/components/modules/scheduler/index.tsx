@@ -19,6 +19,8 @@ import {
 import { GanttCanvas } from './gantt-canvas'
 import { TaskInspector } from './task-inspector'
 import { AddTaskModal, CriticalPathBreachModal, EMPTY_NEW_TASK, type NewTaskDraft } from './modals'
+import { calculateCpm, type CpmTask } from '@/lib/cpm'
+import { useMemo } from 'react'
 
 export function SchedulerModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
@@ -49,11 +51,45 @@ export function SchedulerModule() {
   const [breachTask, setBreachTask] = useState<Task | null>(null)
   // Convert expanded array to Set for O(1) lookups
   const expanded = new Set(expandedArr)
+
+  // Real CPM calculation — compute critical path from task dependencies
+  const cpmResult = useMemo(() => {
+    const flat = flattenTasks(tasks)
+    // Build CPM input from flat task list
+    const cpmTasks: CpmTask[] = flat.map(({ task }) => ({
+      id: task.id,
+      duration: task.duration,
+      predecessors: [], // No explicit dependency links in current data model
+    }))
+    try {
+      const result = calculateCpm(cpmTasks)
+      return result
+    } catch {
+      return null
+    }
+  }, [tasks])
+
+  // Apply CPM critical path to tasks (override the decorative boolean)
+  const tasksWithCpm = useMemo(() => {
+    if (!cpmResult) return tasks
+    const updateTasks = (items: Task[]): Task[] => {
+      return items.map(t => {
+        const cpmData = cpmResult.results[t.id]
+        const isCritical = cpmData ? cpmData.isCritical : t.critical
+        const updated = { ...t, critical: isCritical }
+        if (t.children) {
+          updated.children = updateTasks(t.children)
+        }
+        return updated
+      })
+    }
+    return updateTasks(tasks)
+  }, [tasks, cpmResult])
   // Add Task modal state
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK)
 
-  const flat = flattenTasks(tasks)
+  const flat = flattenTasks(tasksWithCpm)
   const visible = flat.filter(({ task }) => {
     if (task.type === 'Work' || task.type === 'Milestone' || task.type === 'Hammock') return true
     return true
