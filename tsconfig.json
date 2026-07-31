@@ -40,6 +40,8 @@
     "node_modules",
     "mini-services",
     "scripts",
-    "tool-results"
+    "tool-results",
+    "skills",
+    "agent-ctx"
   ]
 }
