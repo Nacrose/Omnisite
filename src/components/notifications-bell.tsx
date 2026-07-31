@@ -51,8 +51,12 @@ const SEVERITY_COLORS = {
 export function NotificationsBell() {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Notification[]>(NOTIFICATIONS)
+  const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all')
   const ref = useRef<HTMLDivElement>(null)
   const unreadCount = items.filter(n => n.unread).length
+  const visibleItems = items.filter(n =>
+    filter === 'all' ? true : filter === 'unread' ? n.unread : n.severity === 'critical',
+  )
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -151,19 +155,37 @@ export function NotificationsBell() {
 
           {/* Filter tabs */}
           <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--pane-divider)]">
-            {['All', 'Unread', 'Critical'].map(tab => (
-              <button
-                key={tab}
-                className="text-[10px] px-2 py-1 rounded hover:bg-accent text-muted-foreground"
-              >
-                {tab}
-              </button>
-            ))}
+            {(['All', 'Unread', 'Critical'] as const).map(tab => {
+              const f = tab.toLowerCase() as typeof filter
+              const count =
+                f === 'all' ? items.length :
+                f === 'unread' ? items.filter(n => n.unread).length :
+                items.filter(n => n.severity === 'critical').length
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    'text-[10px] px-2 py-1 rounded transition-colors',
+                    filter === f
+                      ? 'bg-accent text-foreground font-medium'
+                      : 'hover:bg-accent text-muted-foreground',
+                  )}
+                >
+                  {tab}{count > 0 && <span className="ml-1 text-[9px] opacity-70">{count}</span>}
+                </button>
+              )
+            })}
           </div>
 
           {/* Items */}
           <div className="max-h-[400px] overflow-y-auto">
-            {items.map(n => {
+            {visibleItems.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
+                No {filter !== 'all' ? filter : ''} notifications
+              </div>
+            ) : (
+              visibleItems.map(n => {
               const Icon = ICONS[n.type]
               return (
                 <button
@@ -196,7 +218,8 @@ export function NotificationsBell() {
                   </div>
                 </button>
               )
-            })}
+            })
+            )}
           </div>
 
           {/* Footer */}

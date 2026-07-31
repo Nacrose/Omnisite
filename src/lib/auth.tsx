@@ -35,6 +35,12 @@ interface AuthContextValue {
   isDemo: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  /**
+   * Sign in as the demo user (Arjun Sharma, PM) without credentials.
+   * Sets the `omnisite-demo-bypass` flag so subsequent getSession() calls
+   * re-grant demo access until signOut() clears the flag.
+   */
+  signInAsDemo: () => void
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -43,6 +49,7 @@ const AuthContext = createContext<AuthContextValue>({
   isDemo: false,
   signIn: async () => ({ error: 'AuthProvider not mounted' }),
   signOut: async () => {},
+  signInAsDemo: () => {},
 })
 
 // ─── Demo user (no Supabase configured) ─────────────────────────────────────
@@ -107,28 +114,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // This lets the app work during development before auth users are created.
     let subscription: Subscription | null = null
 
+    // Helper: check the demo bypass flag (server-side safe).
+    const isDemoBypass = () =>
+      typeof window !== 'undefined' && window.localStorage.getItem('omnisite-demo-bypass') === 'true'
+
     supabase!.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       if (!active) return
       const s = data.session
       if (s?.user) {
         setUser(mapSupabaseUser(s.user))
-      } else {
-        // No active session — check if demo bypass is enabled
-        // (allows access during development before auth users are created)
-        const demoBypass = typeof window !== 'undefined' && window.localStorage.getItem('omnisite-demo-bypass') === 'true'
-        if (demoBypass) {
-          setUser(DEMO_USER)
-        }
-        // Otherwise user stays null — login page will show
+      } else if (isDemoBypass()) {
+        // No active session, but demo bypass is enabled — grant demo access.
+        setUser(DEMO_USER)
       }
+      // Otherwise user stays null — login page will show.
       setLoading(false)
     }).catch(() => {
       if (!active) return
       setLoading(false)
     })
 
-    subscription = supabase!.auth.onAuthStateChange((_event, session) => {
+    subscription = supabase!.auth.onAuthStateChange((event, session) => {
       if (!active) return
+      // Don't let the INITIAL_SESSION event (which fires immediately after
+      // getSession) clear the demo user if the bypass flag is set.
+      if (event === 'INITIAL_SESSION' && isDemoBypass() && !session) {
+        return
+      }
       setUser(session?.user ? mapSupabaseUser(session.user) : null)
     }).data.subscription
 
@@ -153,6 +165,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    // Always clear the demo bypass flag on sign-out so a real Supabase
+    // user can sign in afterwards without manually clearing localStorage.
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('omnisite-demo-bypass')
+    }
     if (!configured || !supabase) {
       setUser(null)
       return
@@ -161,8 +178,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  const signInAsDemo = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('omnisite-demo-bypass', 'true')
+    }
+    setUser(DEMO_USER)
+    setLoading(false)
+  }
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, isDemo: configured ? false : true, signIn, signOut }),
+    () => ({ user, loading, isDemo: configured ? false : true, signIn, signOut, signInAsDemo }),
     [user, loading, configured],
   )
 

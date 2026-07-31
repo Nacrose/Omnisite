@@ -349,7 +349,7 @@ function MiniGantt() {
         })}
         <div
           className="absolute top-0 bottom-0 w-px bg-[var(--critical)] pointer-events-none"
-          style={{ left: `calc(11rem + ${(8 / totalWeeks) * 100}% * (100% - 11rem) / 100%)` }}
+          style={{ left: `calc(11rem + ${(8 / totalWeeks)} * (100% - 11rem))` }}
         />
       </div>
     </div>

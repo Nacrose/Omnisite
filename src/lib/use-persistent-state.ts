@@ -78,6 +78,16 @@ export function clearAllPersistentState() {
     'omnisite-qs-items',
     'omnisite-recent-modules',
     'omnisite-active-project',
+    // Additional keys not in the original list:
+    'omnisite-workers',
+    'omnisite-equipment',
+    'omnisite-chat-channel',
+    'omnisite-locale',
+    'omnisite-calendar',
+    'omnisite-demo-bypass',
+    'omnisite-notifications-dispatched',
+    'omnisite-audit-queue',
+    'omnisite-app-store', // Zustand persisted store
   ]
   keys.forEach(k => {
     try { window.localStorage.removeItem(k) } catch (e) { /* ignore */ }

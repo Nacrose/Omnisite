@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, Search, Mountain } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Toaster } from '@/components/ui/sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import type { Subcontractor } from './types'
 import { INITIAL_SCS } from './types'
@@ -30,7 +29,6 @@ export function SubcontractorModule() {
 
   return (
     <>
-      <Toaster richColors position="top-center" />
       <Workspace2Pane
         leftPane={
           <>

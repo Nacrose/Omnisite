@@ -2,6 +2,7 @@
 
 import { ReactNode, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useApp } from '@/lib/app-store'
 import { List, LayoutGrid, PanelRight, ArrowLeft } from 'lucide-react'
 
 // ─── 3-Pane (BOQ, Scheduler, Reports) ───────────────────────────────────────
@@ -24,6 +25,9 @@ export function Workspace3Pane({
   className,
 }: Workspace3PaneProps) {
   const [mobileTab, setMobileTab] = useState<'center' | 'left' | 'right'>('center')
+  // Consume the persisted pane-toggle flags from the app store so the
+  // header button and the `[` / `]` keyboard shortcuts actually do something.
+  const { leftPaneOpen, rightPaneOpen } = useApp()
   const hasLeft = !!leftPane
   const hasRight = !!rightPane
 
@@ -61,13 +65,13 @@ export function Workspace3Pane({
         {hasRight && mobileTab === 'right' && <div className="h-full overflow-hidden pane flex flex-col">{rightPane}</div>}
       </div>
 
-      {/* Desktop layout */}
+      {/* Desktop layout — panes respect the persisted open/close flags. */}
       <div className="hidden md:flex h-full overflow-hidden">
-        {leftPane && (
+        {leftPane && leftPaneOpen && (
           <div className="flex-shrink-0 border-r border-[var(--pane-divider)] pane flex flex-col min-w-0" style={{ width: leftPaneWidth }}>{leftPane}</div>
         )}
         <div className="flex-1 min-w-0 flex flex-col pane">{centerPane}</div>
-        {rightPane && (
+        {rightPane && rightPaneOpen && (
           <div className="flex-shrink-0 border-l border-[var(--pane-divider)] pane flex flex-col min-w-0" style={{ width: rightPaneWidth }}>{rightPane}</div>
         )}
       </div>
@@ -105,6 +109,7 @@ export function Workspace2Pane({
   className,
 }: Workspace2PaneProps) {
   const [mobileTab, setMobileTab] = useState<'list' | 'detail'>('list')
+  const { leftPaneOpen } = useApp()
 
   // Resolve: if listPane/detailPane are provided directly, use them
   // Otherwise, leftPane = list, centerPane + rightPane = detail (3-pane compat)
@@ -145,9 +150,11 @@ export function Workspace2Pane({
         </div>
       </div>
 
-      {/* Desktop layout */}
+      {/* Desktop layout — list pane respects the persisted leftPaneOpen flag. */}
       <div className="hidden md:flex h-full overflow-hidden">
-        <div className="flex-shrink-0 border-r border-[var(--pane-divider)] pane flex flex-col min-w-0" style={{ width: resolvedListWidth }}>{resolvedList}</div>
+        {resolvedList && leftPaneOpen && (
+          <div className="flex-shrink-0 border-r border-[var(--pane-divider)] pane flex flex-col min-w-0" style={{ width: resolvedListWidth }}>{resolvedList}</div>
+        )}
         <div className="flex-1 min-w-0 flex flex-col pane">{resolvedDetail}</div>
       </div>
     </div>

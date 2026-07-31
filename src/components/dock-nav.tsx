@@ -47,19 +47,19 @@ export function DockNav() {
     }
 
     const dock = dockRef.current
-    if (dock) {
-      dock.addEventListener('mouseenter', () => {
-        if (hideTimerRef.current) {
-          clearTimeout(hideTimerRef.current)
-          hideTimerRef.current = null
-        }
-        setIsVisible(true)
-      })
+    const onDockEnter = () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current)
+        hideTimerRef.current = null
+      }
+      setIsVisible(true)
     }
+    if (dock) dock.addEventListener('mouseenter', onDockEnter)
 
     document.addEventListener('mousemove', handleMouseMove)
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
+      if (dock) dock.removeEventListener('mouseenter', onDockEnter)
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
     }
   }, [])
@@ -154,7 +154,12 @@ function DockIcon({ item, isActive, onClick }: {
 }) {
   const ref = useRef<HTMLButtonElement>(null)
   const mouseX = useMotionValue(Infinity)
+  const [hovered, setHovered] = useState(false)
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const handleMouseEnter = () => {
+    tooltipTimerRef.current = setTimeout(() => setHovered(true), 200)
+  }
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = ref.current?.getBoundingClientRect()
     if (rect) {
@@ -164,6 +169,11 @@ function DockIcon({ item, isActive, onClick }: {
 
   const handleMouseLeave = () => {
     mouseX.set(Infinity)
+    if (tooltipTimerRef.current) {
+      clearTimeout(tooltipTimerRef.current)
+      tooltipTimerRef.current = null
+    }
+    setHovered(false)
   }
 
   // Magnification: icon grows based on proximity to cursor (macOS dock effect)
@@ -178,6 +188,7 @@ function DockIcon({ item, isActive, onClick }: {
       <motion.button
         ref={ref}
         onMouseMove={handleMouseMove}
+        onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={onClick}
         style={{ width: size, height: size }}
@@ -193,7 +204,7 @@ function DockIcon({ item, isActive, onClick }: {
           <ModuleIcon name={item.icon} className="w-1/2 h-1/2" />
         </motion.div>
         {isActive && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />}
-        <DockLabel item={item} />
+        <DockLabel item={item} show={hovered} />
       </motion.button>
 
       {/* Mobile: fixed-size icon */}
@@ -216,24 +227,9 @@ function DockIcon({ item, isActive, onClick }: {
 
 // ─── Label tooltip that appears above the icon on hover ───────────────────────
 
-function DockLabel({ item }: { item: DockItem }) {
-  const [show, setShow] = useState(false)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const handleEnter = () => {
-    timeoutRef.current = setTimeout(() => setShow(true), 200)
-  }
-  const handleLeave = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    setShow(false)
-  }
-
+function DockLabel({ item, show }: { item: DockItem; show: boolean }) {
   return (
-    <div
-      className="absolute bottom-full mb-2 pointer-events-none"
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-    >
+    <div className="absolute bottom-full mb-2 pointer-events-none">
       <AnimatePresence>
         {show && (
           <motion.div

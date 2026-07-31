@@ -9,7 +9,6 @@ import { useI18n } from '@/lib/i18n'
 import { getCurrentBsYear } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Toaster } from '@/components/ui/sonner'
 
 export function StatusBar() {
   const { activeModule } = useApp()
@@ -40,8 +39,9 @@ export function StatusBar() {
       else setSavedAgo(`${Math.floor(seconds / 60)}m ago`)
     }
     updateAgo()
-    const t = setInterval(updateAgo, 5000)
-    return () => clearInterval(t)
+    // Rename to `agoTimer` so it doesn't shadow the i18n `t` translation function.
+    const agoTimer = setInterval(updateAgo, 5000)
+    return () => clearInterval(agoTimer)
   }, [lastSaved])
 
   const handleReset = () => {
@@ -193,7 +193,6 @@ export function StatusBar() {
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 
       <span className="font-mono">v1.0.0</span>
-      <Toaster richColors position="top-center" />
     </footer>
   )
 }

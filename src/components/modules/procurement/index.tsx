@@ -11,7 +11,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Toaster } from '@/components/ui/sonner'
 import { Po, ReqItem, Tab } from './types'
 import { INITIAL_POS, INITIAL_REQS } from './types'
 import { ReqCenterView } from './req-view'
@@ -47,9 +46,16 @@ export function ProcurementModule() {
       vendorGroups.set(selectedVendor.name, existing)
     }
 
-    // Create one PO per vendor
+    // Create one PO per vendor.
+    // Derive the next PO number from the EXISTING POs so repeated clicks
+    // don't generate duplicate IDs (the original implementation always
+    // started at PO-2410-019, so the second click would collide).
     const newPOs: Po[] = []
-    let poNum = 19 // starting after existing PO-018
+    const maxNum = pos.reduce((max, p) => {
+      const m = p.id.match(/PO-\d+-(\d+)/)
+      return m ? Math.max(max, parseInt(m[1], 10)) : max
+    }, 18)
+    let poNum = maxNum + 1
     for (const [vendor, group] of vendorGroups) {
       const po: Po = {
         id: `PO-2410-${String(poNum).padStart(3, '0')}`,
@@ -66,9 +72,11 @@ export function ProcurementModule() {
 
     setPos(prev => [...newPOs, ...prev])
 
-    // Mark requisitions as Fully PO'd
+    // Mark requisitions as Fully PO'd.
+    // Recompute the predicate INSIDE the updater so we use the latest
+    // `prev` state instead of the render-time `approvedReqs` closure.
     setReqs(prev => prev.map(r => {
-      if (approvedReqs.find(ar => ar.id === r.id)) {
+      if (r.status === 'Approved' || r.status === 'Partially PO\'d') {
         return { ...r, status: 'Fully PO\'d' as const }
       }
       return r
@@ -127,7 +135,6 @@ export function ProcurementModule() {
 
   return (
     <>
-      <Toaster richColors position="top-center" />
       <Workspace2Pane
         leftPane={
           <>

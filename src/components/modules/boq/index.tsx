@@ -12,7 +12,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Toaster } from '@/components/ui/sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
 import {
@@ -44,8 +43,12 @@ export function BoqModule() {
   // Rebuild tree from flat rows (DB stores flat, app needs tree)
   const boqData = (() => {
     if (!boqRows || boqRows.length === 0) return JSON.parse(JSON.stringify(BOQ_DATA))
-    // Check if data is already a tree (has children) or flat rows
-    const hasChildren = boqRows.some((r) => 'children' in r)
+    // Check if data is already a tree (has non-empty children arrays) or flat rows.
+    // NOTE: use Array.isArray(r.children) && r.children.length > 0 instead of
+    // `'children' in r` — the `in` operator checks key existence, and flattenTree
+    // sets `children: undefined` on every flattened row, so `'children' in r`
+    // would always be true and the rebuild-from-flat branch would never run.
+    const hasChildren = boqRows.some((r) => Array.isArray((r as BoqItem).children) && (r as BoqItem).children!.length > 0)
     if (hasChildren) return boqRows
 
     // Rebuild tree from flat rows using parent_id
@@ -111,34 +114,82 @@ export function BoqModule() {
     return out
   }
 
-  // Helper: commit a new boqData state, pushing the current state to undo stack and clearing redo
+  // Helper: commit a new boqData state, pushing the current state to undo stack and clearing redo.
+  // Uses a functional update on setBoqRows so the latest committed state is
+  // used (avoids stale-closure bugs when multiple edits land in the same
+  // React batch). Pushes to undoStack and clears redoStack via functional
+  // updates so the side effects don't run inside the setBoqRows updater
+  // (which would double-fire under StrictMode).
   const commitBoqData = (updater: (prev: BoqItem[]) => BoqItem[]) => {
-    const next = updater(boqData)
-    setUndoStack(u => [...u, JSON.parse(JSON.stringify(boqData))])
+    // Capture the current tree for the undo stack BEFORE applying the updater.
+    const currentTree = boqData
+    setUndoStack(u => [...u, JSON.parse(JSON.stringify(currentTree))])
     setRedoStack([])
-    // Save flattened tree to Supabase/localStorage
-    setBoqRows(flattenTree(next) as unknown as BoqItem[])
+    setBoqRows(prevRows => {
+      // Rebuild the tree from the previous flat rows, apply the updater,
+      // then flatten the result for storage.
+      const prevTree = rebuildTreeFromRows(prevRows)
+      const next = updater(prevTree)
+      return flattenTree(next) as unknown as BoqItem[]
+    })
+  }
+
+  // Helper used by commitBoqData: rebuild a BoqItem tree from flat rows.
+  // (Mirrors the IIFE above but operates on an arbitrary row array.)
+  const rebuildTreeFromRows = (rows: BoqItem[]): BoqItem[] => {
+    if (!rows || rows.length === 0) return JSON.parse(JSON.stringify(BOQ_DATA))
+    const hasChildren = rows.some((r) => Array.isArray(r.children) && r.children!.length > 0)
+    if (hasChildren) return rows
+    const map = new Map<string, BoqItem>()
+    const roots: BoqItem[] = []
+    for (const row of rows as unknown as Record<string, unknown>[]) {
+      const item: BoqItem = {
+        id: row.id as string,
+        code: row.code as string,
+        desc: (row.desc || row.description) as string,
+        type: (row.type as BoqItem['type']) || 'Priced',
+        qty: Number(row.qty) || 0,
+        uom: (row.uom as string) || '',
+        rate: Number(row.rate) || 0,
+        hasRA: Boolean(row.hasRA ?? row.has_ra),
+        level: Number(row.level) || 0,
+      }
+      map.set(item.id, item)
+    }
+    for (const row of rows as unknown as Record<string, unknown>[]) {
+      const item = map.get(row.id as string)!
+      const parentId = (row.parentId || row.parent_id) as string | null
+      if (parentId && map.has(parentId)) {
+        const parent = map.get(parentId)!
+        if (!parent.children) parent.children = []
+        parent.children.push(item)
+      } else {
+        roots.push(item)
+      }
+    }
+    return roots.length > 0 ? roots : JSON.parse(JSON.stringify(BOQ_DATA))
   }
 
   const undo = () => {
     if (undoStack.length === 0) return
-    setUndoStack(u => {
-      const prev = u[u.length - 1]
-      setRedoStack(r => [...r, JSON.parse(JSON.stringify(boqData))])
-      setBoqRows(flattenTree(prev) as unknown as BoqItem[])
-      return u.slice(0, -1)
-    })
+    // Pull the snapshot to restore and the current tree to push to redo,
+    // then apply via functional setBoqRows. Side effects are pulled out of
+    // the updater so they don't double-fire under StrictMode.
+    const snapshot = undoStack[undoStack.length - 1]
+    const currentTree = boqData
+    setUndoStack(u => u.slice(0, -1))
+    setRedoStack(r => [...r, JSON.parse(JSON.stringify(currentTree))])
+    setBoqRows(flattenTree(snapshot) as unknown as BoqItem[])
     toast.success('Undo', { description: `Reverted (${undoStack.length - 1} actions left)` })
   }
 
   const redo = () => {
     if (redoStack.length === 0) return
-    setRedoStack(r => {
-      const next = r[r.length - 1]
-      setUndoStack(u => [...u, JSON.parse(JSON.stringify(boqData))])
-      setBoqRows(flattenTree(next) as unknown as BoqItem[])
-      return r.slice(0, -1)
-    })
+    const snapshot = redoStack[redoStack.length - 1]
+    const currentTree = boqData
+    setRedoStack(r => r.slice(0, -1))
+    setUndoStack(u => [...u, JSON.parse(JSON.stringify(currentTree))])
+    setBoqRows(flattenTree(snapshot) as unknown as BoqItem[])
     toast.success('Redo', { description: `${redoStack.length - 1} actions left` })
   }
 
@@ -288,7 +339,7 @@ export function BoqModule() {
 
     // Find the dragged item and check it's not a parent of the target (no cycles)
     const dragInfo = findItemAndParent(boqData, draggedId)
-    if (!draggedItem) return
+    if (!dragInfo) return
 
     // Check for cycle: is targetHeadingId a descendant of draggedId?
     const isDescendant = (items: BoqItem[] | undefined, ancestorId: string, targetId: string): boolean => {
@@ -556,9 +607,12 @@ export function BoqModule() {
       }
       rightPane={
         selectedLeaf.type === 'Priced' ? (
-          <RaInspector item={selectedLeaf} />
+          // key={item.id} forces RaInspector to remount when the selected
+          // BOQ item changes, so its internal coefficient/row state resets
+          // instead of leaking from the previous item.
+          <RaInspector key={selectedLeaf.id} item={selectedLeaf} />
         ) : (
-          <NonPricedInspector item={selectedLeaf} />
+          <NonPricedInspector key={selectedLeaf.id} item={selectedLeaf} />
         )
       }
       leftPaneWidth="280px"
@@ -568,7 +622,6 @@ export function BoqModule() {
       {/* Context Menu */}
       {contextMenu && (
         <>
-          <Toaster richColors position="top-center" />
           <div
             className="fixed z-50 pane border border-[var(--pane-divider)] rounded-lg shadow-2xl overflow-hidden py-1 w-52 animate-in fade-in zoom-in-95 duration-100"
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 220), top: Math.min(contextMenu.y, window.innerHeight - 280) }}

@@ -42,16 +42,20 @@ export function PoCenterView({ pos }: { pos: Po[] }) {
 }
 
 export function GrnCenterView() {
+  // Each row carries its own `rate` so the locked-amount calculation uses
+  // the real per-PO unit rate, not a single hard-coded rate for all rows.
   const [rows, setRows] = useState([
-    { po: 'PO-018', vendor: 'Udaipur Cement', poq: 1200, grnq: 1200, invq: 1200, pay: 'Cleared' as 'Cleared' | 'Hold' | 'Partial Hold' | 'Awaiting GRN' },
-    { po: 'PO-014', vendor: 'Trishuli Sand', poq: 45, grnq: 38, invq: 38, pay: 'Partial Hold' as const },
-    { po: 'PO-022', vendor: 'Hetauda Aggregates', poq: 96, grnq: 0, invq: 0, pay: 'Awaiting GRN' as const },
-    { po: 'PO-016', vendor: 'Ghorahi Ply', poq: 60, grnq: 60, invq: 58, pay: 'Hold' as const },
+    { po: 'PO-018', vendor: 'Udaipur Cement', poq: 1200, grnq: 1200, invq: 1200, rate: 920, pay: 'Cleared' as 'Cleared' | 'Hold' | 'Partial Hold' | 'Awaiting GRN' },
+    { po: 'PO-014', vendor: 'Trishuli Sand', poq: 45, grnq: 38, invq: 38, rate: 3850, pay: 'Partial Hold' as const },
+    { po: 'PO-022', vendor: 'Hetauda Aggregates', poq: 96, grnq: 0, invq: 0, rate: 2950, pay: 'Awaiting GRN' as const },
+    { po: 'PO-016', vendor: 'Ghorahi Ply', poq: 60, grnq: 60, invq: 58, rate: 2790, pay: 'Hold' as const },
   ])
 
   // 3-way match check: PO qty === GRN qty === Invoice qty
   const isMatched = (r: typeof rows[0]) => r.poq === r.grnq && r.grnq === r.invq
-  const lockedAmount = rows.filter(r => !isMatched(r) && r.grnq > 0).reduce((sum, r) => sum + r.invq * 920, 0) // simplified rate
+  const lockedAmount = rows
+    .filter(r => !isMatched(r) && r.grnq > 0)
+    .reduce((sum, r) => sum + r.invq * r.rate, 0)
 
   // Toggle payment approval — only allowed if 3-way match passes
   const toggleApproval = (po: string) => {
@@ -61,7 +65,7 @@ export function GrnCenterView() {
         toast.error('Payment locked', { description: `${po} fails 3-way match. PO ${r.poq} ≠ GRN ${r.grnq} ≠ Inv ${r.invq}. Cannot approve.` })
         return r
       }
-      const newPay = r.pay === 'Cleared' ? 'Hold' : 'Cleared'
+      const newPay: typeof r.pay = r.pay === 'Cleared' ? 'Hold' : r.pay === 'Hold' ? 'Cleared' : r.pay
       toast.success(newPay === 'Cleared' ? 'Payment cleared' : 'Payment held', { description: `${po} — 3-way match verified` })
       return { ...r, pay: newPay }
     }))

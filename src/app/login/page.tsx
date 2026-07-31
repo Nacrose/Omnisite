@@ -11,7 +11,7 @@ import { isSupabaseConfigured } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { user, loading, signIn, isDemo } = useAuth()
+  const { user, loading, signIn, signInAsDemo, isDemo } = useAuth()
   const configured = isSupabaseConfigured()
 
   const [email, setEmail] = useState('')
@@ -146,7 +146,11 @@ export default function LoginPage() {
                 variant="outline"
                 className="w-full mt-3"
                 onClick={() => {
-                  window.localStorage.setItem('omnisite-demo-bypass', 'true')
+                  // Use the auth provider's signInAsDemo so the in-memory user
+                  // is set immediately — relying on a fresh page load to pick
+                  // up the localStorage flag would leave the user stuck on
+                  // /login because AuthProvider only checks the flag on mount.
+                  signInAsDemo()
                   router.push('/')
                 }}
               >

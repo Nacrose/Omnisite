@@ -61,7 +61,14 @@ export async function deleteFile(bucket: string, path: string): Promise<boolean>
 /**
  * List files in a Supabase Storage bucket folder.
  */
-export async function listFiles(bucket: string, folder: string = ''): Promise<{ name: string; url: string }[]> {
+export interface StoredFile {
+  name: string
+  url: string
+  /** Storage path (e.g. "D-087/1730000000-abc.jpg") — required for deleteFile(). */
+  path: string
+}
+
+export async function listFiles(bucket: string, folder: string = ''): Promise<StoredFile[]> {
   if (!isSupabaseConfigured() || !supabase) return []
 
   const { data, error } = await supabase!
@@ -79,7 +86,7 @@ export async function listFiles(bucket: string, folder: string = ''): Promise<{ 
         .storage
         .from(bucket)
         .getPublicUrl(path)
-      return { name: item.name, url: urlData.publicUrl }
+      return { name: item.name, url: urlData.publicUrl, path }
     })
 }
 

@@ -78,7 +78,7 @@ export function DrawingsModule() {
           </PaneBody>
         </>
       }
-      rightPane={<DrawingInspector dwg={selected} />}
+      rightPane={<DrawingInspector key={selected.id} dwg={selected} />}
       leftPaneWidth="220px"
       rightPaneWidth="380px"
     />

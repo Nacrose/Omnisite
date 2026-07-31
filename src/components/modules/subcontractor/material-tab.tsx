@@ -28,19 +28,35 @@ export function MaterialTab({ sc }: { sc: Subcontractor }) {
     const existing = materialMap.get(key)
     if (existing) existing.returned += mr.qty
   }
-  // Calculate theoretical from composite items mapping × RA coefficients
-  // Simplified: cement = 4.5 bags/cum PCC, steel = 1:1, aggregate = 0.9 cum/cum, sand = 0.45 cum/cum
+  // Calculate theoretical from composite items mapping × RA coefficients.
+  // Drain SC: cement = 5.7 bags/rmt, steel = 0.095 mt/rmt, agg = 0.9 cum/rmt, sand = 0.45 cum/rmt.
+  // Tunneling SC: shotcrete, rockbolts, steel ribs have their own norms.
   const totalRmt = sc.items.find(i => i.type === 'composite')?.actualQty || 0
   for (const [, m] of materialMap) {
     if (m.code === 'M-CEM-OPC') {
       // PCC: 0.40 cum/rmt × 4.5 bags + RCC: 0.60 cum/rmt × 6.5 bags = 5.7 bags/rmt
       m.theoretical = totalRmt * 5.7
     } else if (m.code === 'M-STEEL-TMT16' || m.code === 'M-STEEL-ISMB150') {
+      // Drain: rebar ~0.095 mt/rmt. Tunnel: steel ribs ~0.83 rib/rmt (handled below).
       m.theoretical = totalRmt * 0.095
     } else if (m.code === 'M-AGG-20') {
       m.theoretical = totalRmt * (0.40 * 0.9 + 0.60 * 0.9) // PCC + RCC agg
     } else if (m.code === 'M-SAND-R') {
       m.theoretical = totalRmt * (0.40 * 0.45 + 0.60 * 0.45)
+    } else if (sc.isTunneling) {
+      // Tunneling-specific materials not covered by the drain coefficients.
+      // Use designPattern from the SC's conditional items when available;
+      // otherwise leave theoretical at 0 and the UI will show 'N/A'.
+      if (m.code === 'M-SHOTCRETE') {
+        const pattern = sc.items.find(i => i.code === 'SC-TUN-SHOT')?.designPattern
+        m.theoretical = pattern ? pattern * totalRmt : 0
+      } else if (m.code === 'M-ROCKBOLT3') {
+        const pattern = sc.items.find(i => i.code === 'SC-TUN-BOLT')?.designPattern
+        m.theoretical = pattern ? pattern * totalRmt : 0
+      } else if (m.code === 'M-STEEL-ISMB150' && sc.isTunneling) {
+        // Tunnel steel rib: ~0.83 rib/rmt × ~0.045 mt/rib = 0.037 mt/rmt
+        m.theoretical = totalRmt * 0.037
+      }
     }
   }
 
@@ -80,20 +96,23 @@ export function MaterialTab({ sc }: { sc: Subcontractor }) {
         </div>
         {materials.map(m => {
           const netUsed = m.issued - m.returned
-          const variance = m.theoretical > 0 ? ((netUsed - m.theoretical) / m.theoretical) * 100 : 0
-          const overVariance = Math.abs(variance) > 5
+          const hasTheoretical = m.theoretical > 0
+          const variance = hasTheoretical ? ((netUsed - m.theoretical) / m.theoretical) * 100 : 0
+          const overVariance = hasTheoretical && Math.abs(variance) > 5
           return (
             <div key={m.code} className={cn('grid grid-cols-12 gap-1 px-2 py-1.5 border-t border-[var(--pane-divider)]', overVariance && 'bg-amber-500/5')}>
               <div className="col-span-4 min-w-0">
                 <div className="font-medium truncate">{m.name}</div>
                 <div className="text-[9px] text-muted-foreground font-mono">{m.code}</div>
               </div>
-              <div className="col-span-2 text-right font-mono text-muted-foreground">{m.theoretical.toFixed(1)} {m.uom}</div>
+              <div className="col-span-2 text-right font-mono text-muted-foreground">
+                {hasTheoretical ? `${m.theoretical.toFixed(1)} ${m.uom}` : <span className="text-[9px] opacity-60">N/A</span>}
+              </div>
               <div className="col-span-2 text-right font-mono">{m.issued.toFixed(1)}</div>
               <div className="col-span-1 text-right font-mono text-muted-foreground">{m.returned.toFixed(0)}</div>
               <div className="col-span-2 text-right font-mono font-medium">{netUsed.toFixed(1)}</div>
-              <div className={cn('col-span-1 text-right font-mono font-bold', overVariance ? 'text-amber-600' : 'text-emerald-600')}>
-                {variance >= 0 ? '+' : ''}{variance.toFixed(0)}%
+              <div className={cn('col-span-1 text-right font-mono font-bold', overVariance ? 'text-amber-600' : hasTheoretical ? 'text-emerald-600' : 'text-muted-foreground/50')}>
+                {hasTheoretical ? `${variance >= 0 ? '+' : ''}${variance.toFixed(0)}%` : '—'}
               </div>
             </div>
           )

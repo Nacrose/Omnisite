@@ -80,11 +80,11 @@ export function CommandPalette() {
     ? defaultActions.filter(a => a.label.toLowerCase().includes(query.toLowerCase()))
     : defaultActions
 
-  // Combined list: search results first, then filtered actions
-  const allItems: (SearchResult | CmdEntry)[] = [
-    ...searchResults,
-    ...filteredActions.filter(a => !searchResults.some(r => r.id === a.id)),
-  ]
+  // Combined list: search results first, then filtered actions.
+  // Apply the same id-collision filter to the displayed actions so the
+  // rendered list and the keyboard-navigable list stay in sync.
+  const displayedActions = filteredActions.filter(a => !searchResults.some(r => r.id === a.id))
+  const allItems: (SearchResult | CmdEntry)[] = [...searchResults, ...displayedActions]
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => Math.min(s + 1, allItems.length - 1)) }
@@ -187,14 +187,14 @@ export function CommandPalette() {
           })}
 
           {/* Actions (Quick Add + Modules) — shown when no query or as additional results */}
-          {(!query.trim() || filteredActions.length > 0) && (
+          {(!query.trim() || displayedActions.length > 0) && (
             <div>
               {query.trim() && sortedTypes.length > 0 && (
                 <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 bg-secondary/20">
-                  Actions · {filteredActions.length}
+                  Actions · {displayedActions.length}
                 </div>
               )}
-              {filteredActions.map(a => {
+              {displayedActions.map(a => {
                 const idx = runningIndex++
                 const isSelected = idx === selected
                 return (

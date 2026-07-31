@@ -201,7 +201,16 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
                     'Project pays Routine Maint',
                     'Project pays Major Repairs',
                   ].map(term => {
-                    const checked = (equip.rental?.terms || []).some(t => t.toLowerCase().includes(term.toLowerCase().replace('project pays ', '').replace('driver salary', 'driver').split(' ')[0]))
+                    // Match the FULL phrase (payer + item), not just the first
+                    // word of the item. The old matcher stripped "project pays "
+                    // and matched only the first word, so "Project pays Driver
+                    // Salary" would incorrectly match "Renter pays Driver Salary".
+                    const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+                    const normalizeTerm = (s: string) =>
+                      normalize(s).replace('driver salary', 'driver')
+                    const checked = (equip.rental?.terms || []).some(t =>
+                      normalizeTerm(t) === normalizeTerm(term)
+                    )
                     return (
                       <label key={term} className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)]">
                         <Checkbox checked={checked} />

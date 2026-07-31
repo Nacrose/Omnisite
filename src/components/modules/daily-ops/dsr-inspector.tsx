@@ -24,9 +24,12 @@ interface StoredPhoto {
 }
 
 export function DsrInspector({ entry }: { entry: DsrEntry }) {
+  // Theoretical cement consumption = 4.5 bags per cum of concrete.
+  // Guard against divide-by-zero when entry.actual is 0 (e.g. a planned-
+  // but-not-started task) — otherwise variance would be Infinity.
   const theoretical = entry.actual * 4.5 // bags per cum (cement)
   const issued = 132
-  const variance = ((issued - theoretical) / theoretical) * 100
+  const variance = theoretical > 0 ? ((issued - theoretical) / theoretical) * 100 : 0
   const overVariance = Math.abs(variance) > 5
   // RFI draft modal state
   const [rfiModalOpen, setRfiModalOpen] = useState(false)
@@ -64,7 +67,9 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
       listFiles(STORAGE_BUCKETS.DSRR_PHOTOS, entry.id)
         .then(files => {
           if (cancelled) return
-          setPhotos(files.map(f => ({ name: f.name, url: f.url, path: f.url })))
+          // Use the storage path returned by listFiles (not the public URL)
+          // so deleteFile() can actually remove the file later.
+          setPhotos(files.map(f => ({ name: f.name, url: f.url, path: f.path })))
         })
         .catch(() => {
           if (cancelled) return
@@ -445,7 +450,9 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
 }
 
 function MaterialRow({ mat, theoretical, issued, uom }: { mat: string; theoretical: number; issued: number; uom: string }) {
-  const variance = ((issued - theoretical) / theoretical) * 100
+  // Guard divide-by-zero: when theoretical is 0 (e.g. a planned-but-not-
+  // started task with actual=0), variance would be Infinity/NaN.
+  const variance = theoretical > 0 ? ((issued - theoretical) / theoretical) * 100 : 0
   const over = Math.abs(variance) > 5
   return (
     <div className={cn('p-2 rounded border', over ? 'border-red-500/40 bg-red-500/5' : 'border-[var(--pane-divider)]')}>

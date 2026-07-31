@@ -77,7 +77,12 @@ export function FinancialsModule() {
   // Rebuild tree from flat rows
   const cbsData = (() => {
     if (!cbsRows || cbsRows.length === 0) return JSON.parse(JSON.stringify(CBS))
-    const hasChildren = cbsRows.some((r) => 'children' in r)
+    // Check if data is already a tree (has non-empty children arrays) or flat rows.
+    // NOTE: use Array.isArray(r.children) && r.children.length > 0 instead of
+    // `'children' in r` — the `in` operator checks key existence, and flattenCbs
+    // sets `children: undefined` on every flattened row, so `'children' in r`
+    // would always be true and the rebuild-from-flat branch would never run.
+    const hasChildren = cbsRows.some((r) => Array.isArray((r as CbsNode).children) && (r as CbsNode).children!.length > 0)
     if (hasChildren) return cbsRows
 
     const rows = cbsRows as unknown as Record<string, unknown>[]
@@ -121,10 +126,49 @@ export function FinancialsModule() {
     return out
   }
 
-  // Wrapper setter that flattens before saving
+  // Wrapper setter that flattens before saving.
+  // Uses a functional update on setCbsRows so the latest committed state
+  // is used (avoids stale-closure bugs when multiple edits land in the
+  // same React batch).
+  const rebuildTreeFromRows = (rows: CbsNode[]): CbsNode[] => {
+    if (!rows || rows.length === 0) return JSON.parse(JSON.stringify(CBS))
+    const hasChildren = rows.some((r) => Array.isArray(r.children) && r.children!.length > 0)
+    if (hasChildren) return rows
+    const map = new Map<string, CbsNode>()
+    const roots: CbsNode[] = []
+    for (const row of rows as unknown as Record<string, unknown>[]) {
+      const node: CbsNode = {
+        code: row.code as string,
+        name: row.name as string,
+        budget: Number(row.budget) || 0,
+        committed: Number(row.committed) || 0,
+        actual: Number(row.actual) || 0,
+        forecast: Number(row.forecast) || 0,
+        marginPct: Number(row.marginPct ?? row.margin_pct) || 0,
+        level: Number(row.level) || 0,
+      }
+      map.set(node.code, node)
+    }
+    for (const row of rows as unknown as Record<string, unknown>[]) {
+      const node = map.get(row.code as string)!
+      const parentCode = (row.parentCode || row.parent_code) as string | null
+      if (parentCode && map.has(parentCode)) {
+        const parent = map.get(parentCode)!
+        if (!parent.children) parent.children = []
+        parent.children.push(node)
+      } else {
+        roots.push(node)
+      }
+    }
+    return roots.length > 0 ? roots : JSON.parse(JSON.stringify(CBS))
+  }
+
   const setCbsData = (updater: (prev: CbsNode[]) => CbsNode[]) => {
-    const next = updater(cbsData)
-    setCbsRows(flattenCbs(next) as unknown as CbsNode[])
+    setCbsRows(prevRows => {
+      const prevTree = rebuildTreeFromRows(prevRows)
+      const next = updater(prevTree)
+      return flattenCbs(next) as unknown as CbsNode[]
+    })
   }
 
   // Convert expanded array to Set for O(1) lookups
@@ -133,13 +177,17 @@ export function FinancialsModule() {
   const flat = flattenCbs(cbsData)
   const selected = flat.find(c => c.code === selectedCode) ?? flat[0]
 
-  // Live totals — sum of top-level nodes
-  const totals = cbsData.reduce((acc, c) => ({
-    budget: acc.budget + c.budget,
-    committed: acc.committed + c.committed,
-    actual: acc.actual + c.actual,
-    forecast: acc.forecast + c.forecast,
-  }), { budget: 0, committed: 0, actual: 0, forecast: 0 })
+  // Live totals — sum of TOP-LEVEL nodes only.
+  // NOTE: must filter to roots (no parentCode). Summing all rows in cbsData
+  // would double-count: each parent's budget + each child's budget.
+  const totals = cbsData
+    .filter(c => !c.parentCode)
+    .reduce((acc, c) => ({
+      budget: acc.budget + c.budget,
+      committed: acc.committed + c.committed,
+      actual: acc.actual + c.actual,
+      forecast: acc.forecast + c.forecast,
+    }), { budget: 0, committed: 0, actual: 0, forecast: 0 })
 
   // Live total margin
   const totalMarginPct = totals.budget > 0 ? ((totals.budget - totals.forecast) / totals.budget) * 100 : 0
@@ -147,11 +195,16 @@ export function FinancialsModule() {
   // Non-persistent UI state
   const [editing, setEditing] = useState<{ code: string; field: 'committed' | 'actual' | 'forecast' } | null>(null)
 
-  // Update a CBS node's committed/actual/forecast
+  // Update a CBS node's committed/actual/forecast.
+  // After updating a leaf, walk back UP the tree and re-aggregate parent
+  // totals so the parent's actual/committed/forecast/marginPct reflect
+  // the sum of its children.
   const updateNode = (code: string, field: 'committed' | 'actual' | 'forecast', value: number) => {
     setCbsData(prev => {
       const updated = JSON.parse(JSON.stringify(prev)) as CbsNode[]
-      const walk = (items: CbsNode[]) => {
+      // walk() returns true if the target was found in this subtree, so the
+      // caller can re-aggregate the parent on the way back up the recursion.
+      const walk = (items: CbsNode[]): boolean => {
         for (const n of items) {
           if (n.code === code) {
             n[field] = Math.max(0, value)
@@ -159,7 +212,15 @@ export function FinancialsModule() {
             n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
             return true
           }
-          if (n.children && walk(n.children)) return true
+          if (n.children && walk(n.children)) {
+            // Re-aggregate this parent from its children after a child changed.
+            n.actual = n.children.reduce((s, c) => s + c.actual, 0)
+            n.committed = n.children.reduce((s, c) => s + c.committed, 0)
+            n.forecast = n.children.reduce((s, c) => s + c.forecast, 0)
+            n.budget = n.children.reduce((s, c) => s + c.budget, 0)
+            n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
+            return true
+          }
         }
         return false
       }
@@ -289,18 +350,24 @@ export function FinancialsModule() {
               </div>
             </div>
             <div className="text-[10px] text-muted-foreground px-3 py-2">Mirrors BOQ WBS · 3 top nodes · 7 leaf items</div>
-            {CBS.map(c => (
-              <button
-                key={c.code}
-                onClick={() => setSelectedCode(c.code)}
-                className={cn('w-full text-left px-3 py-1.5 hover:bg-accent/50', selectedCode === c.code && 'bg-accent')}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-muted-foreground">{c.code}</span>
-                  <span className="text-xs font-medium">{c.name}</span>
-                </div>
-              </button>
-            ))}
+            {CBS.map(c => {
+              // Use the LIVE tree (cbsData) for display so the left-pane
+              // reflects user edits. Previously this rendered from the CBS
+              // constant, so edits to the P&L grid never updated the outline.
+              const liveNode = cbsData.find(n => n.code === c.code) ?? c
+              return (
+                <button
+                  key={c.code}
+                  onClick={() => setSelectedCode(c.code)}
+                  className={cn('w-full text-left px-3 py-1.5 hover:bg-accent/50', selectedCode === c.code && 'bg-accent')}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-muted-foreground">{liveNode.code}</span>
+                    <span className="text-xs font-medium">{liveNode.name}</span>
+                  </div>
+                </button>
+              )
+            })}
           </PaneBody>
         </>
       }
@@ -340,7 +407,7 @@ export function FinancialsModule() {
             <div className="w-24 px-2 text-right">Forecast</div>
             <div className="w-20 px-2 text-right">Margin %</div>
           </div>
-          <PaneBody className="px-0">{renderCbsRows(CBS, 0)}</PaneBody>
+          <PaneBody className="px-0">{renderCbsRows(cbsData, 0)}</PaneBody>
           <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs bg-secondary/30">
             <span className="font-medium">Project Totals</span>
             <div className="flex-1" />

@@ -90,10 +90,12 @@ export function SchedulerModule() {
   const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK)
 
   const flat = flattenTasks(tasksWithCpm)
-  const visible = flat.filter(({ task }) => {
-    if (task.type === 'Work' || task.type === 'Milestone' || task.type === 'Hammock') return true
-    return true
-  })
+  // Apply the "Critical path only" filter so the toggle actually does something.
+  // Previously `visible` was declared but never used, and the filter body returned
+  // true on every branch.
+  const visible = flat.filter(({ task }) =>
+    !showCriticalOnly || task.critical || task.type === 'Summary',
+  )
   const selectedTask = flat.find(f => f.task.id === selectedId)?.task ?? flat[0].task
 
   // Update a task's start date when dragged
@@ -162,6 +164,11 @@ export function SchedulerModule() {
 
   const renderTaskRows = () => {
     const rows: React.ReactNode[] = []
+    // When showCriticalOnly is on, render only the filtered visible list.
+    // Otherwise render the full tree.
+    const itemsToRender = showCriticalOnly
+      ? visible.map(v => v.task)
+      : tasksWithCpm
     const walk = (items: Task[], depth: number) => {
       for (const t of items) {
         const isExpanded = expanded.has(t.id)
@@ -193,10 +200,11 @@ export function SchedulerModule() {
             </div>
             <div className={cn('flex-1 min-w-0 truncate', t.type === 'Summary' && 'font-semibold')}>{t.name}</div>
             <div className="w-16 flex-shrink-0 text-right pr-2">
-              <span className="font-mono tabular-nums">{t.duration}d</span>
+              {/* Duration is in WEEKS (matches types.ts `start: week offset`). */}
+              <span className="font-mono tabular-nums">{t.duration}w</span>
               {t.baseline && t.baseline[1] - t.baseline[0] !== t.duration && t.type !== 'Summary' && (
                 <span className="text-[9px] text-muted-foreground line-through ml-1">
-                  {t.baseline[1] - t.baseline[0]}d
+                  {t.baseline[1] - t.baseline[0]}w
                 </span>
               )}
             </div>
@@ -206,7 +214,7 @@ export function SchedulerModule() {
         if (hasChildren && isExpanded) walk(t.children!, depth + 1)
       }
     }
-    walk(tasks, 0)
+    walk(itemsToRender, 0)
     return rows
   }
 
@@ -232,6 +240,12 @@ export function SchedulerModule() {
     setDragging({ id: t.id, startX: e.clientX, originalDuration: t.duration, mode: 'resize' })
   }
 
+  // Keep a ref to the latest tasks so the drag-end breach detector reads
+  // post-drag values instead of the stale closure value captured when the
+  // `dragging` effect was set up.
+  const tasksRef = useRef(tasks)
+  useEffect(() => { tasksRef.current = tasks }, [tasks])
+
   useEffect(() => {
     if (!dragging) return
     const onMove = (e: MouseEvent) => {
@@ -244,8 +258,12 @@ export function SchedulerModule() {
       }
     }
     const onUp = () => {
-      // Check for Critical Path Breach on drag end
-      const updated = tasks.find(t => t.id === dragging?.id)
+      // Check for Critical Path Breach on drag end.
+      // Read from tasksRef so we see the post-drag state, and search the
+      // flattened tree recursively so Hammock tasks that are children of
+      // Summary tasks (e.g. T-301 under T-300) are still found.
+      const flat = flattenTasks(tasksRef.current)
+      const updated = flat.find(f => f.task.id === dragging?.id)?.task
       if (updated && updated.type === 'Hammock' && updated.constraints?.includes('Must Finish On')) {
         // Extract deadline from constraint string like "Must Finish On: Wk 32"
         const match = updated.constraints.match(/Wk (\d+)/)
@@ -309,7 +327,7 @@ export function SchedulerModule() {
             <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => setAddTaskOpen(true)}><Plus className="w-3.5 h-3.5" />Task</Button>
           </PaneHeader>
           <GanttCanvas
-            tasks={tasks}
+            tasks={tasksWithCpm}
             expanded={expanded}
             selectedId={selectedId}
             onSelect={setSelectedId}

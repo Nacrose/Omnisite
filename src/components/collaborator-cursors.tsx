@@ -14,28 +14,51 @@ export function CollaboratorCursors() {
   const containerRef = useRef<HTMLDivElement>(null)
   const lastSentRef = useRef<number>(0)
 
-  // Track local mouse movement and broadcast cursor position
+  // Track local mouse movement and broadcast cursor position.
+  // The container has pointer-events:none, so we attach the listener to
+  // window and check whether the mouse is within the container's rect.
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     const handleMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect()
+      // Ignore moves outside the container's bounds.
+      if (
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom
+      ) {
+        return
+      }
       const now = Date.now()
       if (now - lastSentRef.current < 50) return // throttle to 20fps for sending
       lastSentRef.current = now
-      const rect = container.getBoundingClientRect()
       const x = ((e.clientX - rect.left) / rect.width) * 100
       const y = ((e.clientY - rect.top) / rect.height) * 100
       sendCursor(x, y, 'gantt')
     }
 
-    const handleLeave = () => stopCursor()
+    const handleLeave = (e: MouseEvent) => {
+      // `mouseout` fires when the pointer leaves any element; only stop the
+      // cursor when it leaves the container's bounds (or leaves the window).
+      const rect = container.getBoundingClientRect()
+      if (
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom
+      ) {
+        stopCursor()
+      }
+    }
 
-    container.addEventListener('mousemove', handleMove)
-    container.addEventListener('mouseleave', handleLeave)
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseout', handleLeave)
     return () => {
-      container.removeEventListener('mousemove', handleMove)
-      container.removeEventListener('mouseleave', handleLeave)
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseout', handleLeave)
     }
   }, [sendCursor, stopCursor])
 

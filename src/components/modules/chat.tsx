@@ -89,9 +89,14 @@ export function ChatModule() {
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         (payload) => {
-          if (mounted) {
-            setMessages(prev => [...prev, payload.new as unknown as ChatMessage])
-          }
+          if (!mounted) return
+          const incoming = payload.new as unknown as ChatMessage
+          // De-duplicate: sendMessage() already optimistically inserts the
+          // returned row, so the realtime INSERT event for the same row
+          // would otherwise render the message twice.
+          setMessages(prev =>
+            prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming],
+          )
         }
       )
       .subscribe()
@@ -102,10 +107,12 @@ export function ChatModule() {
     }
   }, [])
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages OR when the active channel changes
+  // (switching channels doesn't change `messages` since it's the full list,
+  // so without `activeChannel` in the deps the scroll wouldn't fire).
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, activeChannel])
 
   const channelMessages = messages.filter(m => m.channel_id === activeChannel)
   const activeChannelInfo = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0]

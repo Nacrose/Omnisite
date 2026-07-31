@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Toaster } from '@/components/ui/sonner'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -59,21 +58,30 @@ export function QsModule() {
   const selected = items.find(i => i.id === selectedId) ?? items[0]
   const filtered = filter === 'All' ? items : items.filter(i => i.type === filter)
 
-  // Advance an NCR to the next workflow status
+  // Advance an NCR to the next workflow status.
+  // Guarded: only NCR-type items can be advanced. Punch / Incident /
+  // Near-Miss items have their own (simpler) lifecycle and must NOT be
+  // pushed into NCR-only statuses like 'CAP Submitted'.
   const advanceNcr = (id: string) => {
     setItems(prev => prev.map(it => {
       if (it.id !== id) return it
+      if (it.type !== 'NCR') return it
       const next = NCR_WORKFLOW[it.status]
       if (!next) return it
       // When closing, release the billing hold
       const newBillingHold = next === 'Closed' ? false : it.billingHold
       return { ...it, status: next as QsItem['status'], billingHold: newBillingHold }
     }))
-    const next = NCR_WORKFLOW[selected.status]
-    if (next) {
-      toast.success('NCR advanced', {
-        description: `${selected.id} → ${next}${next === 'Closed' ? ' · billing hold released' : ''}`,
-      })
+    // Toast uses the latest `items` state (closure value). For a more accurate
+    // message we look up the item being advanced.
+    const target = items.find(i => i.id === id)
+    if (target && target.type === 'NCR') {
+      const next = NCR_WORKFLOW[target.status]
+      if (next) {
+        toast.success('NCR advanced', {
+          description: `${target.id} → ${next}${next === 'Closed' ? ' · billing hold released' : ''}`,
+        })
+      }
     }
   }
 
@@ -166,7 +174,9 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
       listFiles(STORAGE_BUCKETS.NCR_PHOTOS, item.id)
         .then(files => {
           if (cancelled) return
-          setPhotos(files.map(f => ({ name: f.name, url: f.url, path: f.url })))
+          // Use the storage path returned by listFiles (not the public URL)
+          // so deleteFile() can actually remove the file later.
+          setPhotos(files.map(f => ({ name: f.name, url: f.url, path: f.path })))
         })
         .catch(() => {
           if (cancelled) return
@@ -224,8 +234,11 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
   const workflowSteps = ['Open', 'CAP Submitted', 'Consultant Sign-off', 'Closed']
   const currentStepIndex = workflowSteps.indexOf(item.status)
 
-  // Determine the action button label based on current status
+  // Determine the action button label based on current status.
+  // Only NCR items have the CAP → Consultant → Close workflow; Punch /
+  // Incident / Near-Miss items must NOT show the NCR action button.
   const actionLabel = (() => {
+    if (item.type !== 'NCR') return null
     if (item.status === 'Open') return 'Submit Corrective Action Plan'
     if (item.status === 'CAP Submitted') return 'Request Consultant Sign-off'
     if (item.status === 'Consultant Sign-off') return 'Approve & Close NCR'
@@ -234,7 +247,6 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
 
   return (
     <>
-      <Toaster richColors position="top-center" />
       <PaneHeader title={`Inspector · ${item.id}`} />
       <PaneBody>
         <div className="p-4 border-b border-[var(--pane-divider)]">
@@ -498,7 +510,7 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
             </Button>
             <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2">
               <FileText className="w-3.5 h-3.5" />
-              View Attachments ({photos.length || 3} photos)
+              View Attachments ({photos.length} photos)
             </Button>
             <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><Users className="w-3.5 h-3.5" />Assign / Reassign</Button>
 

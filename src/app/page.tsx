@@ -60,8 +60,8 @@ export default function Home() {
   const router = useRouter()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
-  const active = MODULES.find(m => m.id === activeModule)!
-  const Renderer = MODULE_RENDERERS[activeModule]
+  const active = MODULES.find(m => m.id === activeModule) ?? MODULES[0]
+  const Renderer = MODULE_RENDERERS[active.id] ?? MODULE_RENDERERS.dashboard
   useKeyboardShortcuts()
 
   // Close the user dropdown on outside click / Escape.

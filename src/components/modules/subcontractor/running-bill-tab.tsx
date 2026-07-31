@@ -32,9 +32,30 @@ export function RunningBillTab({ sc }: { sc: Subcontractor }) {
     if (e) e.returned += mr.qty
   }
   const totalRmt = sc.items.find(i => i.type === 'composite')?.actualQty || 0
+  // Mirror the coefficients used in material-tab.tsx so the two tabs agree.
+  // Previously this version only handled cement and steel, so aggregate and
+  // sand were charged back in full (theoretical=0 → overQty=netUsed).
   for (const [, m] of materialMap) {
-    if (m.code === 'M-CEM-OPC') m.theoretical = totalRmt * 5.7
-    else if (m.code === 'M-STEEL-TMT16' || m.code === 'M-STEEL-ISMB150') m.theoretical = totalRmt * 0.095
+    if (m.code === 'M-CEM-OPC') {
+      m.theoretical = totalRmt * 5.7
+    } else if (m.code === 'M-STEEL-TMT16' || m.code === 'M-STEEL-ISMB150') {
+      m.theoretical = totalRmt * 0.095
+    } else if (m.code === 'M-AGG-20') {
+      m.theoretical = totalRmt * (0.40 * 0.9 + 0.60 * 0.9)
+    } else if (m.code === 'M-SAND-R') {
+      m.theoretical = totalRmt * (0.40 * 0.45 + 0.60 * 0.45)
+    } else if (sc.isTunneling) {
+      // Tunneling-specific materials — use designPattern when available.
+      if (m.code === 'M-SHOTCRETE') {
+        const pattern = sc.items.find(i => i.code === 'SC-TUN-SHOT')?.designPattern
+        m.theoretical = pattern ? pattern * totalRmt : 0
+      } else if (m.code === 'M-ROCKBOLT3') {
+        const pattern = sc.items.find(i => i.code === 'SC-TUN-BOLT')?.designPattern
+        m.theoretical = pattern ? pattern * totalRmt : 0
+      } else if (m.code === 'M-STEEL-ISMB150') {
+        m.theoretical = totalRmt * 0.037
+      }
+    }
     const netUsed = m.issued - m.returned
     const overQty = Math.max(0, netUsed - m.theoretical)
     materialChargeback += overQty * m.rate

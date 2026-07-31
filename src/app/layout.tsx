@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { I18nProvider } from "@/lib/i18n";
 import { AuthProvider } from "@/lib/auth";
@@ -43,7 +43,10 @@ export default function RootLayout({
             </I18nProvider>
           </AuthProvider>
         </ThemeProvider>
-        <Toaster />
+        {/* Single Sonner Toaster mounted at the app root — all `toast.*` calls
+            from any component render here. Per-component Toasters were removed
+            to prevent duplicate toasts on every call. */}
+        <SonnerToaster richColors position="top-center" />
       </body>
     </html>
   );

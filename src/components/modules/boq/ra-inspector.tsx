@@ -20,25 +20,31 @@ interface RaRow {
   code: string; name: string; uom: string; qty: number; rate: number; source: string;
 }
 
-const MATERIALS: RaRow[] = [
+const INITIAL_MATERIALS: RaRow[] = [
   { code: 'M-CEM-OPC', name: 'Cement OPC 53 Grade (Udaipur)', uom: 'Bag', qty: 4.5, rate: 920, source: 'Project Rate Library' },
   { code: 'M-SAND-R', name: 'River Sand (Trishuli)', uom: 'cum', qty: 0.45, rate: 3850, source: 'Project Rate Library' },
   { code: 'M-AGG-20', name: 'Coarse Aggregate 20mm', uom: 'cum', qty: 0.9, rate: 2950, source: 'Project Rate Library' },
   { code: 'M-WAT', name: 'Water (tanker)', uom: 'ltr', qty: 180, rate: 0.45, source: 'Project Rate Library' },
 ]
 
-const LABOUR: RaRow[] = [
+const INITIAL_LABOUR: RaRow[] = [
   { code: 'L-MASN', name: 'Mason (Skilled Cat. I)', uom: 'day', qty: 0.6, rate: 1450, source: 'DoR Norm 2075' },
   { code: 'L-HEL', name: 'Mazdoor (Unskilled)', uom: 'day', qty: 1.4, rate: 950, source: 'DoR Norm 2075' },
   { code: 'L-MIX', name: 'Mixer Operator', uom: 'day', qty: 0.2, rate: 1200, source: 'DoR Norm 2075' },
 ]
 
-const EQUIPMENT: RaRow[] = [
+const INITIAL_EQUIPMENT: RaRow[] = [
   { code: 'E-MIX', name: 'Concrete Mixer 0.4 cum', uom: 'hr', qty: 1.8, rate: 285, source: 'Equipment Master' },
   { code: 'E-VIB', name: 'Needle Vibrator 60mm', uom: 'hr', qty: 1.2, rate: 95, source: 'Equipment Master' },
 ]
 
 export function RaInspector({ item }: { item: BoqItem }) {
+  // Live state for RA resource rows — drives real-time recalculation of
+  // directCost / pctCostBase / totalCost / margin when the user edits a
+  // qty or rate cell in the RA Builder tab.
+  const [materials, setMaterials] = useState<RaRow[]>(INITIAL_MATERIALS)
+  const [labour, setLabour] = useState<RaRow[]>(INITIAL_LABOUR)
+  const [equipment, setEquipment] = useState<RaRow[]>(INITIAL_EQUIPMENT)
   // Live state for RA coefficients — drives real-time recalculation of the Financial Summary
   const [pctCosts, setPctCosts] = useState({
     labour: { on: true, pct: 2.5 },
@@ -50,11 +56,21 @@ export function RaInspector({ item }: { item: BoqItem }) {
   const [opOnPct, setOpOnPct] = useState(true)
   const [opPct, setOpPct] = useState(15)
 
+  // Helper to update a single row's qty or rate.
+  const updateRow = (
+    setter: React.Dispatch<React.SetStateAction<RaRow[]>>,
+    index: number,
+    field: 'qty' | 'rate',
+    value: number,
+  ) => {
+    setter(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r))
+  }
+
   // Recompute on every render — pure function of state
-  const directCost = [...MATERIALS, ...LABOUR, ...EQUIPMENT].reduce((s, r) => s + r.qty * r.rate, 0)
-  const labourCost = LABOUR.reduce((s, r) => s + r.qty * r.rate, 0)
-  const materialCost = MATERIALS.reduce((s, r) => s + r.qty * r.rate, 0)
-  const equipCost = EQUIPMENT.reduce((s, r) => s + r.qty * r.rate, 0)
+  const directCost = [...materials, ...labour, ...equipment].reduce((s, r) => s + r.qty * r.rate, 0)
+  const labourCost = labour.reduce((s, r) => s + r.qty * r.rate, 0)
+  const materialCost = materials.reduce((s, r) => s + r.qty * r.rate, 0)
+  const equipCost = equipment.reduce((s, r) => s + r.qty * r.rate, 0)
 
   const pctCostBase =
     (pctCosts.labour.on ? labourCost * pctCosts.labour.pct / 100 : 0) +
@@ -67,7 +83,12 @@ export function RaInspector({ item }: { item: BoqItem }) {
   const totalCost = directCost + pctCostBase + overheadAmount
   const contractRate = item.rate
   const margin = contractRate - totalCost
-  const marginPct = (margin / contractRate) * 100
+  // Guard divide-by-zero: if contractRate is 0 (e.g. cleared input),
+  // marginPct would be Infinity/NaN and break the UI.
+  const marginPct = contractRate > 0 ? (margin / contractRate) * 100 : 0
+  // Visual-bar widths — also guarded against 0 / negative contractRate.
+  const costBarPct = contractRate > 0 ? Math.min(100, (totalCost / contractRate) * 100) : 0
+  const marginBarPct = contractRate > 0 ? Math.max(0, Math.min(100, (margin / contractRate) * 100)) : 0
 
   return (
     <>
@@ -93,9 +114,9 @@ export function RaInspector({ item }: { item: BoqItem }) {
           </div>
 
           <TabsContent value="builder" className="mt-0">
-            <RaSection title="Materials" icon={<Layers className="w-3.5 h-3.5" />} rows={MATERIALS} />
-            <RaSection title="Labour" icon={<Layers className="w-3.5 h-3.5" />} rows={LABOUR} />
-            <RaSection title="Equipment" icon={<Layers className="w-3.5 h-3.5" />} rows={EQUIPMENT} />
+            <RaSection title="Materials" icon={<Layers className="w-3.5 h-3.5" />} rows={materials} onUpdate={(i, f, v) => updateRow(setMaterials, i, f, v)} />
+            <RaSection title="Labour" icon={<Layers className="w-3.5 h-3.5" />} rows={labour} onUpdate={(i, f, v) => updateRow(setLabour, i, f, v)} />
+            <RaSection title="Equipment" icon={<Layers className="w-3.5 h-3.5" />} rows={equipment} onUpdate={(i, f, v) => updateRow(setEquipment, i, f, v)} />
 
             {/* % COSTS */}
             <div className="px-4 py-3 border-y border-[var(--pane-divider)]">
@@ -232,11 +253,11 @@ export function RaInspector({ item }: { item: BoqItem }) {
                   <div className="h-2 rounded-full overflow-hidden flex bg-secondary">
                     <div
                       className="bg-amber-500/70 transition-all duration-300"
-                      style={{ width: `${Math.min(100, (totalCost / contractRate) * 100)}%` }}
+                      style={{ width: `${costBarPct}%` }}
                     />
                     <div
                       className={cn('transition-all duration-300', margin >= 0 ? 'bg-emerald-500/70' : 'bg-red-500/70')}
-                      style={{ width: `${Math.max(0, Math.min(100, (margin / contractRate) * 100))}%` }}
+                      style={{ width: `${marginBarPct}%` }}
                     />
                   </div>
                   <div className="flex justify-between text-[10px] mt-1">
@@ -283,7 +304,7 @@ export function RaInspector({ item }: { item: BoqItem }) {
   )
 }
 
-function RaSection({ title, icon, rows }: { title: string; icon: React.ReactNode; rows: RaRow[] }) {
+function RaSection({ title, icon, rows, onUpdate }: { title: string; icon: React.ReactNode; rows: RaRow[]; onUpdate: (index: number, field: 'qty' | 'rate', value: number) => void }) {
   const sectionTotal = rows.reduce((s, r) => s + r.qty * r.rate, 0)
   return (
     <div className="px-4 py-3 border-b border-[var(--pane-divider)]">
@@ -302,11 +323,21 @@ function RaSection({ title, icon, rows }: { title: string; icon: React.ReactNode
                 <span>{r.source}</span>
               </div>
             </div>
-            <Input className="col-span-2 h-6 text-xs px-1" defaultValue={r.qty} />
+            <Input
+              className="col-span-2 h-6 text-xs px-1"
+              type="number"
+              value={r.qty}
+              onChange={(e) => onUpdate(i, 'qty', parseFloat(e.target.value) || 0)}
+            />
             <div className="col-span-3 flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">{r.uom}</span>
               <div className="flex-1 flex items-center gap-0.5">
-                <Input className="h-6 text-xs px-1 flex-1 font-mono" defaultValue={r.rate} />
+                <Input
+                  className="h-6 text-xs px-1 flex-1 font-mono"
+                  type="number"
+                  value={r.rate}
+                  onChange={(e) => onUpdate(i, 'rate', parseFloat(e.target.value) || 0)}
+                />
                 <button className="p-0.5 hover:bg-accent rounded" title="Auto-calc from primary UOM">
                   <Zap className="w-3 h-3 text-amber-500" />
                 </button>

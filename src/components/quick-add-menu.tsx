@@ -3,7 +3,6 @@
 import { useApp, ModuleId } from '@/lib/app-store'
 import { X, ClipboardList, Mail, Landmark, Truck, FileStack, ShieldAlert, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
-import { Toaster } from '@/components/ui/sonner'
 
 const ACTIONS: { id: string; label: string; icon: typeof ClipboardList; color: string; desc: string; module: ModuleId }[] = [
   { id: 'dsr', label: 'Daily Site Report', icon: ClipboardList, color: 'text-emerald-500', desc: 'Log today\'s progress', module: 'daily-ops' },
@@ -20,7 +19,6 @@ export function QuickAddMenu() {
 
   return (
     <>
-      <Toaster richColors position="top-center" />
       {quickAddOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm flex items-start justify-center pt-[12vh]"
