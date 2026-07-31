@@ -44,7 +44,7 @@ export function BoqModule() {
   const boqData = (() => {
     if (!boqRows || boqRows.length === 0) return JSON.parse(JSON.stringify(BOQ_DATA))
     // Check if data is already a tree (has children) or flat rows
-    const hasChildren = boqRows.some((r: Record<string, unknown>) => r.children)
+    const hasChildren = boqRows.some((r) => 'children' in r)
     if (hasChildren) return boqRows
 
     // Rebuild tree from flat rows using parent_id
