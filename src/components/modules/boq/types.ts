@@ -9,6 +9,7 @@ export interface BoqItem {
   hasRA?: boolean
   level: number
   children?: BoqItem[]
+  parentId?: string
 }
 
 export const BOQ_DATA: BoqItem[] = [

@@ -17,7 +17,7 @@ import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
 
 interface CbsNode {
-  code: string; name: string; budget: number; committed: number; actual: number; forecast: number; marginPct: number; level: number; children?: CbsNode[]
+  code: string; name: string; budget: number; committed: number; actual: number; forecast: number; marginPct: number; level: number; children?: CbsNode[]; parentCode?: string
 }
 
 const CBS: CbsNode[] = [
@@ -74,7 +74,7 @@ export function FinancialsModule() {
   // Rebuild tree from flat rows
   const cbsData = (() => {
     if (!cbsRows || cbsRows.length === 0) return JSON.parse(JSON.stringify(CBS))
-    const hasChildren = cbsRows.some((r: Record<string, unknown>) => r.children)
+    const hasChildren = cbsRows.some((r) => 'children' in r)
     if (hasChildren) return cbsRows
 
     const rows = cbsRows as unknown as Record<string, unknown>[]

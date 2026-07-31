@@ -20,9 +20,9 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
   // Material efficiency
   let matEfficiency = 100
   let matCount = 0
-  const materialMap = new Map<string, { issued: number; returned: number; theoretical: number }>()
+  const materialMap = new Map<string, { code: string; issued: number; returned: number; theoretical: number }>()
   for (const mi of sc.materialIssues) {
-    const e = materialMap.get(mi.materialCode) || { issued: 0, returned: 0, theoretical: 0 }
+    const e = materialMap.get(mi.materialCode) || { code: mi.materialCode, issued: 0, returned: 0, theoretical: 0 }
     e.issued += mi.qty; materialMap.set(mi.materialCode, e)
   }
   for (const mr of sc.materialReturns) {
@@ -31,8 +31,8 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
   }
   const totalRmt = sc.items.find(i => i.type === 'composite')?.actualQty || 0
   for (const [, m] of materialMap) {
-    if (m.code === 'M-CEM-OPC' as any) m.theoretical = totalRmt * 5.7
-    else if (m.code === 'M-STEEL-TMT16' as any || m.code === 'M-STEEL-ISMB150' as any) m.theoretical = totalRmt * 0.095
+    if (m.code === 'M-CEM-OPC') m.theoretical = totalRmt * 5.7
+    else if (m.code === 'M-STEEL-TMT16' || m.code === 'M-STEEL-ISMB150') m.theoretical = totalRmt * 0.095
     const netUsed = m.issued - m.returned
     const variance = m.theoretical > 0 ? Math.abs(((netUsed - m.theoretical) / m.theoretical) * 100) : 0
     matEfficiency = Math.min(matEfficiency, 100 - variance)

@@ -22,9 +22,9 @@ export function RunningBillTab({ sc }: { sc: Subcontractor }) {
 
   // Material over-use chargeback
   let materialChargeback = 0
-  const materialMap = new Map<string, { issued: number; returned: number; theoretical: number; rate: number }>()
+  const materialMap = new Map<string, { code: string; issued: number; returned: number; theoretical: number; rate: number }>()
   for (const mi of sc.materialIssues) {
-    const e = materialMap.get(mi.materialCode) || { issued: 0, returned: 0, theoretical: 0, rate: mi.rate }
+    const e = materialMap.get(mi.materialCode) || { code: mi.materialCode, issued: 0, returned: 0, theoretical: 0, rate: mi.rate }
     e.issued += mi.qty; materialMap.set(mi.materialCode, e)
   }
   for (const mr of sc.materialReturns) {
@@ -33,8 +33,8 @@ export function RunningBillTab({ sc }: { sc: Subcontractor }) {
   }
   const totalRmt = sc.items.find(i => i.type === 'composite')?.actualQty || 0
   for (const [, m] of materialMap) {
-    if (m.code === 'M-CEM-OPC' as any) m.theoretical = totalRmt * 5.7
-    else if (m.code === 'M-STEEL-TMT16' as any || m.code === 'M-STEEL-ISMB150' as any) m.theoretical = totalRmt * 0.095
+    if (m.code === 'M-CEM-OPC') m.theoretical = totalRmt * 5.7
+    else if (m.code === 'M-STEEL-TMT16' || m.code === 'M-STEEL-ISMB150') m.theoretical = totalRmt * 0.095
     const netUsed = m.issued - m.returned
     const overQty = Math.max(0, netUsed - m.theoretical)
     materialChargeback += overQty * m.rate

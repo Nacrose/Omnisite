@@ -62,8 +62,7 @@ export function ChatModule() {
 
   // Load messages from Supabase
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      // Use setTimeout to avoid synchronous setState in effect
+    if (!isSupabaseConfigured() || !supabase) {
       const t = setTimeout(() => setLoading(false), 0)
       return () => clearTimeout(t)
     }
@@ -71,7 +70,7 @@ export function ChatModule() {
     let mounted = true
 
     const load = async () => {
-      const { data, error } = await supabase
+      const { data, error } = await supabase!
         .from('chat_messages')
         .select('*')
         .order('created_at', { ascending: true })
@@ -85,7 +84,7 @@ export function ChatModule() {
     load()
 
     // Real-time subscription
-    const channel = supabase
+    const channel = supabase!
       .channel('chat-messages-rt')
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },

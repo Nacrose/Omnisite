@@ -105,12 +105,12 @@ export function useSyncedState<T>(
     load()
 
     // Real-time subscription
-    const channel = supabase
+    const channel = supabase!
       .channel(`${supabaseTable}-rt`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: supabaseTable },
         async () => {
-          const { data } = await supabase
+          const { data } = await supabase!
             .from(supabaseTable)
             .select('*')
             .order('created_at', { ascending: true })

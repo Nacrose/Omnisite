@@ -201,7 +201,7 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
                     'Project pays Routine Maint',
                     'Project pays Major Repairs',
                   ].map(term => {
-                    const checked = equip.rental.terms.some(t => t.toLowerCase().includes(term.toLowerCase().replace('project pays ', '').replace('driver salary', 'driver').split(' ')[0]))
+                    const checked = (equip.rental?.terms || []).some(t => t.toLowerCase().includes(term.toLowerCase().replace('project pays ', '').replace('driver salary', 'driver').split(' ')[0]))
                     return (
                       <label key={term} className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)]">
                         <Checkbox checked={checked} />
