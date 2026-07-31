@@ -58,7 +58,7 @@ export function BoqModule() {
         id: row.id as string,
         code: row.code as string,
         desc: (row.desc || row.description) as string,
-        type: (row.type as string) || 'Priced',
+        type: (row.type as BoqItem['type']) || 'Priced',
         qty: Number(row.qty) || 0,
         uom: (row.uom as string) || '',
         rate: Number(row.rate) || 0,
