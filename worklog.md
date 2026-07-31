@@ -481,3 +481,25 @@ Constraints verified:
 - Demo mode (no Supabase env vars) is the default and remains fully functional: user auto-logs-in as Arjun Sharma (PM), DSR/NCR photo uploads show "Demo mode — configure Supabase Storage" notices, notification dispatch logs to browser console only.
 - Existing module functionality unchanged; the only behavioral change to page.tsx is that the user name/role now comes from `useAuth()` (which returns the same "Arjun Sharma / PM" data in demo mode, so visually identical).
 - A detailed work record is also saved at `/agent-ctx/2-super-z-main.md`.
+
+---
+Task ID: final-prep
+Agent: Super Z (main)
+Task: Final pre-deploy verification — fix any remaining build blockers so the 28 unpushed commits can ship to Vercel cleanly.
+
+Work Log:
+- Verified working tree clean and 28 commits ahead of origin/main.
+- `bun run lint` → 0 errors, 0 warnings.
+- `bun run test` → 17 tests passing across 3 suites (cpm, calendar, csv-export).
+- `npx tsc --noEmit` → failed with 15 errors in `skills/` directory (z-ai-web-dev-sdk module not installed). These are scaffold files unrelated to the Next.js app but the tsconfig `include: ["**/*.ts"]` was picking them up.
+- Added `skills` and `agent-ctx` to `tsconfig.json` `exclude` list. After change: tsc clean.
+- `bun run build` → failed with `Error: supabaseUrl is required` at module evaluation time of `src/lib/supabase-server.ts`. The eager `createClient('', 'missing-service-key', ...)` call throws when env vars are absent (local builds, CI without secrets).
+- Refactored `src/lib/supabase-server.ts` to use a lazy Proxy: the exported `supabase` is a Proxy that defers `createClient` until the first property access (i.e. the first API request). Module load no longer throws. On Vercel (env vars set) behavior is identical to before. Locally without env vars, the build now succeeds and API routes return a clear 500 error only when called.
+- Re-ran `bun run build` → ✓ Compiled successfully in 13.2s, all 11 static pages generated, all 7 API routes registered as dynamic.
+- Committed both fixes as commit `bac630b`: "Fix production build: lazy Supabase server client + exclude skills from tsconfig".
+- Attempted `git push origin main` → failed: no GitHub credentials available in this environment (`fatal: could not read Username for 'https://github.com'`). User needs to push manually.
+
+Stage Summary:
+- Build is now Vercel-ready: lint clean, tsc clean, tests passing, production build succeeds locally without env vars.
+- Total commits ahead of origin/main: 28 (was 27 + the new build-fix commit).
+- Next action required from the user: push to origin/main to trigger Vercel redeploy. Command: `git push origin main`.
