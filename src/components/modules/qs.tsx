@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, ChangeEvent } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,11 +9,14 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
   Plus, Search, ShieldCheck, AlertTriangle, CheckCircle2, XCircle, FileText, Lock, Users, Clock, ArrowRight,
+  Camera, Loader2, Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
+import { isSupabaseConfigured } from '@/lib/supabase'
 
 interface QsItem {
   id: string; type: 'ITR' | 'NCR' | 'Punch' | 'Incident' | 'Near-Miss'; title: string; linkedBoq?: string;
@@ -140,6 +143,82 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
     assignee: item.cap?.assignee || item.assignee || '',
     dueDate: item.cap?.dueDate || item.dueDate || '',
   })
+
+  // ─── NCR / ITR photo upload state ────────────────────────────────────────
+  // Photos live in the ncr-photos bucket under a folder named after the
+  // item id (e.g. ncr-photos/NCR-034/<timestamp>-<rand>.jpg).
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [photos, setPhotos] = useState<{ name: string; url: string; path?: string }[]>([])
+  const [photosLoading, setPhotosLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const storageConfigured = isSupabaseConfigured()
+
+  useEffect(() => {
+    let cancelled = false
+    // Defer state resets to an async microtask so the effect body itself
+    // doesn't synchronously call setState (avoids cascading renders per
+    // react-hooks/set-state-in-effect rule).
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      setPhotos([])
+      if (!storageConfigured) return
+      setPhotosLoading(true)
+      listFiles(STORAGE_BUCKETS.NCR_PHOTOS, item.id)
+        .then(files => {
+          if (cancelled) return
+          setPhotos(files.map(f => ({ name: f.name, url: f.url, path: f.url })))
+        })
+        .catch(() => {
+          if (cancelled) return
+          toast.error('Failed to load photos')
+        })
+        .finally(() => {
+          if (!cancelled) setPhotosLoading(false)
+        })
+    })
+    return () => { cancelled = true }
+  }, [item.id, storageConfigured])
+
+  const triggerFilePicker = () => fileInputRef.current?.click()
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploading(true)
+    let ok = 0
+    let fail = 0
+    for (const file of Array.from(files)) {
+      const result = await uploadFile(STORAGE_BUCKETS.NCR_PHOTOS, file, item.id)
+      if (result.url) {
+        setPhotos(prev => [...prev, { name: file.name, url: result.url, path: result.path }])
+        ok++
+      } else {
+        fail++
+      }
+    }
+    setUploading(false)
+    e.target.value = ''
+    if (ok > 0 && fail === 0) {
+      toast.success(`Uploaded ${ok} photo${ok > 1 ? 's' : ''}`, {
+        description: `Saved to ${STORAGE_BUCKETS.NCR_PHOTOS}/${item.id}/`,
+      })
+    } else if (ok > 0 && fail > 0) {
+      toast.warning(`${ok} uploaded, ${fail} failed`)
+    } else {
+      toast.error('Upload failed', { description: 'Check Supabase Storage bucket permissions.' })
+    }
+  }
+
+  const handleDeletePhoto = async (photo: { url: string; path?: string }) => {
+    if (!photo.path) return
+    const ok = await deleteFile(STORAGE_BUCKETS.NCR_PHOTOS, photo.path)
+    if (ok) {
+      setPhotos(prev => prev.filter(p => p.url !== photo.url))
+      toast.success('Photo deleted')
+    } else {
+      toast.error('Delete failed')
+    }
+  }
 
   const nextStatus = item.type === 'NCR' ? NCR_WORKFLOW[item.status] : null
   const workflowSteps = ['Open', 'CAP Submitted', 'Consultant Sign-off', 'Closed']
@@ -347,8 +426,87 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
           )}
 
           <div className="space-y-1.5">
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><FileText className="w-3.5 h-3.5" />View Attachments (3 photos)</Button>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+              aria-label={`Upload photos for ${item.id}`}
+            />
+
+            {/* Photo gallery — existing NCR/ITR photos */}
+            {photosLoading ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {[1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className="aspect-square rounded bg-secondary/50 animate-pulse flex items-center justify-center"
+                  >
+                    <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+                  </div>
+                ))}
+              </div>
+            ) : photos.length > 0 ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {photos.map((photo, i) => (
+                  <div
+                    key={photo.url + i}
+                    className="relative group aspect-square rounded overflow-hidden border border-[var(--pane-divider)]"
+                  >
+                    <img
+                      src={photo.url}
+                      alt={`${item.id} photo ${i + 1}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    {storageConfigured && (
+                      <button
+                        onClick={() => handleDeletePhoto(photo)}
+                        className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label={`Delete photo ${i + 1}`}
+                        title="Delete photo"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-8 text-xs justify-start gap-2"
+              onClick={triggerFilePicker}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <Camera className="w-3.5 h-3.5" />
+                  Upload Photo
+                </>
+              )}
+            </Button>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2">
+              <FileText className="w-3.5 h-3.5" />
+              View Attachments ({photos.length || 3} photos)
+            </Button>
             <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><Users className="w-3.5 h-3.5" />Assign / Reassign</Button>
+
+            {!storageConfigured && (
+              <p className="text-[10px] text-muted-foreground text-center pt-1">
+                Demo mode — configure Supabase Storage to enable uploads.
+              </p>
+            )}
           </div>
         </div>
       </PaneBody>

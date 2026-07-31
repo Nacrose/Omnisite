@@ -3,15 +3,24 @@
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { fetchAll, upsertOne } from '@/lib/api-client'
 
 /**
  * useSyncedState — hybrid storage hook.
  *
- * If Supabase is configured → loads from DB, saves to DB, subscribes to real-time.
- * If not → falls back to localStorage.
+ * If Supabase is configured →
+ *   - Reads go through the REST API client (`GET /api/{endpoint}`).
+ *   - Writes go through the REST API client (`POST /api/{endpoint}`).
+ *   - Real-time notifications arrive via the Supabase client's postgres_changes
+ *     channel (read-only); on each notification we re-fetch through the API
+ *     client so the read path is also server-validated.
+ *
+ * If not → falls back to localStorage (no network traffic at all).
  *
  * The hook handles the mapping between app objects and DB rows via optional
- * transform functions.
+ * transform functions. The DB row ↔ API JSON shape is identical, so the same
+ * `fieldMap` / `primaryKey` config works for both the legacy direct-Supabase
+ * path and the new API path.
  */
 
 interface SyncConfig {
@@ -19,6 +28,26 @@ interface SyncConfig {
   fieldMap?: Record<string, string>
   /** The primary key column name in the DB (default: 'id') */
   primaryKey?: string
+}
+
+/**
+ * Map a Supabase table name to its REST API endpoint slug.
+ * e.g. `boq_items` → `boq` (so we hit `/api/boq`).
+ * Falls back to the table name itself if no mapping is registered, so new
+ * tables work automatically once a matching `/api/{table}` route exists.
+ */
+const TABLE_TO_ENDPOINT: Record<string, string> = {
+  boq_items: 'boq',
+  tasks: 'tasks',
+  workers: 'workers',
+  equipment: 'equipment',
+  cbs_nodes: 'cbs-nodes',
+  qs_items: 'qs-items',
+  chat_messages: 'chat-messages',
+}
+
+function endpointFor(table: string): string {
+  return TABLE_TO_ENDPOINT[table] ?? table
 }
 
 export function useSyncedState<T>(
@@ -34,6 +63,7 @@ export function useSyncedState<T>(
 
   const pk = config?.primaryKey || 'id'
   const fmap = config?.fieldMap || {}
+  const apiEndpoint = endpointFor(supabaseTable)
 
   // Transform a DB row → app object (reverse map column names to field names)
   const fromDb = (row: Record<string, unknown>): Record<string, unknown> => {
@@ -75,24 +105,18 @@ export function useSyncedState<T>(
 
     const load = async () => {
       try {
-        const { data, error } = await supabase!
-          .from(supabaseTable)
-          .select('*')
-          .order('created_at', { ascending: true })
-
-        if (error) {
-          console.warn(`[useSyncedState] Load failed for ${supabaseTable}:`, error.message)
-          if (mounted) setSupabaseState(localState)
-        } else if (data && data.length > 0) {
-          // Transform DB rows to app objects
-          const transformed = data.map(row => fromDb(row))
-          if (mounted) setSupabaseState(transformed as unknown as T)
+        // Initial read goes through the API client (server-side validated).
+        const rows = await fetchAll<Record<string, unknown>>(apiEndpoint)
+        if (!mounted) return
+        if (rows.length > 0) {
+          const transformed = rows.map(row => fromDb(row))
+          setSupabaseState(transformed as unknown as T)
         } else {
           // No data — use initial (don't seed, the SQL seed already ran)
           const initialData = typeof initial === 'function' ? (initial as () => T)() : initial
-          if (mounted) setSupabaseState(initialData)
+          setSupabaseState(initialData)
         }
-        if (mounted) setLoading(false)
+        setLoading(false)
       } catch (e) {
         console.warn(`[useSyncedState] Error for ${supabaseTable}, using localStorage:`, e)
         if (mounted) {
@@ -104,19 +128,23 @@ export function useSyncedState<T>(
 
     load()
 
-    // Real-time subscription
-    const channel = supabase!
+    // Real-time subscription — uses the Supabase client ONLY to receive
+    // change notifications. When a notification arrives, we re-fetch through
+    // the API client (the read path), keeping the write/read paths consistent
+    // and server-validated.
+    const channel = supabase
       .channel(`${supabaseTable}-rt`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: supabaseTable },
         async () => {
-          const { data } = await supabase!
-            .from(supabaseTable)
-            .select('*')
-            .order('created_at', { ascending: true })
-          if (data && mounted) {
-            const transformed = data.map(row => fromDb(row))
-            setSupabaseState(transformed as unknown as T)
+          try {
+            const rows = await fetchAll<Record<string, unknown>>(apiEndpoint)
+            if (rows && mounted) {
+              const transformed = rows.map(row => fromDb(row))
+              setSupabaseState(transformed as unknown as T)
+            }
+          } catch (e) {
+            console.warn(`[useSyncedState] Realtime refetch failed for ${supabaseTable}:`, e)
           }
         }
       )
@@ -128,7 +156,7 @@ export function useSyncedState<T>(
     }
   }, [supabaseTable])
 
-  // State setter — writes to Supabase or localStorage
+  // State setter — writes to API (when Supabase configured) or localStorage
   const setState = (value: T | ((prev: T) => T)) => {
     if (useSupabase && supabaseState !== null) {
       const newValue = typeof value === 'function'
@@ -136,14 +164,32 @@ export function useSyncedState<T>(
         : value
       setSupabaseState(newValue)
 
-      // Sync to Supabase — upsert each item individually
+      // Sync to API — upsert each item that has a primary key.
+      // We diff against the previous state so unchanged rows don't generate
+      // spurious POSTs (the original implementation upserted every row on
+      // every keystroke, which was wasteful).
       if (Array.isArray(newValue)) {
+        const prevArr = Array.isArray(supabaseState) ? (supabaseState as unknown[]) : []
+        const prevById = new Map<string, unknown>()
+        for (const p of prevArr) {
+          const pid = (p as Record<string, unknown>)[pk] as string | undefined
+          if (pid) prevById.set(pid, p)
+        }
         for (const item of newValue) {
           const row = toDb(item as Record<string, unknown>)
-          const id = (item as Record<string, unknown>)[pk === 'id' ? 'id' : pk] || (item as Record<string, unknown>).id
-          if (id) {
-            supabase!.from(supabaseTable).upsert({ ...row, id })
+          const id = (item as Record<string, unknown>)[pk] as string | undefined
+          if (!id) continue
+          // Skip rows that haven't changed since the previous render.
+          const prevItem = prevById.get(id)
+          if (prevItem !== undefined && JSON.stringify(prevItem) === JSON.stringify(item)) {
+            continue
           }
+          // Fire-and-forget; the realtime channel will notify us when the
+          // write lands, and per-item failures are logged without blocking
+          // subsequent writes.
+          upsertOne(apiEndpoint, { ...row, id }).catch(e => {
+            console.warn(`[useSyncedState] upsert failed for ${supabaseTable}:${id}`, e)
+          })
         }
       }
 

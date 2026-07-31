@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -9,10 +9,19 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import {
-  Mail, Camera, X, AlertTriangle, CheckCircle2, MapPin,
+  Mail, Camera, X, AlertTriangle, CheckCircle2, MapPin, Loader2, Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { DsrEntry } from './types'
+import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
+import { isSupabaseConfigured } from '@/lib/supabase'
+
+interface StoredPhoto {
+  name: string
+  url: string
+  path?: string
+}
 
 export function DsrInspector({ entry }: { entry: DsrEntry }) {
   const theoretical = entry.actual * 4.5 // bags per cum (cement)
@@ -28,6 +37,89 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
     background: '',
   })
   const [rfiSaved, setRfiSaved] = useState(false)
+
+  // ─── Photo upload state ───────────────────────────────────────────────────
+  // Photos are stored per-DSR entry in a Supabase Storage folder named after
+  // the entry id (e.g. dsr-photos/D-087/<timestamp>-<rand>.jpg).
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [photos, setPhotos] = useState<StoredPhoto[]>([])
+  const [photosLoading, setPhotosLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const storageConfigured = isSupabaseConfigured()
+
+  // Load existing photos whenever the entry changes.
+  useEffect(() => {
+    let cancelled = false
+    // Defer state resets to an async microtask so the effect body itself
+    // doesn't synchronously call setState (avoids cascading renders per
+    // react-hooks/set-state-in-effect rule).
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      setPhotos([])
+      if (!storageConfigured) {
+        // Demo mode — no cloud storage; show a placeholder gallery.
+        return
+      }
+      setPhotosLoading(true)
+      listFiles(STORAGE_BUCKETS.DSRR_PHOTOS, entry.id)
+        .then(files => {
+          if (cancelled) return
+          setPhotos(files.map(f => ({ name: f.name, url: f.url, path: f.url })))
+        })
+        .catch(() => {
+          if (cancelled) return
+          toast.error('Failed to load photos')
+        })
+        .finally(() => {
+          if (!cancelled) setPhotosLoading(false)
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [entry.id, storageConfigured])
+
+  const triggerFilePicker = () => fileInputRef.current?.click()
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploading(true)
+    let ok = 0
+    let fail = 0
+    for (const file of Array.from(files)) {
+      const result = await uploadFile(STORAGE_BUCKETS.DSRR_PHOTOS, file, entry.id)
+      if (result.url) {
+        setPhotos(prev => [...prev, { name: file.name, url: result.url, path: result.path }])
+        ok++
+      } else {
+        fail++
+      }
+    }
+    setUploading(false)
+    // reset input so the same file can be re-selected
+    e.target.value = ''
+    if (ok > 0 && fail === 0) {
+      toast.success(`Uploaded ${ok} photo${ok > 1 ? 's' : ''}`, {
+        description: `Saved to ${STORAGE_BUCKETS.DSRR_PHOTOS}/${entry.id}/`,
+      })
+    } else if (ok > 0 && fail > 0) {
+      toast.warning(`${ok} uploaded, ${fail} failed`)
+    } else {
+      toast.error('Upload failed', { description: 'Check Supabase Storage bucket permissions.' })
+    }
+  }
+
+  const handleDeletePhoto = async (photo: StoredPhoto) => {
+    if (!photo.path) return
+    const ok = await deleteFile(STORAGE_BUCKETS.DSRR_PHOTOS, photo.path)
+    if (ok) {
+      setPhotos(prev => prev.filter(p => p.url !== photo.url))
+      toast.success('Photo deleted')
+    } else {
+      toast.error('Delete failed')
+    }
+  }
 
   const generateRfi = () => {
     // Auto-populate background from DSR remarks + entry details
@@ -127,14 +219,98 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
           </TabsContent>
 
           <TabsContent value="photos" className="mt-0 px-4 py-3">
-            <div className="grid grid-cols-2 gap-2">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="aspect-square rounded-md bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-                  <Camera className="w-6 h-6 text-white/60" />
-                </div>
-              ))}
-            </div>
-            <Button variant="outline" size="sm" className="w-full mt-3 h-8 text-xs gap-1.5"><Camera className="w-3.5 h-3.5" />Upload Photo</Button>
+            {/* Hidden file input — triggered by the Upload Photo button */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+              aria-label="Upload DSR photos"
+            />
+
+            {/* Photo gallery */}
+            {photosLoading ? (
+              <div className="grid grid-cols-2 gap-2">
+                {[1, 2].map(i => (
+                  <div
+                    key={i}
+                    className="aspect-square rounded-md bg-secondary/50 animate-pulse flex items-center justify-center"
+                  >
+                    <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                  </div>
+                ))}
+              </div>
+            ) : photos.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {photos.map((photo, i) => (
+                  <div
+                    key={photo.url + i}
+                    className="relative group aspect-square rounded-md overflow-hidden border border-[var(--pane-divider)]"
+                  >
+                    <img
+                      src={photo.url}
+                      alt={`DSR ${entry.id} photo ${i + 1}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    {storageConfigured && (
+                      <button
+                        onClick={() => handleDeletePhoto(photo)}
+                        className="absolute top-1 right-1 p-1 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label={`Delete photo ${i + 1}`}
+                        title="Delete photo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {[1, 2].map(i => (
+                  <div
+                    key={i}
+                    className="aspect-square rounded-md bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center"
+                  >
+                    <Camera className="w-6 h-6 text-white/60" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-3 h-8 text-xs gap-1.5"
+              onClick={triggerFilePicker}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <Camera className="w-3.5 h-3.5" />
+                  Upload Photo
+                </>
+              )}
+            </Button>
+
+            {!storageConfigured && (
+              <p className="mt-2 text-[10px] text-muted-foreground text-center">
+                Demo mode — configure Supabase Storage to enable uploads.
+              </p>
+            )}
+            {photos.length > 0 && (
+              <p className="mt-2 text-[10px] text-muted-foreground text-center">
+                {photos.length} photo{photos.length > 1 ? 's' : ''} in {STORAGE_BUCKETS.DSRR_PHOTOS}/{entry.id}/
+              </p>
+            )}
           </TabsContent>
         </Tabs>
       </PaneBody>

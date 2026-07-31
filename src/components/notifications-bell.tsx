@@ -4,6 +4,10 @@ import { useState, useRef, useEffect } from 'react'
 import { Bell, CheckCircle2, AlertTriangle, Clock, FileText, ShieldAlert, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import {
+  sendNotification,
+  type NotificationType,
+} from '@/lib/notifications'
 
 interface Notification {
   id: string
@@ -13,13 +17,17 @@ interface Notification {
   time: string
   unread: boolean
   severity: 'info' | 'warning' | 'critical'
+  /** Maps the seeded notification to a sendNotification() type. */
+  notifyType?: NotificationType
+  /** A stable recipient identifier (user id, role, or email). */
+  recipient?: string
 }
 
 const NOTIFICATIONS: Notification[] = [
-  { id: 'n1', type: 'alert', title: 'NCR billing hold active', desc: 'NCR-034 dropped Max Billable Qty to 0 for BOQ 3.2', time: '5 min ago', unread: true, severity: 'critical' },
-  { id: 'n2', type: 'approval', title: 'PO awaiting approval', desc: 'PO-2410-018 — Cement 1,200 bags · NPR 1,104,000', time: '12 min ago', unread: true, severity: 'warning' },
-  { id: 'n3', type: 'reminder', title: 'RFI reply overdue', desc: 'RFI-067 — Rebar detailing at expansion joint · 3 days overdue', time: '1 hr ago', unread: true, severity: 'critical' },
-  { id: 'n4', type: 'approval', title: 'DSR review needed', desc: 'DSR #087 — Chainage 4+200 to 4+350 PCC submitted by Bikash R.', time: '2 hrs ago', unread: true, severity: 'warning' },
+  { id: 'n1', type: 'alert', title: 'NCR billing hold active', desc: 'NCR-034 dropped Max Billable Qty to 0 for BOQ 3.2', time: '5 min ago', unread: true, severity: 'critical', notifyType: 'ncr_hold', recipient: 'pm@omnisite' },
+  { id: 'n2', type: 'approval', title: 'PO awaiting approval', desc: 'PO-2410-018 — Cement 1,200 bags · NPR 1,104,000', time: '12 min ago', unread: true, severity: 'warning', notifyType: 'po_approval', recipient: 'pm@omnisite' },
+  { id: 'n3', type: 'reminder', title: 'RFI reply overdue', desc: 'RFI-067 — Rebar detailing at expansion joint · 3 days overdue', time: '1 hr ago', unread: true, severity: 'critical', notifyType: 'rfi_overdue', recipient: 'pm@omnisite' },
+  { id: 'n4', type: 'approval', title: 'DSR review needed', desc: 'DSR #087 — Chainage 4+200 to 4+350 PCC submitted by Bikash R.', time: '2 hrs ago', unread: true, severity: 'warning', notifyType: 'dsr_review', recipient: 'pm@omnisite' },
   { id: 'n5', type: 'document', title: 'Drawing revision issued', desc: 'KRR-P3-DR-DR-008 Rev A — Box culvert rebar details (Pending)', time: '3 hrs ago', unread: false, severity: 'info' },
   { id: 'n6', type: 'safety', title: 'Near-miss reported', desc: 'NM-012 — Tipper reversing without spotter at ch. 4+200', time: '4 hrs ago', unread: false, severity: 'warning' },
   { id: 'n7', type: 'reminder', title: 'Toolbox talk scheduled', desc: 'Today 15:00 — Excavation safety at ch. 4+200', time: '5 hrs ago', unread: false, severity: 'info' },
@@ -53,6 +61,41 @@ export function NotificationsBell() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // ─── Fire server-side notifications for overdue / critical items ──────────
+  // Runs once per session (guarded by sessionStorage) to avoid spamming the
+  // console / email / SMS channels on every re-render.
+  useEffect(() => {
+    const SESSION_KEY = 'omnisite-notifications-dispatched'
+    if (typeof window === 'undefined') return
+    if (window.sessionStorage.getItem(SESSION_KEY)) return
+
+    const overdue = items.filter(
+      n => n.unread && (n.severity === 'critical' || n.notifyType === 'rfi_overdue' || n.notifyType === 'dsr_review'),
+    )
+    if (overdue.length === 0) {
+      window.sessionStorage.setItem(SESSION_KEY, '1')
+      return
+    }
+
+    // Fire-and-forget — server side will log + dispatch via configured channels.
+    Promise.all(
+      overdue.map(n =>
+        n.notifyType
+          ? sendNotification(n.notifyType, n.desc, n.recipient || 'pm@omnisite', n.title, { id: n.id })
+          : Promise.resolve({ console: false, email: false, sms: false }),
+      ),
+    ).then(results => {
+      const dispatched = results.filter(r => r.console).length
+      if (dispatched > 0) {
+        console.log(`[NotificationsBell] dispatched ${dispatched} overdue notification(s)`)
+      }
+    }).catch(() => {
+      // Swallow — notification dispatch failure should never break the UI.
+    })
+
+    window.sessionStorage.setItem(SESSION_KEY, '1')
+  }, [items])
 
   const markAllRead = () => {
     setItems(prev => prev.map(n => ({ ...n, unread: false })))

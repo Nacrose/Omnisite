@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { ModuleId, MODULES, useApp } from '@/lib/app-store'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { QuickAddMenu } from '@/components/quick-add-menu'
@@ -11,9 +13,12 @@ import { HelpModal } from '@/components/help-modal'
 import { DockNav } from '@/components/dock-nav'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { useKeyboardShortcuts } from '@/lib/use-keyboard-shortcuts'
+import { useAuth } from '@/lib/auth'
+import { ROLE_TEMPLATES } from '@/lib/permissions'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Search, ChevronDown, PanelRight, Building2,
+  Search, ChevronDown, PanelRight, Building2, Loader2, LogOut,
 } from 'lucide-react'
 import { DashboardModule } from '@/components/modules/dashboard'
 import { BoqModule } from '@/components/modules/boq'
@@ -50,10 +55,73 @@ const MODULE_RENDERERS: Record<ModuleId, () => React.ReactNode> = {
 }
 
 export default function Home() {
-  const { activeModule, rightPaneOpen, toggleRightPane, setCommandOpen } = useApp()
+  const { activeModule, toggleRightPane, setCommandOpen } = useApp()
+  const { user, loading, signOut, isDemo } = useAuth()
+  const router = useRouter()
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
   const active = MODULES.find(m => m.id === activeModule)!
   const Renderer = MODULE_RENDERERS[activeModule]
   useKeyboardShortcuts()
+
+  // Close the user dropdown on outside click / Escape.
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUserMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [userMenuOpen])
+
+  // ─── Auth gating ──────────────────────────────────────────────────────────
+  // When Supabase is configured and the user is genuinely not signed in
+  // (loading finished, no user), bounce them to /login so they can sign in.
+  // In demo mode (no Supabase) the user is auto-set, so this never fires.
+  useEffect(() => {
+    if (isSupabaseConfigured() && !loading && !user) {
+      router.replace('/login')
+    }
+  }, [loading, user, router])
+
+  // Compute initials from the user's name (or email) for the avatar.
+  const displayName = user?.name || (loading ? 'Loading…' : 'Guest')
+  const roleLabel = user ? ROLE_TEMPLATES[user.role]?.label ?? user.role : ''
+  const initials = (() => {
+    if (!user?.name) return loading ? '…' : '?'
+    const parts = user.name.split(' ').filter(Boolean)
+    if (parts.length === 0) return '?'
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  })()
+
+  const handleSignOut = async () => {
+    setUserMenuOpen(false)
+    await signOut()
+    router.replace('/login')
+  }
+
+  // Show a small loading shell while the auth session is being resolved.
+  // (Demo mode resolves in ~150ms; real Supabase may take longer.)
+  if (loading && !user) {
+    return (
+      <div className="flex items-center justify-center h-screen w-screen bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="text-xs">Loading workspace…</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden workspace-bg theme-transition">
@@ -102,15 +170,52 @@ export default function Home() {
           <div className="w-px h-6 bg-border mx-0.5 hidden sm:block" />
 
           {/* User — avatar only on mobile */}
-          <button className="flex items-center gap-2 h-8 px-1.5 rounded-md hover:bg-accent">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-              AS
-            </div>
-            <div className="text-left leading-tight hidden lg:block">
-              <div className="text-xs font-medium">Arjun Sharma</div>
-              <div className="text-[10px] text-muted-foreground">Project Manager</div>
-            </div>
-          </button>
+          <div className="relative" ref={userMenuRef}>
+            <button
+              onClick={() => setUserMenuOpen(o => !o)}
+              className="flex items-center gap-2 h-8 px-1.5 rounded-md hover:bg-accent"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                {initials}
+              </div>
+              <div className="text-left leading-tight hidden lg:block">
+                <div className="text-xs font-medium flex items-center gap-1.5">
+                  {displayName}
+                  {isDemo && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-normal">
+                      demo
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-muted-foreground">{roleLabel}</div>
+              </div>
+            </button>
+
+            {userMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 w-56 pane border border-[var(--pane-divider)] rounded-lg shadow-2xl z-50 overflow-hidden"
+              >
+                <div className="px-3 py-2.5 border-b border-[var(--pane-divider)]">
+                  <div className="text-xs font-semibold truncate">{displayName}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
+                  <div className="mt-1 inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                    {roleLabel}
+                  </div>
+                </div>
+                <button
+                  role="menuitem"
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent text-left"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-muted-foreground" />
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Inspector toggle — desktop only */}
           <button
