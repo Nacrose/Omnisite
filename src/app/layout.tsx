@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   keywords: ["OmniSite", "Construction Management", "BOQ", "Rate Analysis", "Gantt", "DoR Norms", "FIDIC"],
   authors: [{ name: "OmniSite" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
   },
 };
 

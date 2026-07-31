@@ -69,13 +69,13 @@ export function useSyncedState<T>(
   }
 
   useEffect(() => {
-    if (!useSupabase) return
+    if (!useSupabase || !supabase) return
 
     let mounted = true
 
     const load = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabase!
           .from(supabaseTable)
           .select('*')
           .order('created_at', { ascending: true })
@@ -124,7 +124,7 @@ export function useSyncedState<T>(
 
     return () => {
       mounted = false
-      supabase.removeChannel(channel)
+      supabase!.removeChannel(channel)
     }
   }, [supabaseTable])
 
@@ -142,7 +142,7 @@ export function useSyncedState<T>(
           const row = toDb(item as Record<string, unknown>)
           const id = (item as Record<string, unknown>)[pk === 'id' ? 'id' : pk] || (item as Record<string, unknown>).id
           if (id) {
-            supabase.from(supabaseTable).upsert({ ...row, id })
+            supabase!.from(supabaseTable).upsert({ ...row, id })
           }
         }
       }

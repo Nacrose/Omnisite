@@ -99,7 +99,7 @@ export function ChatModule() {
 
     return () => {
       mounted = false
-      supabase.removeChannel(channel)
+      supabase!.removeChannel(channel)
     }
   }, [])
 
@@ -127,7 +127,7 @@ export function ChatModule() {
     setInput('')
 
     if (isSupabaseConfigured()) {
-      const { data, error } = await supabase.from('chat_messages').insert(newMsg).select()
+      const { data, error } = await supabase!.from('chat_messages').insert(newMsg).select()
       if (!error && data) {
         // Real-time will handle the update, but add locally too for instant feedback
         setMessages(prev => [...prev, data[0] as unknown as ChatMessage])

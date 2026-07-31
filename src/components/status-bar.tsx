@@ -84,9 +84,7 @@ export function StatusBar() {
             isConnected ? 'bg-emerald-500' : 'bg-amber-500'
           )} />
         </div>
-        <span>
-          {isConnected ? 'Real-time connected' : 'Live preview (simulated)'}
-        </span>
+        <span>{isConnected ? 'Cloud sync active' : 'Local mode'}</span>
       </span>
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
@@ -161,7 +159,7 @@ export function StatusBar() {
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 
-      <span className="font-mono">v0.9.6-beta</span>
+      <span className="font-mono">v1.0.0</span>
       <Toaster richColors position="top-center" />
     </footer>
   )
