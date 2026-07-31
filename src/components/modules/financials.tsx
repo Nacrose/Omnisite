@@ -15,6 +15,9 @@ import {
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { exportToCsv } from '@/lib/csv-export'
+import { toast } from 'sonner'
+import { Download } from 'lucide-react'
 
 interface CbsNode {
   code: string; name: string; budget: number; committed: number; actual: number; forecast: number; marginPct: number; level: number; children?: CbsNode[]; parentCode?: string
@@ -308,6 +311,13 @@ export function FinancialsModule() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Edit Committed/Actual/Forecast on leaf nodes
             </span>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+              exportToCsv('omnisite-financials.csv',
+                ['Code', 'Name', 'Budget', 'Committed', 'Actual', 'Forecast', 'Margin %'],
+                flattenCbs(cbsData).map(c => [c.code, c.name, c.budget, c.committed, c.actual, c.forecast, c.marginPct.toFixed(1)])
+              )
+              toast.success('Financials exported', { description: `${flattenCbs(cbsData).length} CBS nodes exported to CSV` })
+            }}><Download className="w-3.5 h-3.5" />Export CSV</Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Upload className="w-3.5 h-3.5" />Upload RA Bill</Button>
             <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Quick Expense</Button>
           </PaneHeader>

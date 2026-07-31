@@ -25,6 +25,7 @@ import { type BoqItem, BOQ_DATA, flatten } from './types'
 import { BoqGrid, ContextMenuItem, type BoqEditingState } from './boq-grid'
 import { BoqOutlineTree } from './boq-outline'
 import { RaInspector, NonPricedInspector } from './ra-inspector'
+import { exportToCsv } from '@/lib/csv-export'
 
 export function BoqModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
@@ -484,8 +485,13 @@ export function BoqModule() {
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
               <FileSpreadsheet className="w-3.5 h-3.5" />Export RA (DoR Format)
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
-              <Download className="w-3.5 h-3.5" />Export
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+              const flat = flatten(boqData)
+              exportToCsv('omnisite-boq.csv', ['Code', 'Description', 'Type', 'Qty', 'UOM', 'Rate (NPR)', 'Amount (NPR)'],
+                flat.map(i => [i.code, i.desc, i.type, i.qty, i.uom, i.rate, i.qty * i.rate]))
+              toast.success('BOQ exported', { description: `${flat.length} items exported to CSV` })
+            }}>
+              <Download className="w-3.5 h-3.5" />Export CSV
             </Button>
             <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Item</Button>
           </PaneHeader>

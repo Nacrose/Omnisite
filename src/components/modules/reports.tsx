@@ -245,7 +245,7 @@ export function ReportsModule() {
             </div>
             <Separator />
             <div className="text-[10px] text-muted-foreground">
-              Export uses server-side Headless Chrome (Puppeteer) for high-fidelity, print-ready PDF with Org Logo and Page Numbers.
+              Uses browser print dialog (Ctrl+P / Cmd+P). Save as PDF from the print dialog for a print-ready output with Org Logo and Page Numbers.
             </div>
           </PaneBody>
         </>

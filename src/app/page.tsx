@@ -9,6 +9,7 @@ import { ProjectSwitcher } from '@/components/project-switcher'
 import { StatusBar } from '@/components/status-bar'
 import { HelpModal } from '@/components/help-modal'
 import { DockNav } from '@/components/dock-nav'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { useKeyboardShortcuts } from '@/lib/use-keyboard-shortcuts'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -124,18 +125,20 @@ export default function Home() {
 
       {/* Module viewport — now full width */}
       <main className="flex-1 min-h-0 overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeModule}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="h-full"
-          >
-            <Renderer />
-          </motion.div>
-        </AnimatePresence>
+        <ErrorBoundary key={activeModule}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeModule}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="h-full"
+            >
+              <Renderer />
+            </motion.div>
+          </AnimatePresence>
+        </ErrorBoundary>
       </main>
 
       {/* Bottom status bar — desktop only */}
