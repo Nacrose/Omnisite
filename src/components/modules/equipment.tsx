@@ -54,6 +54,15 @@ const EQUIP: Equip[] = [
   },
 ]
 
+/**
+ * Effective billed hours for a piece of equipment.
+ * Only active equipment bills for 8 hours; idle/breakdown equipment costs 0
+ * (previously defaulted to 8 via `|| 8`, inflating daily cost by ~NPR 34K).
+ */
+function effectiveHours(e: Equip): number {
+  return e.hoursToday ?? (e.status === 'active' ? 8 : 0)
+}
+
 export function EquipmentModule() {
   const [selectedId, setSelectedId] = useState('E-001')
   const [equipList, setEquipList] = useSyncedState<Equip[]>(
@@ -66,7 +75,10 @@ export function EquipmentModule() {
     }
   ) as [Equip[], (v: Equip[] | ((prev: Equip[]) => Equip[])) => void, boolean]
   const selected = equipList.find(e => e.id === selectedId) ?? equipList[0]
-  const totalCost = equipList.reduce((s, e) => s + (e.chargeRate || 0) * (e.hoursToday || 8), 0)
+  // Only bill active equipment for hours. Idle/breakdown equipment costs 0
+  // (previously defaulted to 8 hours via `|| 8`, inflating the daily cost by
+  // ~NPR 34K and pushing wrong numbers to Financials ACWP).
+  const totalCost = equipList.reduce((s, e) => s + (e.chargeRate || 0) * effectiveHours(e), 0)
 
   return (
     <Workspace2Pane
@@ -139,8 +151,8 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
               </div>
               <div className="p-2.5 rounded-md border border-[var(--pane-divider)]">
                 <div className="text-[10px] text-muted-foreground">Today&apos;s cost</div>
-                <div className="text-base font-bold mt-0.5">NPR {(equip.chargeRate * (equip.hoursToday || 8)).toLocaleString()}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{equip.hoursToday || 8}h × NPR {equip.chargeRate}/day</div>
+                <div className="text-base font-bold mt-0.5">NPR {(equip.chargeRate * effectiveHours(equip)).toLocaleString()}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{effectiveHours(equip)}h × NPR {equip.chargeRate}/day</div>
               </div>
             </div>
 

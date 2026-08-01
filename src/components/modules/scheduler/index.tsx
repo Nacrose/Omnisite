@@ -46,6 +46,8 @@ export function SchedulerModule() {
   const [showCriticalOnly, setShowCriticalOnly] = useState(false)
   const [dragging, setDragging] = useState<DragState>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  // Search query — filters the task outline by id/name.
+  const [searchQuery, setSearchQuery] = useState('')
   // EOT / Critical Path Breach modal
   const [breachModal, setBreachModal] = useState(false)
   const [breachTask, setBreachTask] = useState<Task | null>(null)
@@ -165,10 +167,22 @@ export function SchedulerModule() {
   const renderTaskRows = () => {
     const rows: React.ReactNode[] = []
     // When showCriticalOnly is on, render only the filtered visible list.
+    // When searchQuery is non-empty, filter the tree by id/name (keeping ancestors).
     // Otherwise render the full tree.
-    const itemsToRender = showCriticalOnly
-      ? visible.map(v => v.task)
-      : tasksWithCpm
+    const q = searchQuery.trim().toLowerCase()
+    const filterTree = (items: Task[]): Task[] => {
+      if (!q) return items
+      const out: Task[] = []
+      for (const t of items) {
+        const childMatches = t.children ? filterTree(t.children) : []
+        if (t.id.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || childMatches.length > 0) {
+          out.push({ ...t, children: childMatches.length > 0 ? childMatches : t.children })
+        }
+      }
+      return out
+    }
+    const baseItems = showCriticalOnly ? visible.map(v => v.task) : tasksWithCpm
+    const itemsToRender = filterTree(baseItems)
     const walk = (items: Task[], depth: number) => {
       for (const t of items) {
         const isExpanded = expanded.has(t.id)
@@ -292,12 +306,12 @@ export function SchedulerModule() {
       leftPane={
         <>
           <PaneHeader title="Task Outline">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => setAddTaskOpen(true)}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <div className="px-3 py-2 border-b border-[var(--pane-divider)] space-y-2">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Filter tasks…" className="h-8 pl-7 text-xs" />
+              <Input placeholder="Filter tasks…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
             <label className="flex items-center gap-2 text-xs">
               <Switch checked={showCriticalOnly} onCheckedChange={setShowCriticalOnly} />
@@ -307,7 +321,7 @@ export function SchedulerModule() {
           <PaneBody className="py-2">{renderTaskRows()}</PaneBody>
           <div className="border-t border-[var(--pane-divider)] p-3 text-xs space-y-1">
             <div className="flex justify-between"><span className="text-muted-foreground">Total tasks</span><span className="font-mono">{flat.length}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Critical path</span><span className="font-mono text-red-500">4 tasks · 28 days</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Critical path</span><span className="font-mono text-red-500">{flat.filter(f => f.task.critical && f.task.type === 'Work').length} tasks · {flat.filter(f => f.task.critical && f.task.type === 'Work').reduce((s, f) => s + f.task.duration, 0)}w</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Project finish</span><span className="font-mono">Wk 48</span></div>
           </div>
         </>
@@ -323,7 +337,7 @@ export function SchedulerModule() {
               <Switch checked={showResources} onCheckedChange={setShowResources} />
               <span className="text-muted-foreground">Resource usage</span>
             </label>
-            <Button variant="ghost" size="sm" className="h-7 text-xs"><Gauge className="w-3.5 h-3.5" />Level</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.info('Resource levelling', { description: 'Reschedules tasks to resolve over-allocation of Mason/Mazdoor resources.' })}><Gauge className="w-3.5 h-3.5" />Level</Button>
             <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => setAddTaskOpen(true)}><Plus className="w-3.5 h-3.5" />Task</Button>
           </PaneHeader>
           <GanttCanvas

@@ -89,6 +89,8 @@ export function BoqModule() {
   // Non-persistent UI state
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<BoqEditingState | null>(null)
+  // Search query — filters the tree by code/description.
+  const [searchQuery, setSearchQuery] = useState('')
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
   // Drag-and-drop state
@@ -212,6 +214,28 @@ export function BoqModule() {
   }, [undo, redo])
 
   const allFlat = flatten(boqData)
+
+  // Apply the search filter: when query is non-empty, filter the tree to
+  // items whose code or description matches (and their ancestor headings).
+  const filteredBoqData = (() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return boqData
+    const matches = (item: BoqItem) =>
+      item.code.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q)
+    // Recursively filter: keep a node if it matches OR any descendant matches.
+    const filterTree = (items: BoqItem[]): BoqItem[] => {
+      const out: BoqItem[] = []
+      for (const it of items) {
+        const childMatches = it.children ? filterTree(it.children) : []
+        if (matches(it) || childMatches.length > 0) {
+          out.push({ ...it, children: childMatches.length > 0 ? childMatches : it.children })
+        }
+      }
+      return out
+    }
+    return filterTree(boqData)
+  })()
+
   const selectedLeaf = allFlat.find(i => i.id === selectedId) ?? allFlat[2]
 
   // Live contract total — sum of qty × rate for all non-heading items
@@ -478,7 +502,7 @@ export function BoqModule() {
             {/* Search — moved from the old left outline pane */}
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Filter BOQ items…" className="h-7 w-44 pl-7 text-xs" />
+              <Input placeholder="Filter BOQ items…" className="h-7 w-44 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
             <span className="hidden lg:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -548,8 +572,8 @@ export function BoqModule() {
               onDragCancel={handleDragCancel}
             >
               <BoqGrid
-                items={boqData}
-                expanded={expanded}
+                items={filteredBoqData}
+                expanded={searchQuery.trim() ? new Set(allFlat.map(i => i.id)) : expanded}
                 selectedId={selectedId}
                 selected={selected}
                 editing={editing}

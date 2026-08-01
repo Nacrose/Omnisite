@@ -140,7 +140,7 @@ function WorkerInspector({ worker }: { worker: Worker }) {
             </div>
             {worker.geoFence === false && worker.status === 'on-site' ? (
               <div className="text-[10px] text-amber-700 dark:text-amber-300">
-                ⚠ Clock-in GPS outside site perimeter (450m). Foreman verification required.
+                ⚠ Clock-in GPS outside site perimeter (500m). Foreman verification required.
               </div>
             ) : (
               <div className="text-[10px] text-muted-foreground">

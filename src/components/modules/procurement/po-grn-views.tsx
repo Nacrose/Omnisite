@@ -149,11 +149,14 @@ export function GrnCenterView() {
 }
 
 export function StockCenterView() {
+  // Compute live stats from STOCK so the header never lies.
+  const stockValue = STOCK.reduce((s, x) => s + x.onHand * x.avgCost, 0)
+  const warehouseCount = new Set(STOCK.map(s => s.warehouse)).size
   return (
     <>
       <div className="px-4 py-3 border-b border-[var(--pane-divider)] bg-secondary/20 flex items-center gap-3 text-xs">
-        <Badge variant="outline"><Boxes className="w-3 h-3 mr-1" />5 SKUs · 3 warehouses</Badge>
-        <span className="text-muted-foreground">Total stock value: <span className="font-mono font-semibold text-foreground">NPR 1,924,840</span></span>
+        <Badge variant="outline"><Boxes className="w-3 h-3 mr-1" />{STOCK.length} SKUs · {warehouseCount} warehouses</Badge>
+        <span className="text-muted-foreground">Total stock value: <span className="font-mono font-semibold text-foreground">NPR {stockValue.toLocaleString('en-IN')}</span></span>
       </div>
       <PaneBody className="px-0">
         <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">

@@ -40,6 +40,8 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
     background: '',
   })
   const [rfiSaved, setRfiSaved] = useState(false)
+  // Stable RFI ID — generated once per mount so it doesn't change on re-render.
+  const [rfiId] = useState(() => Math.floor(Math.random() * 9000) + 1000)
 
   // ─── Photo upload state ───────────────────────────────────────────────────
   // Photos are stored per-DSR entry in a Supabase Storage folder named after
@@ -349,8 +351,8 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
             {rfiSaved ? (
               <div className="p-8 text-center">
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-                <div className="text-sm font-semibold">RFI-{Math.floor(Math.random() * 9000) + 1000} created</div>
-                <div className="text-xs text-muted-foreground mt-1">Draft saved to Correspondence module. Consultant notified.</div>
+                <div className="text-sm font-semibold">RFI-{rfiId} created</div>
+                <div className="text-xs text-muted-foreground mt-1">Draft saved — switch to the RFI Register tab to review and submit.</div>
               </div>
             ) : (
               <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">

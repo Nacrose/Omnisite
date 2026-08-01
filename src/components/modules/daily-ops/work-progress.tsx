@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import {
@@ -13,6 +14,8 @@ export function WorkProgressView({ entries, selectedId, onSelect }: {
   entries: DsrEntry[]; selectedId: string; onSelect: (id: string) => void
 }) {
   const selected = entries.find(e => e.id === selectedId)
+  // Stable ITR ID — generated once per mount so it doesn't change on every render.
+  const [itrId] = useState(() => Math.floor(Math.random() * 9000) + 1000)
   return (
     <>
       <PaneHeader title="Work Progress · Auto-generated from Schedule">
@@ -26,7 +29,7 @@ export function WorkProgressView({ entries, selectedId, onSelect }: {
           <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
           <span className="flex-1">
             <span className="font-medium">ITR auto-prompted:</span>
-            <span className="text-muted-foreground"> {selected.id} marked completed → Inspection Test Request ITR-{Math.floor(Math.random() * 9000) + 1000} auto-generated for consultant approval.</span>
+            <span className="text-muted-foreground"> {selected.id} marked completed → Inspection Test Request ITR-{itrId} auto-generated for consultant approval.</span>
           </span>
           <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => toast.success('Opening ITR', { description: 'Redirecting to Q&S module' })}>
             View ITR

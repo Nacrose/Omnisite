@@ -55,8 +55,11 @@ export function QsModule() {
       primaryKey: 'id',
     }
   ) as [QsItem[], (v: QsItem[] | ((prev: QsItem[]) => QsItem[])) => void, boolean]
-  const selected = items.find(i => i.id === selectedId) ?? items[0]
   const filtered = filter === 'All' ? items : items.filter(i => i.type === filter)
+  // Inspector should follow the filter — if the selected item isn't in the
+  // filtered list, fall back to the first filtered item instead of showing
+  // a stale selection from a different category.
+  const selected = filtered.find(i => i.id === selectedId) ?? filtered[0]
 
   // Advance an NCR to the next workflow status.
   // Guarded: only NCR-type items can be advanced. Punch / Incident /
@@ -125,14 +128,22 @@ export function QsModule() {
           </PaneBody>
           <div className="border-t border-[var(--pane-divider)] p-3 space-y-1.5 text-xs">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Billing Holds</div>
-            <div className="p-2 rounded-md bg-red-500/10 border border-red-500/30">
-              <div className="flex items-center gap-1.5 text-red-600 font-medium"><Lock className="w-3 h-3" />1 active hold</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">NCR-034 · BOQ 3.2 · Max billable = 0</div>
-            </div>
+            {(() => {
+              const holds = items.filter(i => i.billingHold)
+              if (holds.length === 0) {
+                return <div className="p-2 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-[11px]">No active billing holds</div>
+              }
+              return holds.map(h => (
+                <div key={h.id} className="p-2 rounded-md bg-red-500/10 border border-red-500/30">
+                  <div className="flex items-center gap-1.5 text-red-600 font-medium"><Lock className="w-3 h-3" />{h.id} hold active</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">{h.title}</div>
+                </div>
+              ))
+            })()}
           </div>
         </>
       }
-      rightPane={<QsInspector item={selected} onAdvance={advanceNcr} onSaveCap={saveCap} />}
+      rightPane={<QsInspector key={selected.id} item={selected} onAdvance={advanceNcr} onSaveCap={saveCap} />}
       leftPaneWidth="240px"
       rightPaneWidth="380px"
     />

@@ -15,7 +15,14 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
 
   const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
   const retention = earned * (sc.retentionPct / 100)
-  const netPayable = earned - sc.advancePaid - retention - sc.reworkCost
+  // Match the Running Bill tab's formula (includes TDS, other deductibles,
+  // and material + consumable chargebacks) so the two tabs agree.
+  const tds = sc.customDeductibles.find(d => d.type === 'tds')
+  const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
+  const otherDeductibleTotal = sc.customDeductibles
+    .filter(d => d.type !== 'tds')
+    .reduce((sum, d) => sum + d.amount, 0)
+  const netPayable = earned - sc.advancePaid - retention - sc.reworkCost - tdsAmount - otherDeductibleTotal
 
   // Material efficiency
   let matEfficiency = 100
@@ -73,8 +80,16 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
         <div className="space-y-1.5">
           <ComplianceRow label="PAN" value={sc.pan} status="ok" />
           <ComplianceRow label="GST" value={sc.gst} status="ok" />
-          <ComplianceRow label="Insurance" value={`Expires ${sc.insuranceExpiry}`} status="ok" />
-          <ComplianceRow label="Labour License" value={`Expires ${sc.labourLicenseExpiry}`} status="warn" />
+          {/* Date-aware compliance status: >6 months = ok, 3-6 months = warn, <3 months = exp */}
+          {(() => {
+            const daysTo = (iso: string) => (Date.parse(iso) - Date.now()) / 86_400_000
+            const insStatus = daysTo(sc.insuranceExpiry) < 0 ? 'exp' : daysTo(sc.insuranceExpiry) < 90 ? 'exp' : daysTo(sc.insuranceExpiry) < 180 ? 'warn' : 'ok'
+            const licStatus = daysTo(sc.labourLicenseExpiry) < 0 ? 'exp' : daysTo(sc.labourLicenseExpiry) < 90 ? 'exp' : daysTo(sc.labourLicenseExpiry) < 180 ? 'warn' : 'ok'
+            return <>
+              <ComplianceRow label="Insurance" value={`Expires ${sc.insuranceExpiry}`} status={insStatus as 'ok' | 'warn' | 'exp'} />
+              <ComplianceRow label="Labour License" value={`Expires ${sc.labourLicenseExpiry}`} status={licStatus as 'ok' | 'warn' | 'exp'} />
+            </>
+          })()}
         </div>
       </div>
 

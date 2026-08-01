@@ -339,7 +339,10 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 <ArrowRight className="w-3.5 h-3.5" />Open linked DSR ({rfi.linkedDsr})
               </Button>
             )}
-            {rfi.costImpact && rfi.costImpact.includes('VO') && (
+            {/* Show the Convert-to-VO button whenever there's a non-trivial cost impact
+                (not just when the string contains 'VO' — "potential" costs are exactly
+                the case where a VO would be filed). */}
+            {rfi.costImpact && rfi.costImpact !== 'None' && (
               <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2 text-amber-600">
                 <AlertTriangle className="w-3.5 h-3.5" />Convert to Variation Order
               </Button>

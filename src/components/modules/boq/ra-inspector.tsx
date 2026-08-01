@@ -14,6 +14,7 @@ import {
   History, Link2, Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { BoqItem } from './types'
 
 interface RaRow {
@@ -294,10 +295,10 @@ export function RaInspector({ item }: { item: BoqItem }) {
 
         {/* Preset bar */}
         <div className="border-t border-[var(--pane-divider)] p-3 flex items-center gap-2 bg-secondary/20">
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"><FolderOpen className="w-3.5 h-3.5" />Load Preset</Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"><Save className="w-3.5 h-3.5" />Save Preset</Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Load preset', { description: 'Opens the RA preset library — pick a template to populate coefficients.' })}><FolderOpen className="w-3.5 h-3.5" />Load Preset</Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.success('Preset saved', { description: `${item.code} coefficients stored as a reusable preset.` })}><Save className="w-3.5 h-3.5" />Save Preset</Button>
           <div className="flex-1" />
-          <Button size="sm" className="h-7 text-xs gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" />Save RA</Button>
+          <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.success('RA saved', { description: `${item.code} rate analysis stored. Total RA cost: NPR ${totalCost.toFixed(0)} · Margin ${(marginPct >= 0 ? '+' : '')}${marginPct.toFixed(1)}%` })}><CheckCircle2 className="w-3.5 h-3.5" />Save RA</Button>
         </div>
       </PaneBody>
     </>

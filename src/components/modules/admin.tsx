@@ -44,21 +44,24 @@ const ROLES = [
 
 export function AdminModule() {
   const [cat, setCat] = useState<Cat>('users')
+  // Compute counts from the real arrays so badges never lie.
+  const totalUsers = ROLES.reduce((s, r) => s + r.users, 0)
+  const CATS: { id: Cat; name: string; icon: typeof Users; count: number }[] = [
+    { id: 'users', name: 'User Management', icon: Users, count: totalUsers },
+    { id: 'materials', name: 'Material Master', icon: Package, count: MATERIALS.length },
+    { id: 'vendors', name: 'Vendor Master', icon: FileText, count: VENDORS.length },
+    { id: 'rates', name: '3-Tier Rate Library', icon: Zap, count: 3 }, // 3 tiers
+    { id: 'presets', name: 'RA Preset Library', icon: SettingsIcon, count: 5 }, // 5 preset rows
+  ]
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Master Data">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => {}}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
-            {([
-              { id: 'users' as Cat, name: 'User Management', icon: Users, count: 16 },
-              { id: 'materials' as Cat, name: 'Material Master', icon: Package, count: 142 },
-              { id: 'vendors' as Cat, name: 'Vendor Master', icon: FileText, count: 38 },
-              { id: 'rates' as Cat, name: '3-Tier Rate Library', icon: Zap, count: 4 },
-              { id: 'presets' as Cat, name: 'RA Preset Library', icon: SettingsIcon, count: 24 },
-            ]).map(c => {
+            {CATS.map(c => {
               const Icon = c.icon
               return (
                 <button key={c.id} onClick={() => setCat(c.id)} className={cn('w-full flex items-center gap-2.5 h-9 px-3 text-xs', cat === c.id ? 'bg-accent border-l-2 border-primary' : 'hover:bg-accent/50 border-l-2 border-transparent')}>

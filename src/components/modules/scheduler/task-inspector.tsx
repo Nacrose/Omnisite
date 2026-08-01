@@ -56,7 +56,7 @@ export function TaskInspector({ task }: { task: Task }) {
               </div>
             </div>
             <div>
-              <label className="text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">Duration (days)</label>
+              <label className="text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">Duration (weeks)</label>
               <Input className="mt-1 h-8 text-xs" defaultValue={task.duration} />
             </div>
             <div>

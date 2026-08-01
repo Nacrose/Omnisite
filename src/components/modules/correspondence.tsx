@@ -35,7 +35,9 @@ export function CorrespondenceModule() {
   const [filter, setFilter] = useState<Filter>('All')
   const [selectedId, setSelectedId] = useState('L-001')
   const filtered = filter === 'All' ? LETTERS : LETTERS.filter(l => l.type === filter)
-  const selected = LETTERS.find(l => l.id === selectedId) ?? LETTERS[0]
+  // Inspector should follow the filter — if the selected letter isn't in the
+  // filtered list, fall back to the first filtered letter.
+  const selected = filtered.find(l => l.id === selectedId) ?? filtered[0]
 
   return (
     <Workspace3Pane

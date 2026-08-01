@@ -47,10 +47,10 @@ const BACKLOG = [
   { name: '>14 days', value: 6, color: 'var(--critical)' },
 ]
 
-const KPIs: { label: string; value: string; delta: string; trend: 'up' | 'down'; desc: string; module: ModuleId }[] = [
+const KPIs: { label: string; value: string; delta: string; trend: 'up' | 'down'; desc: string; module: ModuleId; /** When true, a negative delta is good (e.g. EAC). */ invertColor?: boolean }[] = [
   { label: 'SPI', value: '0.97', delta: '-0.03', trend: 'down', desc: 'Schedule Performance', module: 'scheduler' },
   { label: 'CPI', value: '1.04', delta: '+0.02', trend: 'up', desc: 'Cost Performance', module: 'financials' },
-  { label: 'EAC', value: 'NPR 487.2M', delta: '-12.4M', trend: 'up', desc: 'Estimate at Completion', module: 'financials' },
+  { label: 'EAC', value: 'NPR 487.2M', delta: '-12.4M', trend: 'down', desc: 'Estimate at Completion (lower is better)', module: 'financials', invertColor: true },
   { label: 'Margin', value: '14.8%', delta: '+0.6%', trend: 'up', desc: 'Project gross margin', module: 'financials' },
 ]
 
@@ -59,7 +59,7 @@ const URGENT_ACTIONS: { type: string; desc: string; who: string; due: string; se
   { type: 'DSR Review', desc: 'DSR #087 — Chainage 4+200 to 4+350 PCC', who: 'Bikash R.', due: 'Today', severity: 'high', module: 'daily-ops' },
   { type: 'NCR Hold', desc: 'NCR-034 — Box culvert rebar cover < 40mm', who: 'Engineer', due: 'Open', severity: 'critical', module: 'qs' },
   { type: 'Variation', desc: 'SI-022 — Extra excavation at chainage 2+850', who: 'PM', due: '2 days', severity: 'medium', module: 'correspondence' },
-  { type: 'RFI Reply', desc: 'RFI-067 — Rebar detailing at expansion joint', who: 'Consultant', due: 'Overdue 3d', severity: 'critical', module: 'daily-ops' },
+  { type: 'RFI Reply', desc: 'RFI-067 — Rebar detailing at expansion joint', who: 'Consultant', due: 'Overdue 4d', severity: 'critical', module: 'daily-ops' },
 ]
 
 const GANTT_MINI_TASKS = [
@@ -73,6 +73,9 @@ const GANTT_MINI_TASKS = [
 
 export function DashboardModule() {
   const { setActiveModule } = useApp()
+  // Compute totals from the real arrays so the badges never lie.
+  const backlogTotal = BACKLOG.reduce((s, b) => s + b.value, 0)
+  const miniCritical = GANTT_MINI_TASKS.filter(t => t.name.toLowerCase().includes('culvert')).length
   const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
     // Use setTimeout to defer the initial time set — avoids synchronous setState in effect
@@ -101,8 +104,8 @@ export function DashboardModule() {
               <span className="text-muted-foreground">·</span>
               <span>{now ? now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>
             </div>
-            <Button variant="outline" size="sm"><Cloud className="w-4 h-4 mr-1.5" />24°C · Partly Cloudy</Button>
-            <Button size="sm"><Plus className="w-4 h-4 mr-1.5" />New Report</Button>
+            <Button variant="outline" size="sm" onClick={() => setActiveModule('daily-ops')}><Cloud className="w-4 h-4 mr-1.5" />24°C · Partly Cloudy</Button>
+            <Button size="sm" onClick={() => setActiveModule('reports')}><Plus className="w-4 h-4 mr-1.5" />New Report</Button>
           </div>
         </div>
 
@@ -119,7 +122,7 @@ export function DashboardModule() {
               <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer group hover:border-primary/40">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{k.label}</span>
-                  <span className={`text-xs font-medium flex items-center gap-0.5 ${k.trend === 'up' ? 'delta-up' : 'delta-down'}`}>
+                  <span className={`text-xs font-medium flex items-center gap-0.5 ${(k.invertColor ? k.delta.startsWith('-') : k.trend === 'up') ? 'delta-up' : 'delta-down'}`}>
                     {k.trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                     {k.delta}
                   </span>
@@ -143,7 +146,7 @@ export function DashboardModule() {
                 <h3 className="text-sm font-semibold flex items-center gap-2"><Gauge className="w-4 h-4 text-primary" />Project Health · Mini Schedule</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Baseline vs Actual · Today line marked in red</p>
               </div>
-              <Badge variant="outline" className="text-xs">6 active · 1 critical</Badge>
+              <Badge variant="outline" className="text-xs">{GANTT_MINI_TASKS.length} active · {miniCritical} critical</Badge>
             </div>
             <MiniGantt />
           </Card>
@@ -236,7 +239,7 @@ export function DashboardModule() {
                 <Separator className="my-2" />
                 <div className="flex items-center gap-2 text-sm">
                   <span className="flex-1 text-muted-foreground">Total open</span>
-                  <span className="font-bold">66</span>
+                  <span className="font-bold">{backlogTotal}</span>
                 </div>
               </div>
             </div>
@@ -272,13 +275,13 @@ export function DashboardModule() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-md bg-secondary/40">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="w-3.5 h-3.5" />Manpower on site</div>
-                  <div className="text-xl font-bold mt-1">186</div>
-                  <div className="text-[10px] text-muted-foreground">+12 vs yesterday</div>
+                  <div className="text-xl font-bold mt-1">83</div>
+                  <div className="text-[10px] text-muted-foreground">5 trades · see Daily Ops</div>
                 </div>
                 <div className="p-3 rounded-md bg-secondary/40">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Truck className="w-3.5 h-3.5" />Active equipment</div>
-                  <div className="text-xl font-bold mt-1">14</div>
-                  <div className="text-[10px] text-muted-foreground">2 idle · 1 breakdown</div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Truck className="w-3.5 h-3.5" />Equipment active</div>
+                  <div className="text-xl font-bold mt-1">3</div>
+                  <div className="text-[10px] text-muted-foreground">1 idle · 1 breakdown · see Equipment</div>
                 </div>
               </div>
               <Separator />

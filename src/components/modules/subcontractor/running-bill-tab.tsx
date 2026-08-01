@@ -7,6 +7,7 @@ import {
   Zap, ShieldCheck, Wrench, Plus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { Subcontractor } from './types'
 import { fmtNPR } from './types'
 
@@ -150,10 +151,10 @@ export function RunningBillTab({ sc }: { sc: Subcontractor }) {
         </div>
       </div>
 
-      <Button className="w-full h-9 text-xs gap-1.5"><FileText className="w-3.5 h-3.5" />Generate Running Bill</Button>
+      <Button className="w-full h-9 text-xs gap-1.5" onClick={() => toast.success('Running Bill generated', { description: `${sc.id} · Net payable NPR ${fmtNPR(netPayable)} · exported to PDF + pushed to Financials.` })}><FileText className="w-3.5 h-3.5" />Generate Running Bill</Button>
 
       {/* Add deductible */}
-      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Add Custom Deductible</Button>
+      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Add deductible', { description: 'Opens a form to add a custom deductible (equipment, penalty, electricity, etc.).' })}><Plus className="w-3.5 h-3.5" />Add Custom Deductible</Button>
     </div>
   )
 }

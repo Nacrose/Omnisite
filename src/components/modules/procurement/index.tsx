@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, ReqItem, Tab } from './types'
+import { Po, ReqItem, Tab, STOCK } from './types'
 import { INITIAL_POS, INITIAL_REQS } from './types'
 import { ReqCenterView } from './req-view'
 import { PoCenterView, GrnCenterView, StockCenterView, MinCenterView } from './po-grn-views'
@@ -139,46 +139,64 @@ export function ProcurementModule() {
         leftPane={
           <>
             <PaneHeader title="Procurement">
-              <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New requisition', { description: 'Opens the requisition builder.' })}><Plus className="w-3.5 h-3.5" /></Button>
             </PaneHeader>
             <div className="py-2">
-              {([
-                { id: 'req', name: 'Requisitions', count: reqs.length, icon: FileText },
-                { id: 'po', name: 'Purchase Orders', count: pos.length, icon: Package },
-                { id: 'grn', name: 'GRN / 3-Way Match', count: 4, icon: CheckCircle2 },
-                { id: 'stock', name: 'Live Stock', count: 5, icon: Boxes },
-                { id: 'min', name: 'Material Issues (MIN)', count: 8, icon: ArrowRight },
-              ] as { id: Tab; name: string; count: number; icon: typeof FileText }[]).map(t => {
-                const Icon = t.icon
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => setTab(t.id)}
-                    className={cn(
-                      'w-full flex items-center gap-2.5 h-9 px-4 text-xs transition-colors',
-                      tab === t.id ? 'bg-accent border-l-2 border-primary' : 'hover:bg-accent/50 border-l-2 border-transparent'
-                    )}
-                  >
-                    <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="flex-1 text-left">{t.name}</span>
-                    <Badge variant="secondary" className="text-[9px] h-4 px-1">{t.count}</Badge>
-                  </button>
-                )
-              })}
-            </div>
-            <div className="mt-auto border-t border-[var(--pane-divider)] p-3 space-y-1 text-xs">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Procurement Snapshot</div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Open POs</span><span className="font-mono">12</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Committed cost</span><span className="font-mono">NPR 18.4M</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Stock value</span><span className="font-mono">NPR 1.92M</span></div>
+              {/* Compute counts from real arrays so badges never lie. */}
+              {(() => {
+                const stockValue = STOCK.reduce((s, x) => s + x.onHand * x.avgCost, 0)
+                const committed = pos.reduce((s, p) => s + p.value, 0)
+                const openPos = pos.filter(p => p.status !== 'Delivered').length
+                const tabs = [
+                  { id: 'req' as Tab, name: 'Requisitions', count: reqs.length, icon: FileText },
+                  { id: 'po' as Tab, name: 'Purchase Orders', count: pos.length, icon: Package },
+                  { id: 'grn' as Tab, name: 'GRN / 3-Way Match', count: 4, icon: CheckCircle2 },
+                  { id: 'stock' as Tab, name: 'Live Stock', count: STOCK.length, icon: Boxes },
+                  { id: 'min' as Tab, name: 'Material Issues (MIN)', count: 3, icon: ArrowRight },
+                ]
+                return <>
+                  {tabs.map(t => {
+                    const Icon = t.icon
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setTab(t.id)}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 h-9 px-4 text-xs transition-colors',
+                          tab === t.id ? 'bg-accent border-l-2 border-primary' : 'hover:bg-accent/50 border-l-2 border-transparent'
+                        )}
+                      >
+                        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="flex-1 text-left">{t.name}</span>
+                        <Badge variant="secondary" className="text-[9px] h-4 px-1">{t.count}</Badge>
+                      </button>
+                    )
+                  })}
+                  <div className="mt-auto border-t border-[var(--pane-divider)] p-3 space-y-1 text-xs">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Procurement Snapshot</div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Open POs</span><span className="font-mono">{openPos}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Committed cost</span><span className="font-mono">NPR {(committed / 1_000_000).toFixed(2)}M</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Stock value</span><span className="font-mono">NPR {(stockValue / 1_000_000).toFixed(2)}M</span></div>
+                  </div>
+                </>
+              })()}
             </div>
           </>
         }
         centerPane={
           <>
             <PaneHeader title={tab === 'req' ? 'Requisitions & Comparative Statement' : tab === 'po' ? 'Purchase Orders' : tab === 'grn' ? 'GRN & 3-Way Match' : tab === 'stock' ? 'Live Stock Dashboard' : 'Material Issue Notes'}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Search className="w-3.5 h-3.5" />Search</Button>
-              <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => tab === 'grn' ? toast.info('GRN Receiving Form', { description: 'Select a PO, enter received qty, attach delivery note. System verifies against PO qty.' }) : undefined}><Plus className="w-3.5 h-3.5" />New {tab === 'req' ? 'Requisition' : tab === 'po' ? 'Consolidated PO' : tab === 'grn' ? 'GRN' : tab === 'stock' ? 'Material' : 'MIN'}</Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Search', { description: 'Search across requisitions, POs, GRNs, and MINs.' })}><Search className="w-3.5 h-3.5" />Search</Button>
+              <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+                const labels: Record<Tab, string> = {
+                  req: 'New requisition — select material, qty, vendors',
+                  po: 'New purchase order — pick vendor + line items',
+                  grn: 'GRN Receiving Form — select a PO, enter received qty, attach delivery note. System verifies against PO qty.',
+                  stock: 'Add material to stock — code, qty, warehouse',
+                  min: 'New Material Issue Note — pick task, material, qty',
+                }
+                toast.info(`New ${tab.toUpperCase()}`, { description: labels[tab] })
+              }}><Plus className="w-3.5 h-3.5" />New {tab === 'req' ? 'Requisition' : tab === 'po' ? 'Consolidated PO' : tab === 'grn' ? 'GRN' : tab === 'stock' ? 'Material' : 'MIN'}</Button>
             </PaneHeader>
 
             {tab === 'req' && (

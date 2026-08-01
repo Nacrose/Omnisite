@@ -142,7 +142,7 @@ export function GanttCanvas({
                             style={{ left, width }}
                           >
                             <div className="absolute inset-y-0 left-0 bg-black/20" style={{ width: `${t.progress}%` }} />
-                            <span className="relative z-10 truncate pointer-events-none">{t.duration}d · {t.progress}%</span>
+                            <span className="relative z-10 truncate pointer-events-none">{t.duration}w · {t.progress}%</span>
                             {/* Resize handles — left edge moves, right edge resizes duration */}
                             {t.type !== 'Summary' && (
                               <>
@@ -159,7 +159,7 @@ export function GanttCanvas({
                             {/* Hover tooltip */}
                             {isHovered && !isDragging && (
                               <div className="absolute -top-7 left-1/2 -translate-x-1/2 pane border border-[var(--pane-divider)] rounded px-1.5 py-0.5 text-[9px] text-foreground whitespace-nowrap shadow-md z-40 pointer-events-none">
-                                Wk {t.start + 1} → Wk {t.start + t.duration + 1} · drag body to move, edges to resize
+                                Wk {t.start + 1} → Wk {t.start + t.duration + 1} · drag body or left edge to move, right edge to resize
                               </div>
                             )}
                           </div>
