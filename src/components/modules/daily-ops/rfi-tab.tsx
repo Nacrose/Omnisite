@@ -121,7 +121,7 @@ export function RfiTab() {
               variant="ghost"
               size="sm"
               className="h-7"
-              onClick={() => toast.info('New RFI', { description: 'Draft form — link a DSR entry, fill question + impact, route to consultant.' })}
+              onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}
             >
               <Plus className="w-3.5 h-3.5" />
             </Button>
@@ -328,7 +328,7 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 variant="default"
                 size="sm"
                 className="w-full h-8 text-xs justify-start gap-2"
-                onClick={() => toast.info('Log consultant reply', { description: `${rfi.number} — reply form will record the consultant response and link it to this RFI.` })}
+                onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}
               >
                 <Mail className="w-3.5 h-3.5" />Log Consultant Reply
               </Button>

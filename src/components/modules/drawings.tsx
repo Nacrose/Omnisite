@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { exportToCsv } from '@/lib/csv-export'
 import {
   useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef,
 } from '@/components/ui/table-utils'
@@ -85,7 +86,7 @@ export function DrawingsModule() {
       leftPane={
         <>
           <PaneHeader title="Disciplines">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Upload drawing', { description: 'Opens the drawing upload form (PDF/DWG).' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
             <div className="relative">
@@ -109,8 +110,12 @@ export function DrawingsModule() {
       centerPane={
         <>
           <PaneHeader title={`Drawings Register · ${filtered.length} of ${DWS.length}`}>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Upload drawing', { description: 'Opens the drawing upload form.' })}><Upload className="w-3.5 h-3.5" />Upload</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Export register', { description: 'Exports the drawing register to CSV.' })}><Download className="w-3.5 h-3.5" />Export</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Upload className="w-3.5 h-3.5" />Upload</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+              exportToCsv('omnisite-drawings.csv', ['Number', 'Title', 'Discipline', 'Revision', 'Date', 'Size', 'Status'],
+                filtered.map(d => [d.number, d.title, d.discipline, d.revision, d.date, d.size, d.status]))
+              toast.success('Drawings exported', { description: `${filtered.length} drawings exported to CSV` })
+            }}><Download className="w-3.5 h-3.5" />Export</Button>
           </PaneHeader>
           <StickyTableShell minWidth={680}>
             <StickyTableHeader>
@@ -210,13 +215,13 @@ function DrawingInspector({ dwg }: { dwg: Dwg }) {
 
             {/* Top-right controls */}
             <div className="absolute top-2 right-2 flex gap-1">
-              <Button size="sm" variant="secondary" className="h-7 w-7 p-0" title="Fullscreen" onClick={() => toast.info('Fullscreen', { description: 'Opens the drawing in a fullscreen viewer.' })}><Maximize2 className="w-3.5 h-3.5" /></Button>
+              <Button size="sm" variant="secondary" className="h-7 w-7 p-0" title="Fullscreen" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Maximize2 className="w-3.5 h-3.5" /></Button>
             </div>
 
             {/* Markup toolbar */}
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 pane border border-[var(--pane-divider)] rounded-md p-1 shadow-md">
               {['✎', '▢', '◯', '↔', 'T'].map((t, i) => (
-                <button key={i} className="w-7 h-7 rounded text-sm hover:bg-accent flex items-center justify-center" onClick={() => toast.info('Markup tool', { description: `Selected: ${t === '✎' ? 'Pen' : t === '▢' ? 'Rectangle' : t === '◯' ? 'Circle' : t === '↔' ? 'Measure' : 'Text'}` })} title={`Markup: ${t}`}>{t}</button>
+                <button key={i} className="w-7 h-7 rounded text-sm hover:bg-accent flex items-center justify-center" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })} title={`Markup: ${t}`}>{t}</button>
               ))}
             </div>
           </div>
@@ -286,7 +291,7 @@ function DrawingInspector({ dwg }: { dwg: Dwg }) {
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5"><Link2 className="w-3 h-3" />Bi-Directional Links</div>
             <div className="space-y-1.5">
               {dwg.links.map((l, i) => (
-                <div key={i} className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)] text-xs hover:bg-accent/30 cursor-pointer" onClick={() => toast.info('Open link', { description: `${l.type} → ${l.ref}` })}>
+                <div key={i} className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)] text-xs hover:bg-accent/30 cursor-pointer" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
                   <Badge variant="outline" className="text-[9px]">{l.type}</Badge>
                   <span className="flex-1 truncate">{l.ref}</span>
                   <Eye className="w-3 h-3 text-muted-foreground" />

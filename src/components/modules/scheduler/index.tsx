@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
 import {
   TASKS, TOTAL_WEEKS, WEEK_WIDTH, flattenTasks,
@@ -26,7 +27,7 @@ export function SchedulerModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedId, setSelectedId] = usePersistentState('omnisite-scheduler-selected', 'T-203')
   const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-scheduler-expanded', ['T-100', 'T-200', 'T-300', 'T-400'])
-  const [tasks, setTasks] = useSyncedState<Task[]>(
+  const [tasks, setTasks, tasksLoading] = useSyncedState<Task[]>(
     'omnisite-scheduler-tasks',
     'tasks',
     () => JSON.parse(JSON.stringify(TASKS)),
@@ -40,7 +41,7 @@ export function SchedulerModule() {
       },
       primaryKey: 'id',
     }
-  ) as [Task[], (v: Task[] | ((prev: Task[]) => Task[])) => void, boolean]
+  )
   // Non-persistent UI state
   const [showResources, setShowResources] = useState(false)
   const [showCriticalOnly, setShowCriticalOnly] = useState(false)
@@ -300,6 +301,10 @@ export function SchedulerModule() {
     }
   }, [dragging])
 
+  if (tasksLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading tasks…" /></div>
+  }
+
   return (
     <>
     <Workspace3Pane
@@ -337,7 +342,7 @@ export function SchedulerModule() {
               <Switch checked={showResources} onCheckedChange={setShowResources} />
               <span className="text-muted-foreground">Resource usage</span>
             </label>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.info('Resource levelling', { description: 'Reschedules tasks to resolve over-allocation of Mason/Mazdoor resources.' })}><Gauge className="w-3.5 h-3.5" />Level</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Gauge className="w-3.5 h-3.5" />Level</Button>
             <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => setAddTaskOpen(true)}><Plus className="w-3.5 h-3.5" />Task</Button>
           </PaneHeader>
           <GanttCanvas
@@ -378,11 +383,11 @@ export function SchedulerModule() {
           task={breachTask}
           onClose={() => { setBreachModal(false); setBreachTask(null) }}
           onEotClaim={() => {
-            toast.success('EOT Claim initiated', { description: `${breachTask.id} — Extension of Time claim drafted in Correspondence module.` })
+            toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })
             setBreachModal(false); setBreachTask(null)
           }}
           onAccelerate={() => {
-            toast.success('Acceleration plan initiated', { description: `${breachTask.id} — Resource acceleration plan drafted. Additional cost will be pushed to Financials.` })
+            toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })
             setBreachModal(false); setBreachTask(null)
           }}
         />

@@ -139,7 +139,7 @@ export function ProcurementModule() {
         leftPane={
           <>
             <PaneHeader title="Procurement">
-              <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New requisition', { description: 'Opens the requisition builder.' })}><Plus className="w-3.5 h-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
             </PaneHeader>
             <div className="py-2">
               {/* Compute counts from real arrays so badges never lie. */}
@@ -186,16 +186,9 @@ export function ProcurementModule() {
         centerPane={
           <>
             <PaneHeader title={tab === 'req' ? 'Requisitions & Comparative Statement' : tab === 'po' ? 'Purchase Orders' : tab === 'grn' ? 'GRN & 3-Way Match' : tab === 'stock' ? 'Live Stock Dashboard' : 'Material Issue Notes'}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Search', { description: 'Search across requisitions, POs, GRNs, and MINs.' })}><Search className="w-3.5 h-3.5" />Search</Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Search className="w-3.5 h-3.5" />Search</Button>
               <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
-                const labels: Record<Tab, string> = {
-                  req: 'New requisition — select material, qty, vendors',
-                  po: 'New purchase order — pick vendor + line items',
-                  grn: 'GRN Receiving Form — select a PO, enter received qty, attach delivery note. System verifies against PO qty.',
-                  stock: 'Add material to stock — code, qty, warehouse',
-                  min: 'New Material Issue Note — pick task, material, qty',
-                }
-                toast.info(`New ${tab.toUpperCase()}`, { description: labels[tab] })
+                toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })
               }}><Plus className="w-3.5 h-3.5" />New {tab === 'req' ? 'Requisition' : tab === 'po' ? 'Consolidated PO' : tab === 'grn' ? 'GRN' : tab === 'stock' ? 'Material' : 'MIN'}</Button>
             </PaneHeader>
 

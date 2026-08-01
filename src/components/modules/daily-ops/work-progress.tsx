@@ -7,7 +7,7 @@ import {
   Plus, Copy, Mail, Camera, CheckCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
+import { useApp } from '@/lib/app-store'
 import { DsrEntry, StatusDot } from './types'
 import {
   useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef,
@@ -19,6 +19,7 @@ export function WorkProgressView({ entries, selectedId, onSelect }: {
   const selected = entries.find(e => e.id === selectedId)
   // Stable ITR ID — generated once per mount so it doesn't change on every render.
   const [itrId] = useState(() => Math.floor(Math.random() * 9000) + 1000)
+  const { setActiveModule } = useApp()
   const COLS: ColumnDef[] = [
     { key: 'dsr', label: 'DSR #' },
     { key: 'task', label: 'Task' },
@@ -45,7 +46,7 @@ export function WorkProgressView({ entries, selectedId, onSelect }: {
             <span className="font-medium">ITR auto-prompted:</span>
             <span className="text-muted-foreground"> {selected.id} marked completed → Inspection Test Request ITR-{itrId} auto-generated for consultant approval.</span>
           </span>
-          <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => toast.success('Opening ITR', { description: 'Redirecting to Q&S module' })}>
+          <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => setActiveModule('qs')}>
             View ITR
           </Button>
         </div>

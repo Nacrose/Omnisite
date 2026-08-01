@@ -119,7 +119,7 @@ export function DailySiteLogView() {
                   <div className="font-medium text-red-600">Fuel burn-rate alert — possible theft or excessive idling</div>
                   <div className="text-muted-foreground mt-0.5">JCB 3DX burned 4.0 l/hr vs RA norm of 3.5 l/hr (14% over). Alert sent to PM and storekeeper. Recommend operator log review and fuel dipstick check.</div>
                 </div>
-                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => toast.error('Alert escalated', { description: 'Fuel anomaly reported to PM and Security.' })}>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
                   Escalate
                 </Button>
               </div>

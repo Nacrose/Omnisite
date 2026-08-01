@@ -39,13 +39,13 @@ export function ReportsModule() {
       leftPane={
         <>
           <PaneHeader title="Templates & Widgets">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New template', { description: 'Creates a blank report template.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-3">
             <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Templates</div>
             <div className="space-y-1 px-2 mb-4">
               {TEMPLATES.map(t => (
-                <button key={t.id} className="w-full text-left p-2 rounded hover:bg-accent/50 border border-transparent hover:border-[var(--pane-divider)]" onClick={() => toast.info('Template loaded', { description: `${t.name} · ${t.pages} pages` })}>
+                <button key={t.id} className="w-full text-left p-2 rounded hover:bg-accent/50 border border-transparent hover:border-[var(--pane-divider)]" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
                   <div className="text-xs font-medium">{t.name}</div>
                   <div className="text-[10px] text-muted-foreground">{t.pages} pages · {t.lastUsed}</div>
                 </button>
@@ -79,8 +79,8 @@ export function ReportsModule() {
       centerPane={
         <>
           <PaneHeader title="PDF Canvas · A4 Portrait">
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Preview', { description: 'Opens a print preview of the report.' })}><Eye className="w-3.5 h-3.5" />Preview</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.success('Report saved', { description: 'Layout stored. Next export will use this configuration.' })}><Save className="w-3.5 h-3.5" />Save</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Eye className="w-3.5 h-3.5" />Preview</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Save className="w-3.5 h-3.5" />Save</Button>
             <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
               toast.info('Preparing PDF…', { description: 'Opening print dialog — save as PDF from the browser.' })
               setTimeout(() => window.print(), 300)
@@ -244,7 +244,7 @@ export function ReportsModule() {
                   <div className="font-medium">Completed items</div>
                   <div className="text-muted-foreground">Green badge if % done = 100</div>
                 </div>
-                <Button variant="outline" size="sm" className="w-full h-7 text-xs gap-1" onClick={() => toast.info('Add formatting rule', { description: 'Opens the conditional formatting rule builder.' })}><Plus className="w-3 h-3" />Add rule</Button>
+                <Button variant="outline" size="sm" className="w-full h-7 text-xs gap-1" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3 h-3" />Add rule</Button>
               </div>
             </div>
             <Separator />

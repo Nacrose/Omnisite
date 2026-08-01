@@ -227,7 +227,7 @@ export function NotificationsBell() {
 
           {/* Footer */}
           <div className="px-4 py-2 border-t border-[var(--pane-divider)] bg-secondary/20">
-            <button className="w-full text-center text-[11px] text-primary hover:underline" onClick={() => { setOpen(false); toast.info('Notifications log', { description: 'Opens the full notification history.' }) }}>
+            <button className="w-full text-center text-[11px] text-primary hover:underline" onClick={() => { setOpen(false); toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' }) }}>
               View all notifications →
             </button>
           </div>

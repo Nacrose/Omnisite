@@ -66,7 +66,7 @@ export function AdminModule() {
       leftPane={
         <>
           <PaneHeader title="Master Data">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New entry', { description: `Create a new ${cat === 'users' ? 'user' : cat === 'materials' ? 'material' : cat === 'vendors' ? 'vendor' : 'entry'}.` })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             {CATS.map(c => {
@@ -89,7 +89,7 @@ export function AdminModule() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input placeholder="Search…" className="h-7 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
-            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('New entry', { description: `Create a new ${cat === 'users' ? 'user invite' : cat === 'materials' ? 'material' : cat === 'vendors' ? 'vendor' : 'entry'}.` })}><Plus className="w-3.5 h-3.5" />New</Button>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" />New</Button>
           </PaneHeader>
 
           {cat === 'users' && <UsersView selectedRole={selectedRole} onSelectRole={setSelectedRole} searchQuery={searchQuery} />}
@@ -151,7 +151,7 @@ function UsersView({ selectedRole, onSelectRole, searchQuery }: { selectedRole: 
           </div>
         ))}
       </div>
-      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Invite user', { description: 'Sends an email invite with a role assignment.' })}><Plus className="w-3.5 h-3.5" />Invite User</Button>
+      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" />Invite User</Button>
     </PaneBody>
   )
 }
@@ -282,7 +282,7 @@ function RatesView() {
       <div className="rounded-lg border border-[var(--pane-divider)] overflow-hidden">
         <div className="px-3 py-2 bg-secondary/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
           Tier 2 · Project Rate Library (snapshot · PM-editable inline)
-          <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1" onClick={() => toast.info('Inline edit', { description: 'Opens the RA Builder with these rates pre-loaded for inline editing.' })}><Edit3 className="w-3 h-3" />Inline edit in RA Builder</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Edit3 className="w-3 h-3" />Inline edit in RA Builder</Button>
         </div>
         <div className="p-3 space-y-1.5">
           {MATERIALS.slice(0, 3).map(m => (
@@ -315,7 +315,7 @@ function PresetsView() {
         { name: 'Stone Soling 150mm', items: 3, used: 5 },
         { name: 'DBM 50mm — Pavement', items: 5, used: 2 },
       ].map((p, i) => (
-        <div key={i} className="rounded-lg border border-[var(--pane-divider)] p-3 hover:bg-accent/30 cursor-pointer" onClick={() => toast.info('Preset loaded', { description: `${p.name} · ${p.items} resources. Coefficients loaded into the RA Builder.` })}>
+        <div key={i} className="rounded-lg border border-[var(--pane-divider)] p-3 hover:bg-accent/30 cursor-pointer" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
           <div className="flex items-center justify-between mb-1">
             <div className="font-medium text-sm">{p.name}</div>
             <Badge variant="secondary" className="text-[10px]">Used {p.used}×</Badge>
@@ -381,7 +381,7 @@ function MaterialInspector({ material: m }: { material: Material }) {
                   <div key={i} className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
                     <span className="flex-1">{alt.uom} (factor {alt.factor})</span>
                     <Input className="w-24 h-7 text-xs font-mono" defaultValue={alt.rate} />
-                    <button className="p-1 hover:bg-accent rounded" onClick={() => toast.info('Auto-calc', { description: `Recalculates ${alt.uom} rate from the primary UOM rate.` })} title="Auto-calc from primary UOM"><Zap className="w-3 h-3 text-amber-500" /></button>
+                    <button className="p-1 hover:bg-accent rounded" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })} title="Auto-calc from primary UOM"><Zap className="w-3 h-3 text-amber-500" /></button>
                   </div>
                 ))}
               </div>
@@ -392,9 +392,9 @@ function MaterialInspector({ material: m }: { material: Material }) {
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Actions</div>
           <div className="space-y-1.5">
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Duplicate', { description: `${m.code} duplicated as a project-level copy.` })}><Copy className="w-3.5 h-3.5" />Duplicate</Button>
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Edit', { description: `Editing ${m.name} — inline form opens.` })}><Edit3 className="w-3.5 h-3.5" />Edit</Button>
-            <Button variant="ghost" size="sm" className="w-full h-8 text-xs justify-start gap-2 text-amber-600" onClick={() => toast.info('Soft archive', { description: `${m.code} archived (no delete). Remains visible but greyed out.` })}><Trash2 className="w-3.5 h-3.5" />Soft Archive (no delete)</Button>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Copy className="w-3.5 h-3.5" />Duplicate</Button>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Edit3 className="w-3.5 h-3.5" />Edit</Button>
+            <Button variant="ghost" size="sm" className="w-full h-8 text-xs justify-start gap-2 text-amber-600" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Trash2 className="w-3.5 h-3.5" />Soft Archive (no delete)</Button>
           </div>
         </div>
       </PaneBody>

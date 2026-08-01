@@ -49,7 +49,7 @@ export function ScheduleTab({ sc }: { sc: Subcontractor }) {
         </div>
       )}
 
-      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Assign Schedule Task', { description: 'Schedule task picker will open here — coming soon.' })}><Plus className="w-3.5 h-3.5" />Assign Schedule Task</Button>
+      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" />Assign Schedule Task</Button>
     </div>
   )
 }

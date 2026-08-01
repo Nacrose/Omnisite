@@ -52,7 +52,7 @@ export function CorrespondenceModule() {
       leftPane={
         <>
           <PaneHeader title="Categories">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add category', { description: 'Custom correspondence category — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             {(['All', 'Incoming', 'Outgoing', 'Site Instruction'] as const).map(f => {
@@ -87,7 +87,7 @@ export function CorrespondenceModule() {
         <>
           <PaneHeader title={`Correspondence · ${filtered.length} letters`}>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Search className="w-3.5 h-3.5" />Search</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('New letter', { description: 'Draft form — select type (Incoming/Outgoing/SI), recipient, subject.' })}>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
               <Plus className="w-3.5 h-3.5" />New Letter
             </Button>
           </PaneHeader>
@@ -189,9 +189,7 @@ export function CorrespondenceModule() {
                       variant="outline"
                       className="mt-2 h-7 text-[10px] gap-1"
                       onClick={() => {
-                        toast.success('Variation Order created', {
-                          description: `${selected.number} → VO-2026-008 · Cost impact NPR 1.85M · 14-day schedule extension. Pushed to Financials.`,
-                        })
+                        toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })
                       }}
                     >
                       <ArrowRight className="w-3 h-3" />Convert to Variation Order
@@ -203,9 +201,9 @@ export function CorrespondenceModule() {
               <Separator />
 
               <div className="space-y-1.5">
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('View PDF', { description: `Opening ${selected.number} PDF preview — coming soon.` })}><FileText className="w-3.5 h-3.5" />View PDF</Button>
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Draft Reply', { description: `Compose reply to ${selected.number} — coming soon.` })}><Mail className="w-3.5 h-3.5" />Draft Reply</Button>
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Schedule follow-up', { description: `Pick a date to follow up on ${selected.number} — coming soon.` })}><Calendar className="w-3.5 h-3.5" />Schedule follow-up</Button>
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><FileText className="w-3.5 h-3.5" />View PDF</Button>
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Mail className="w-3.5 h-3.5" />Draft Reply</Button>
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Calendar className="w-3.5 h-3.5" />Schedule follow-up</Button>
               </div>
             </div>
           </PaneBody>

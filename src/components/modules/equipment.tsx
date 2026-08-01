@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
 
 interface Equip {
@@ -68,7 +69,7 @@ export function EquipmentModule() {
   const [selectedId, setSelectedId] = useState('E-001')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
-  const [equipList, setEquipList] = useSyncedState<Equip[]>(
+  const [equipList, setEquipList, equipLoading] = useSyncedState<Equip[]>(
     'omnisite-equipment',
     'equipment',
     () => JSON.parse(JSON.stringify(EQUIP)),
@@ -76,7 +77,7 @@ export function EquipmentModule() {
       fieldMap: { chargeRate: 'charge_rate', fuelToday: 'fuel_today', hoursToday: 'hours_today', burnRate: 'burn_rate', burnNorm: 'burn_norm', licenseExp: 'license_expiry' },
       primaryKey: 'id',
     }
-  ) as [Equip[], (v: Equip[] | ((prev: Equip[]) => Equip[])) => void, boolean]
+  )
   const selected = equipList.find(e => e.id === selectedId) ?? equipList[0]
   // Only bill active equipment for hours. Idle/breakdown equipment costs 0
   // (previously defaulted to 8 hours via `|| 8`, inflating the daily cost by
@@ -107,12 +108,16 @@ export function EquipmentModule() {
     }
   }
 
+  if (equipLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading equipment…" /></div>
+  }
+
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Fleet Categories">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add equipment', { description: 'Equipment registration form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             <div className="px-3 mb-2">
@@ -275,7 +280,7 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
           <TabsContent value="docs" className="mt-0 px-4 py-3 space-y-2 text-xs">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Document Vault</div>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => toast.info('Upload document', { description: 'Drag-and-drop a PDF/image into the document vault — coming soon.' })}><Plus className="w-3 h-3" />Upload</Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3 h-3" />Upload</Button>
             </div>
             {equip.docs.map((d, i) => (
               <div key={i} className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)] hover:bg-accent/30 cursor-pointer">

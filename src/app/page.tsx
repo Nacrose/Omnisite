@@ -10,6 +10,7 @@ import { NotificationsBell } from '@/components/notifications-bell'
 import { ProjectSwitcher } from '@/components/project-switcher'
 import { StatusBar } from '@/components/status-bar'
 import { HelpModal } from '@/components/help-modal'
+import { OnboardingTour } from '@/components/onboarding-tour'
 import { DockNav } from '@/components/dock-nav'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { useKeyboardShortcuts } from '@/lib/use-keyboard-shortcuts'
@@ -268,6 +269,7 @@ export default function Home() {
       <QuickAddMenu />
       <CommandPalette />
       <HelpModal />
+      <OnboardingTour />
     </div>
   )
 }

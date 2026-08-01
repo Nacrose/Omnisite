@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
 
@@ -47,7 +48,7 @@ export function QsModule() {
   const [selectedId, setSelectedId] = useState('NCR-034')
   const [filter, setFilter] = useState<'All' | 'ITR' | 'NCR' | 'Punch' | 'Incident' | 'Near-Miss'>('All')
   const [searchQuery, setSearchQuery] = useState('')
-  const [items, setItems] = useSyncedState<QsItem[]>(
+  const [items, setItems, qsLoading] = useSyncedState<QsItem[]>(
     'omnisite-qs-items',
     'qs_items',
     () => JSON.parse(JSON.stringify(INITIAL_ITEMS)),
@@ -55,7 +56,7 @@ export function QsModule() {
       fieldMap: { linkedBoq: 'linked_boq', dueDate: 'due_date', billingHold: 'billing_hold' },
       primaryKey: 'id',
     }
-  ) as [QsItem[], (v: QsItem[] | ((prev: QsItem[]) => QsItem[])) => void, boolean]
+  )
   const filteredByType = filter === 'All' ? items : items.filter(i => i.type === filter)
   const filtered = searchQuery.trim()
     ? filteredByType.filter(i =>
@@ -102,12 +103,16 @@ export function QsModule() {
     toast.success('Corrective Action Plan saved', { description: `${id} ready for consultant submission` })
   }
 
+  if (qsLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading Q&S register…" /></div>
+  }
+
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Categories">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New register item', { description: 'Pick type (ITR/NCR/Punch/Incident/Near-Miss) — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             {(['All', 'ITR', 'NCR', 'Punch', 'Incident', 'Near-Miss'] as const).map(f => {
@@ -527,11 +532,11 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
                 </>
               )}
             </Button>
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('View Attachments', { description: `${photos.length} photo(s) attached to ${item.id}.` })}>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
               <FileText className="w-3.5 h-3.5" />
               View Attachments ({photos.length} photos)
             </Button>
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Assign / Reassign', { description: `Pick a new owner for ${item.id} — coming soon.` })}><Users className="w-3.5 h-3.5" />Assign / Reassign</Button>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Users className="w-3.5 h-3.5" />Assign / Reassign</Button>
 
             {!storageConfigured && (
               <p className="text-[10px] text-muted-foreground text-center pt-1">

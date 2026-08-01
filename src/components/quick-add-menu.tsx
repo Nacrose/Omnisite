@@ -45,8 +45,8 @@ export function QuickAddMenu() {
                     key={a.id}
                     onClick={() => {
                       setActiveModule(a.module)
-                      toast.success(`${a.label} draft created`, {
-                        description: `Navigated to ${a.desc}`,
+                      toast.success(`Navigated to ${a.label}`, {
+                        description: `Switched to the ${a.module} module`,
                       })
                       setQuickAddOpen(false)
                     }}

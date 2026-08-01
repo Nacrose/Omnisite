@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
+import { exportToCsv } from '@/lib/csv-export'
 import { toast } from 'sonner'
 
 interface Worker {
@@ -55,7 +57,7 @@ export function TimeAttendanceModule() {
   const [selectedId, setSelectedId] = useState('W-001')
   const [selectedTrade, setSelectedTrade] = useState('All Trades')
   const [searchQuery, setSearchQuery] = useState('')
-  const [workerList, setWorkerList] = useSyncedState<Worker[]>(
+  const [workerList, setWorkerList, workersLoading] = useSyncedState<Worker[]>(
     'omnisite-workers',
     'workers',
     () => JSON.parse(JSON.stringify(WORKERS)),
@@ -63,7 +65,7 @@ export function TimeAttendanceModule() {
       fieldMap: { clockIn: 'clock_in', clockOut: 'clock_out', geoFence: 'geo_fence', todayHours: 'today_hours' },
       primaryKey: 'id',
     }
-  ) as [Worker[], (v: Worker[] | ((prev: Worker[]) => Worker[])) => void, boolean]
+  )
   const filteredByTrade = selectedTrade === 'All Trades' ? workerList : workerList.filter(w => w.trade === selectedTrade)
   const filteredWorkers = searchQuery.trim()
     ? filteredByTrade.filter(w =>
@@ -78,12 +80,16 @@ export function TimeAttendanceModule() {
   const totalHours = workerList.reduce((s, w) => s + (w.todayHours || 0), 0)
   const geoFenceBreaches = workerList.filter(w => w.geoFence === false && w.status === 'on-site').length
 
+  if (workersLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading workers…" /></div>
+  }
+
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Trades">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add worker', { description: 'Worker onboarding form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             <div className="px-3 mb-2">
@@ -114,7 +120,11 @@ export function TimeAttendanceModule() {
             <div className="flex justify-between"><span className="text-muted-foreground">On site now</span><span className="font-mono font-semibold text-emerald-600">{totalOnSite}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Total hours logged</span><span className="font-mono">{totalHours}h</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Geo-fence alerts</span><span className={cn('font-mono', geoFenceBreaches > 0 ? 'text-amber-600' : '')}>{geoFenceBreaches}</span></div>
-            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1.5" onClick={() => toast.info('Payroll Export', { description: `Exporting ${workerList.length} workers to CSV — coming soon.` })}><Download className="w-3.5 h-3.5" />Payroll Export</Button>
+            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1.5" onClick={() => {
+              exportToCsv('omnisite-payroll.csv', ['ID', 'Name', 'Trade', 'Phone', 'Status', 'Clock In', 'Clock Out', 'Today Hours'],
+                workerList.map(w => [w.id, w.name, w.trade, w.phone, w.status, w.clockIn ?? '', w.clockOut ?? '', w.todayHours ?? 0]))
+              toast.success('Payroll exported', { description: `${workerList.length} workers exported to CSV` })
+            }}><Download className="w-3.5 h-3.5" />Payroll Export</Button>
           </div>
         </>
       }
@@ -186,7 +196,7 @@ function WorkerInspector({ worker }: { worker: Worker }) {
                 <span className="font-mono">{worker.allocated.reduce((s, a) => s + a.hours, 0)}h / 8h</span>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1" onClick={() => toast.info('Split hours to another task', { description: `Reallocate hours from ${worker.id} — coming soon.` })}><Plus className="w-3 h-3" />Split hours to another task</Button>
+            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3 h-3" />Split hours to another task</Button>
           </div>
 
           <Separator />

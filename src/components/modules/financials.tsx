@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import { exportToCsv } from '@/lib/csv-export'
 import { toast } from 'sonner'
 import { Download } from 'lucide-react'
@@ -65,7 +66,7 @@ export function FinancialsModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedCode, setSelectedCode] = usePersistentState('omnisite-financials-selected', '1.1')
   const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-financials-expanded', ['1', '2'])
-  const [cbsRows, setCbsRows] = useSyncedState<CbsNode[]>(
+  const [cbsRows, setCbsRows, financialsLoading] = useSyncedState<CbsNode[]>(
     'omnisite-financials-cbs',
     'cbs_nodes',
     () => JSON.parse(JSON.stringify(CBS)),
@@ -349,12 +350,16 @@ export function FinancialsModule() {
     return rows
   }
 
+  if (financialsLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading financials…" /></div>
+  }
+
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="CBS Tree">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add CBS node', { description: 'Form to create a new CBS node — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             <div className="px-3 mb-2">
@@ -404,8 +409,8 @@ export function FinancialsModule() {
               )
               toast.success('Financials exported', { description: `${flattenCbs(cbsData).length} CBS nodes exported to CSV` })
             }}><Download className="w-3.5 h-3.5" />Export CSV</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Upload RA Bill', { description: 'Drag-and-drop RA bill PDF — coming soon.' })}><Upload className="w-3.5 h-3.5" />Upload RA Bill</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Quick Expense', { description: 'Add an ad-hoc expense line — coming soon.' })}><Plus className="w-3.5 h-3.5" />Quick Expense</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Upload className="w-3.5 h-3.5" />Upload RA Bill</Button>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" />Quick Expense</Button>
           </PaneHeader>
           {/* Top KPI strip */}
           <div className="grid grid-cols-4 gap-3 p-3 border-b border-[var(--pane-divider)] bg-secondary/20">

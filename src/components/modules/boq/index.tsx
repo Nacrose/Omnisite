@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import {
   DndContext, DragOverlay,
   PointerSensor, useSensor, useSensors, closestCenter,
@@ -475,9 +476,7 @@ export function BoqModule() {
 
   const exportRa = (id: string) => {
     const item = allFlat.find(i => i.id === id)
-    toast.success('RA exported (DoR format)', {
-      description: `${item?.code} — ${item?.desc} · Excel download started`,
-    })
+    toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })
   }
 
   // Close context menu on outside click / escape
@@ -506,6 +505,10 @@ export function BoqModule() {
       if (value) n.add(id); else n.delete(id)
       return n
     })
+  }
+
+  if (boqLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading BOQ items…" /></div>
   }
 
   return (
@@ -655,13 +658,13 @@ export function BoqModule() {
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 220), top: Math.min(contextMenu.y, window.innerHeight - 280) }}
             onClick={(e) => e.stopPropagation()}
           >
-            <ContextMenuItem icon={<Edit3 className="w-3.5 h-3.5" />} label="Edit item" onClick={() => { setContextMenu(null); toast.info('Edit mode', { description: 'Double-click cells to edit' }) }} />
+            <ContextMenuItem icon={<Edit3 className="w-3.5 h-3.5" />} label="Edit item" onClick={() => { setContextMenu(null); toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' }) }} />
             <ContextMenuItem icon={<Copy className="w-3.5 h-3.5" />} label="Duplicate" shortcut="⌘D" onClick={() => { duplicateItem(contextMenu.itemId); setContextMenu(null) }} />
             <ContextMenuItem icon={<FilePlus className="w-3.5 h-3.5" />} label="Add child item" onClick={() => { addChildItem(contextMenu.itemId); setContextMenu(null) }} />
             <div className="my-1 h-px bg-[var(--pane-divider)]" />
             <ContextMenuItem icon={<FileSpreadsheet className="w-3.5 h-3.5" />} label="Export RA (DoR)" onClick={() => { exportRa(contextMenu.itemId); setContextMenu(null) }} />
-            <ContextMenuItem icon={<Link2 className="w-3.5 h-3.5" />} label="Link to Schedule" onClick={() => { setContextMenu(null); toast.info('Link Schedule', { description: 'Open task picker' }) }} />
-            <ContextMenuItem icon={<History className="w-3.5 h-3.5" />} label="View audit log" onClick={() => { setContextMenu(null); toast.info('Audit log', { description: 'Opening revision history' }) }} />
+            <ContextMenuItem icon={<Link2 className="w-3.5 h-3.5" />} label="Link to Schedule" onClick={() => { setContextMenu(null); toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' }) }} />
+            <ContextMenuItem icon={<History className="w-3.5 h-3.5" />} label="View audit log" onClick={() => { setContextMenu(null); toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' }) }} />
             <div className="my-1 h-px bg-[var(--pane-divider)]" />
             <ContextMenuItem icon={<Trash2 className="w-3.5 h-3.5" />} label="Delete" danger onClick={() => { deleteItem(contextMenu.itemId); setContextMenu(null) }} />
           </div>

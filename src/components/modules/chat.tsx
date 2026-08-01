@@ -195,7 +195,7 @@ export function ChatModule() {
       listPane={
         <>
           <PaneHeader title="Messages">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New channel', { description: 'Channel creation form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
             <div className="relative">
@@ -242,7 +242,7 @@ export function ChatModule() {
             {visibleTeamMembers.map(m => (
               <button
                 key={m.id}
-                onClick={() => toast.info('Direct messages', { description: `DMs with ${m.name} coming soon.` })}
+                onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}
                 className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50 transition-colors"
               >
                 <div className="relative flex-shrink-0">
@@ -279,10 +279,10 @@ export function ChatModule() {
             >
               <Users className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="Call" onClick={() => toast.info('Voice call', { description: 'VoIP integration coming soon.' })}>
+            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="Call" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
               <Phone className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="More" onClick={() => toast.info('Channel options', { description: 'Mute, pin, archive — coming soon.' })}>
+            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="More" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
               <MoreVertical className="w-4 h-4" />
             </button>
           </div>
@@ -364,10 +364,10 @@ export function ChatModule() {
           {/* Composer */}
           <div className="flex-shrink-0 p-3 border-t border-[var(--pane-divider)]">
             <div className="flex items-center gap-2">
-              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground" title="Attach file" onClick={() => toast.info('Attach file', { description: 'File picker coming soon.' })}>
+              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground" title="Attach file" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
                 <Paperclip className="w-4 h-4" />
               </button>
-              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground hidden sm:block" title="Attach image" onClick={() => toast.info('Attach image', { description: 'Image picker coming soon.' })}>
+              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground hidden sm:block" title="Attach image" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
                 <ImageIcon className="w-4 h-4" />
               </button>
               <div className="flex-1 flex items-center gap-2 bg-secondary rounded-2xl px-3 py-1.5">
@@ -379,7 +379,7 @@ export function ChatModule() {
                   placeholder={`Message #${activeChannel}…`}
                   className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
                 />
-                <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="Emoji" onClick={() => toast.info('Emoji picker', { description: 'Emoji selection coming soon.' })}>
+                <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="Emoji" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
                   <Smile className="w-4 h-4" />
                 </button>
               </div>

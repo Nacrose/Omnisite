@@ -41,7 +41,7 @@ export function SubcontractorModule() {
         leftPane={
           <>
             <PaneHeader title="Subcontractors">
-              <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add subcontractor', { description: 'Vendor onboarding form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
             </PaneHeader>
             <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
               <div className="relative">
