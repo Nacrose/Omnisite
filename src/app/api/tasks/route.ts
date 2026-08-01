@@ -6,6 +6,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody, taskSchema } from '@/lib/validation'
 
 // GET /api/tasks — fetch tasks, optionally filtered by project_id
+// Supports cursor-based pagination: ?limit=200&cursor=<last_sort_order>
 export async function GET(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
@@ -16,16 +17,29 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('project_id')
+  const limit = parseInt(searchParams.get('limit') || '0', 10)
+  const cursor = searchParams.get('cursor')
 
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
   let query = userClient.from('tasks').select('*')
   if (projectId) query = query.eq('project_id', projectId)
+  if (cursor) query = query.gt('sort_order', Number(cursor)) // cursor = last item's sort_order as string
+  if (limit > 0) query = query.limit(limit + 1) // fetch 1 extra to check for next page
   const { data, error } = await query.order('sort_order', { ascending: true })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // If pagination requested, return { data, nextCursor }
+  if (limit > 0 && data) {
+    const hasMore = data.length > limit
+    const items = hasMore ? data.slice(0, limit) : data
+    const nextCursor = hasMore ? String(items[items.length - 1]?.sort_order) : null
+    return NextResponse.json({ data: items, nextCursor })
+  }
+
   return NextResponse.json(data)
 }
 
