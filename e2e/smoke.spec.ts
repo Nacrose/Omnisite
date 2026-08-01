@@ -4,7 +4,6 @@ test.describe('OmniSite smoke tests', () => {
   test('app loads and shows dashboard', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    // App should render — either login page or dashboard (demo mode)
     await expect(page).toHaveTitle(/OmniSite/)
   })
 
@@ -21,7 +20,6 @@ test.describe('OmniSite smoke tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(2000)
-    // Click BOQ in dock
     const boqBtn = page.locator('[title="BOQ & Rate Analysis"]')
     await boqBtn.click()
     await page.waitForTimeout(1000)
@@ -37,11 +35,10 @@ test.describe('OmniSite smoke tests', () => {
     await page.keyboard.press('Control+k')
     await page.waitForTimeout(500)
     const searchInput = page.locator('input[placeholder*="Search"]')
-    if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await searchInput.fill('boq')
-      await page.waitForTimeout(500)
-      const body = page.locator('body')
-      await expect(body).toContainText('BOQ')
-    }
+    await expect(searchInput).toBeVisible({ timeout: 3000 })
+    await searchInput.fill('boq')
+    await page.waitForTimeout(500)
+    const body = page.locator('body')
+    await expect(body).toContainText('BOQ')
   })
 })

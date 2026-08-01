@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
 import { requireAuth, requireRole } from '@/lib/api-auth'
-import { logAudit } from '@/lib/audit'
+import { logAudit, computeDiff } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody, qsItemSchema } from '@/lib/validation'
 
@@ -69,8 +69,11 @@ export async function POST(req: NextRequest) {
     record_id: body.id || data?.[0]?.id || 'unknown',
     action: oldData ? 'UPDATE' : 'INSERT',
     changed_by: user.id,
-    changed_fields: oldData ? { old: oldData, new: body } : undefined,
-  }).catch(() => {})
+    changed_fields: oldData ? computeDiff(oldData as Record<string, unknown>, body as Record<string, unknown>) : undefined,
+  }).catch(e => {
+      console.error('[AUDIT] Failed:', e)
+      import('@/lib/sentry').then(({ Sentry }) => Sentry.captureException(e)).catch(() => {})
+    })
 
   return NextResponse.json(data)
 }
@@ -108,7 +111,10 @@ export async function DELETE(req: NextRequest) {
     record_id: id,
     action: 'DELETE',
     changed_by: user.id,
-  }).catch(() => {})
+  }).catch(e => {
+      console.error('[AUDIT] Failed:', e)
+      import('@/lib/sentry').then(({ Sentry }) => Sentry.captureException(e)).catch(() => {})
+    })
 
   return NextResponse.json({ success: true })
 }

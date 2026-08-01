@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Wifi, Users, Save, GitBranch, CheckCircle2, Cloud, Activity, RotateCcw, Globe, Calendar } from 'lucide-react'
+import { Wifi, Users, GitBranch, Cloud, Activity, RotateCcw, Globe, Calendar } from 'lucide-react'
 import { useApp } from '@/lib/app-store'
 import { clearAllPersistentState } from '@/lib/use-persistent-state'
 import { usePresence } from '@/lib/use-presence'
+import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { getCurrentBsYear } from '@/lib/calendar'
 import { cn } from '@/lib/utils'
@@ -13,36 +13,8 @@ import { toast } from 'sonner'
 export function StatusBar() {
   const { activeModule } = useApp()
   const { users, isConnected } = usePresence()
-  const { locale, calendar, setLocale, setCalendar, t } = useI18n()
-  const [lastSaved, setLastSaved] = useState(Date.now())
-  const [savedAgo, setSavedAgo] = useState('just now')
-  const [isSyncing, setIsSyncing] = useState(false)
-
-  // Auto-save tick: every 8 seconds, briefly show "syncing" then "saved"
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIsSyncing(true)
-      setTimeout(() => {
-        setIsSyncing(false)
-        setLastSaved(Date.now())
-      }, 700)
-    }, 8000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Update "saved X ago" every 5 seconds
-  useEffect(() => {
-    const updateAgo = () => {
-      const seconds = Math.floor((Date.now() - lastSaved) / 1000)
-      if (seconds < 5) setSavedAgo('just now')
-      else if (seconds < 60) setSavedAgo(`${seconds}s ago`)
-      else setSavedAgo(`${Math.floor(seconds / 60)}m ago`)
-    }
-    updateAgo()
-    // Rename to `agoTimer` so it doesn't shadow the i18n `t` translation function.
-    const agoTimer = setInterval(updateAgo, 5000)
-    return () => clearInterval(agoTimer)
-  }, [lastSaved])
+  const { isDemo } = useAuth()
+  const { locale, calendar, setLocale, setCalendar } = useI18n()
 
   const handleReset = () => {
     if (confirm('Reset all data to defaults? This will clear all your edits to BOQ, Schedule, and Financials.')) {
@@ -59,26 +31,25 @@ export function StatusBar() {
   // Show up to 4 avatar dots (including us)
   const visibleUsers = users.slice(0, 3)
 
+  // Honest static mode label — no fake "syncing" animation. Demo mode
+  // (no Supabase env vars) is the most specific truth; otherwise we
+  // fall back to "Local mode" since the app is local-first.
+  const modeLabel = isDemo ? 'Demo mode' : 'Local mode'
+
   return (
     <footer className="h-6 flex-shrink-0 flex items-center gap-4 px-3 border-t border-[var(--pane-divider)] vibrancy text-[10px] text-muted-foreground">
-      {/* Sync status */}
+      {/* Sync status — honest static label, no fake "syncing" animation */}
       <span className="flex items-center gap-1.5">
-        {isSyncing ? (
-          <>
-            <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-primary font-medium">Syncing…</span>
-          </>
-        ) : (
-          <>
-            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-            <span>Saved {savedAgo}</span>
-          </>
-        )}
+        <div className={cn(
+          'w-1.5 h-1.5 rounded-full',
+          isDemo ? 'bg-amber-500' : 'bg-emerald-500'
+        )} />
+        <span>{modeLabel}</span>
       </span>
 
       <div className="w-px h-3 bg-[var(--pane-divider)]" />
 
-      {/* Real-time connection — now reflects actual WebSocket status */}
+      {/* Real-time connection — reflects actual WebSocket status from usePresence() */}
       <span className="flex items-center gap-1.5">
         <div className="relative">
           <Wifi className={cn('w-3 h-3', !isConnected && 'text-amber-500')} />

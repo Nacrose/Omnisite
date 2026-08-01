@@ -69,6 +69,7 @@ export function usePresence() {
     if (!fallbackActive) {
       fallbackActive = true
       setUsingFallback(true)
+      setIsConnected(true) // simulated presence is "connected"
       setUsers(SIMULATED_USERS)
       setCursors({
         'sim-br': { ...SIMULATED_CURSORS[0] },

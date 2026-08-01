@@ -83,9 +83,15 @@ export function buildApiUrl(endpoint: string, query?: Record<string, string>): s
  * The server returns `{ data: [...], nextCursor: string | null }` when
  * pagination params are present, or a plain array when they're not.
  *
+ * Note: this function flattens the response into a plain array, discarding
+ * the `nextCursor` returned by the server. For paginated requests where you
+ * need to drive a cursor loop, use {@link fetchPaginated} instead.
+ *
  * @example
  *   const items = await fetchAll<BoqItem>('boq')
  *   const page = await fetchAll<BoqItem>('boq', { project_id: '...', limit: '200', cursor: '...' })
+ *
+ * For paginated requests, use fetchPaginated() instead.
  */
 export async function fetchAll<T>(endpoint: string, query?: Record<string, string>): Promise<T[]> {
   const url = buildApiUrl(endpoint, query)
@@ -113,6 +119,46 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
   if (Array.isArray(data)) return data as T[]
   if (data && Array.isArray(data.data)) return data.data as T[]
   return data ? [data as T] : []
+}
+
+/**
+ * Fetch a single page from `GET /api/{endpoint}` and return both the rows
+ * and the cursor for the next page.
+ *
+ * Unlike {@link fetchAll} (which flattens paginated responses into a plain
+ * array and discards the cursor), this function preserves `nextCursor` so
+ * callers can drive an explicit cursor loop until `nextCursor === null`.
+ *
+ * The server response is normalized to `{ data, nextCursor }` regardless of
+ * whether the server returned a plain array (no pagination) or an explicit
+ * `{ data, nextCursor }` envelope.
+ *
+ * @example
+ *   let cursor: string | null = null
+ *   do {
+ *     const { data, nextCursor } = await fetchPaginated<BoqItem>('boq', {
+ *       project_id: '...', limit: '200', cursor: cursor ?? undefined,
+ *     })
+ *     allRows.push(...data)
+ *     cursor = nextCursor
+ *   } while (cursor)
+ */
+export async function fetchPaginated<T>(
+  endpoint: string,
+  query?: Record<string, string>,
+): Promise<{ data: T[]; nextCursor: string | null }> {
+  const url = buildApiUrl(endpoint, query)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json', ...authHeaders },
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new ApiClientError(await readError(res, endpoint), res.status, endpoint)
+  const json = await res.json()
+  if (Array.isArray(json)) return { data: json as T[], nextCursor: null }
+  if (json && Array.isArray(json.data)) return { data: json.data as T[], nextCursor: json.nextCursor ?? null }
+  return { data: json ? [json as T] : [], nextCursor: null }
 }
 
 /**

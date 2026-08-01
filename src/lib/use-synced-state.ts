@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
-import { fetchAll, upsertOne, buildApiUrl, getAuthHeaders } from '@/lib/api-client'
+import { fetchPaginated, upsertOne } from '@/lib/api-client'
 import { useApp } from '@/lib/app-store'
 
 /**
@@ -164,22 +164,15 @@ export function useSyncedState<T>(
         while (page < MAX_PAGES) {
           const query = { ...baseQuery }
           if (cursor) query.cursor = cursor
-          // Fetch directly (not via fetchAll) so we can read nextCursor
-          const url = buildApiUrl(apiEndpoint, query)
-          const authHeaders = await getAuthHeaders()
-          const res = await fetch(url, {
-            method: 'GET',
-            headers: { Accept: 'application/json', ...authHeaders },
-            cache: 'no-store',
-          })
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          const json = await res.json()
-          // Server returns { data, nextCursor } when paginated, or a plain array
-          const rows: Record<string, unknown>[] = Array.isArray(json) ? json : (json.data || [])
+          // Use fetchPaginated so we get both the rows and the next cursor
+          // (fetchAll would silently discard nextCursor).
+          const { data: rows, nextCursor } = await fetchPaginated<Record<string, unknown>>(
+            apiEndpoint,
+            query,
+          )
           allRows = allRows.concat(rows)
           page++
-          // Advance cursor from the paginated response
-          cursor = (json.nextCursor as string | null) ?? null
+          cursor = nextCursor
           if (!cursor || rows.length < 200) break
         }
 

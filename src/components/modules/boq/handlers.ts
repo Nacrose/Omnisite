@@ -141,8 +141,7 @@ export function updateItem(
   value: number,
   ctx: BoqHandlerCtx,
 ): void {
-  commitBoqData(prev => {
-    const updated = deepClone(prev) as BoqItem[]
+  commitBoqData(prev => produce(prev, draft => {
     const walk = (items: BoqItem[]): boolean => {
       for (const it of items) {
         if (it.id === id) {
@@ -153,49 +152,54 @@ export function updateItem(
       }
       return false
     }
-    walk(updated)
-    return updated
-  }, ctx)
+    walk(draft as BoqItem[])
+  }), ctx)
 }
 
 /** Duplicate an item — inserts a copy immediately below the original. */
 export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
-  commitBoqData(prev => {
-    const updated = deepClone(prev) as BoqItem[]
-    const walk = (items: BoqItem[]): BoqItem[] => {
-      const result: BoqItem[] = []
-      for (const it of items) {
-        result.push(it)
+  commitBoqData(prev => produce(prev, draft => {
+    const walk = (items: BoqItem[]): boolean => {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i]
         if (it.id === id) {
-          const copy = deepClone(it) as BoqItem
-          copy.id = `${it.id}-copy-${Date.now().toString(36)}`
-          copy.code = `${it.code}-copy`
-          copy.desc = `${it.desc} (Copy)`
-          result.push(copy)
+          // Deep-clone the matched item (with its subtree) and stamp a new
+          // id/code/desc, then splice it in immediately after the original.
+          const copy = produce(it, d => {
+            d.id = `${it.id}-copy-${Date.now().toString(36)}`
+            d.code = `${it.code}-copy`
+            d.desc = `${it.desc} (Copy)`
+          }) as BoqItem
+          items.splice(i + 1, 0, copy)
+          return true
         }
-        if (it.children) it.children = walk(it.children)
+        if (it.children && walk(it.children)) return true
       }
-      return result
+      return false
     }
-    return walk(updated)
-  }, ctx)
+    walk(draft as BoqItem[])
+  }), ctx)
   toast.success('Item duplicated', { description: `Copy created below ${id}` })
 }
 
 /** Delete an item (and its subtree). Shows an undoable toast. */
 export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
   const item = ctx.allFlat.find(i => i.id === id)
-  commitBoqData(prev => {
-    const updated = deepClone(prev) as BoqItem[]
-    const walk = (items: BoqItem[]): BoqItem[] => {
-      return items.filter(it => {
-        if (it.id === id) return false
-        if (it.children) it.children = walk(it.children)
-        return true
-      })
+  commitBoqData(prev => produce(prev, draft => {
+    // Walk in reverse so splicing doesn't shift the indices we haven't
+    // visited yet.
+    const walk = (items: BoqItem[]): void => {
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i]
+        if (it.id === id) {
+          items.splice(i, 1)
+        } else if (it.children) {
+          walk(it.children)
+        }
+      }
     }
-    return walk(updated)
-  }, ctx)
+    walk(draft as BoqItem[])
+  }), ctx)
   undoableToast('Item deleted', `${item?.code || id} removed from BOQ. Click Undo to restore.`, () => ctx.undoRef.current())
 }
 
@@ -203,8 +207,7 @@ export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
  *  and selects the new item. */
 export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
   const newId = `${parentId}.${Date.now().toString(36)}`
-  commitBoqData(prev => {
-    const updated = deepClone(prev) as BoqItem[]
+  commitBoqData(prev => produce(prev, draft => {
     const walk = (items: BoqItem[]): boolean => {
       for (const it of items) {
         if (it.id === parentId) {
@@ -225,9 +228,8 @@ export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
       }
       return false
     }
-    walk(updated)
-    return updated
-  }, ctx)
+    walk(draft as BoqItem[])
+  }), ctx)
   ctx.setExpandedArr(prev => prev.includes(parentId) ? prev : [...prev, parentId])
   ctx.setSelectedId(newId)
   toast.success('Child item added', { description: `New item under ${parentId}` })

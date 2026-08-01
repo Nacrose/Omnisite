@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
   rules: {
     // TypeScript rules — re-enabled incrementally
-    "@typescript-eslint/no-explicit-any": "off",      // too many to fix in one pass
+    "@typescript-eslint/no-explicit-any": "warn",     // RE-ENABLED as warn
     "@typescript-eslint/no-unused-vars": "warn",       // RE-ENABLED as warn
     "@typescript-eslint/no-non-null-assertion": "off",
     "@typescript-eslint/ban-ts-comment": "off",
