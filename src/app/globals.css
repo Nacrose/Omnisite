@@ -319,6 +319,73 @@
 }
 
 /* ============================================================
+   Table styling — subtle row + column separators
+   ============================================================ */
+.omnisite-table [class*="omnisite-table-header"] > div,
+.omnisite-table-header > div {
+  position: relative;
+  border-right: 1px solid var(--pane-divider);
+}
+.omnisite-table-header > div:last-child {
+  border-right: none;
+}
+
+/* Column separators on body rows */
+.omnisite-table-body > div > div,
+.omnisite-table .omnisite-table-body > div[class*="flex items-center"] > div {
+  border-right: 1px solid color-mix(in srgb, var(--pane-divider) 50%, transparent);
+}
+.omnisite-table .omnisite-table-body > div[class*="flex items-center"] > div:last-child {
+  border-right: none;
+}
+
+/* Row hover + selected states */
+.omnisite-table .omnisite-table-body > div[class*="flex items-center"] {
+  transition: background-color 0.1s ease;
+}
+
+/* ============================================================
+   Resizable pane divider
+   ============================================================ */
+.pane-resizer {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 5;
+  transition: background 0.15s ease;
+}
+.pane-resizer:hover,
+.pane-resizer.dragging {
+  background: var(--primary);
+  opacity: 0.4;
+}
+.pane-resizer::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  background: var(--pane-divider);
+  border-radius: 1px;
+  transition: background 0.15s ease;
+}
+.pane-resizer:hover::after,
+.pane-resizer.dragging::after {
+  background: var(--primary);
+}
+.pane-resizer.locked {
+  cursor: default;
+  opacity: 0.3;
+}
+.pane-resizer.locked::after {
+  background: var(--pane-divider);
+}
+
+/* ============================================================
    Print styles — Report Designer PDF export
    When window.print() is called, hide everything except the A4 canvas.
    ============================================================ */

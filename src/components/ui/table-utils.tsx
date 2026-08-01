@@ -1,20 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Columns3, ChevronDown, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 // ─── Hook: useColumnVisibility ──────────────────────────────────────────────
 
-/**
- * Manages column visibility state for a table.
- * Persists to localStorage when a `storageKey` is provided.
- *
- * @param allKeys  All column keys in display order.
- * @param hiddenByDefault  Keys that start hidden (optional). Defaults to none.
- * @param storageKey  If provided, visibility is persisted to localStorage.
- */
 export function useColumnVisibility(
   allKeys: string[],
   hiddenByDefault: string[] = [],
@@ -53,8 +45,65 @@ export function useColumnVisibility(
   }
 
   const isVisible = (key: string) => visible.has(key)
-
   return { visible, isVisible, toggle }
+}
+
+// ─── Hook: useColumnWidths ──────────────────────────────────────────────────
+
+/**
+ * Manages drag-to-resize column widths. Persists to localStorage.
+ * Returns a width map { columnKey: pixels } and a drag handler factory.
+ */
+export function useColumnWidths(
+  storageKey: string,
+  defaultWidths: Record<string, number> = {},
+) {
+  const loadWidths = (): Record<string, number> => {
+    if (typeof window === 'undefined') return defaultWidths
+    try {
+      const stored = window.localStorage.getItem(`dt-widths-${storageKey}`)
+      if (stored) return { ...defaultWidths, ...JSON.parse(stored) }
+    } catch { /* ignore */ }
+    return defaultWidths
+  }
+
+  const [widths, setWidths] = useState<Record<string, number>>(loadWidths)
+  const dragRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(`dt-widths-${storageKey}`, JSON.stringify(widths))
+    } catch { /* ignore */ }
+  }, [widths, storageKey])
+
+  const startDrag = useCallback((key: string, e: React.MouseEvent, currentWidth: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragRef.current = { key, startX: e.clientX, startWidth: currentWidth }
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = ev.clientX - dragRef.current.startX
+      const newWidth = Math.max(40, dragRef.current.startWidth + delta) // min 40px
+      setWidths(prev => ({ ...prev, [dragRef.current!.key]: newWidth }))
+    }
+
+    const onUp = () => {
+      dragRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [])
+
+  return { widths, startDrag }
 }
 
 // ─── ColumnToggle button + popover ──────────────────────────────────────────
@@ -65,10 +114,6 @@ export interface ColumnDef {
   hideable?: boolean
 }
 
-/**
- * A "Columns" button with a popover that lets users toggle column visibility.
- * Drop this into any table header bar.
- */
 export function ColumnToggle({
   columns,
   visible,
@@ -84,9 +129,7 @@ export function ColumnToggle({
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', handler)
@@ -145,26 +188,30 @@ export function ColumnToggle({
   )
 }
 
+// ─── ColumnResizeHandle — drag to resize a column ───────────────────────────
+
+export function ColumnResizeHandle({
+  columnKey,
+  currentWidth,
+  onDragStart,
+}: {
+  columnKey: string
+  currentWidth: number
+  onDragStart: (key: string, e: React.MouseEvent, width: number) => void
+}) {
+  return (
+    <div
+      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize group/resizer hover:bg-primary/40 transition-colors z-20"
+      onMouseDown={(e) => onDragStart(columnKey, e, currentWidth)}
+      title="Drag to resize"
+    >
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-4 bg-[var(--pane-divider)] group-hover/resizer:bg-primary/60" />
+    </div>
+  )
+}
+
 // ─── StickyTableShell — wraps header + body in a single scroll container ────
 
-/**
- * Wraps a table header and body rows in a single `overflow-auto` container
- * so that:
- *  - Vertical scroll: header stays pinned (position: sticky; top: 0)
- *  - Horizontal scroll: header scrolls with body (columns stay aligned)
- *
- * Usage:
- * <StickyTableShell minWidth={900}>
- *   <StickyTableHeader>
- *     {col1 && <div className="w-32 px-2">Col 1</div>}
- *     ...
- *     <ColumnToggle ... />
- *   </StickyTableHeader>
- *   <StickyTableBody>
- *     {rows.map(...)}
- *   </StickyTableBody>
- * </StickyTableShell>
- */
 export function StickyTableShell({
   children,
   minWidth,
@@ -175,7 +222,7 @@ export function StickyTableShell({
   className?: string
 }) {
   return (
-    <div className={cn('flex-1 min-h-0 overflow-auto', className)}>
+    <div className={cn('flex-1 min-h-0 overflow-auto omnisite-table', className)}>
       <div style={minWidth ? { minWidth: `${minWidth}px` } : undefined}>
         {children}
       </div>
@@ -184,8 +231,8 @@ export function StickyTableShell({
 }
 
 /**
- * A sticky table header row. Place inside <StickyTableShell>.
- * Stays pinned during vertical scroll, moves with horizontal scroll.
+ * A sticky table header row with subtle column separators.
+ * Place inside <StickyTableShell>.
  */
 export function StickyTableHeader({
   children,
@@ -196,7 +243,7 @@ export function StickyTableHeader({
 }) {
   return (
     <div className={cn(
-      'flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30 sticky top-0 z-10',
+      'flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30 sticky top-0 z-10 omnisite-table-header',
       className,
     )}>
       {children}
@@ -205,7 +252,7 @@ export function StickyTableHeader({
 }
 
 /**
- * Table body wrapper. Just a plain container for rows.
+ * Table body wrapper with subtle row separators.
  */
 export function StickyTableBody({
   children,
@@ -214,5 +261,5 @@ export function StickyTableBody({
   children: ReactNode
   className?: string
 }) {
-  return <div className={className}>{children}</div>
+  return <div className={cn('omnisite-table-body', className)}>{children}</div>
 }

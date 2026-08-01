@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { undoableToast } from '@/components/ui/confirm-dialog'
 import { usePersistentState } from '@/lib/use-persistent-state'
-import { useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
+import { useColumnVisibility, useColumnWidths, ColumnToggle, ColumnResizeHandle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import {
@@ -108,6 +108,10 @@ export function BoqModule() {
     { key: 'ra', label: 'RA' },
   ]
   const { visible: boqColVisible, isVisible: boqIsVisible, toggle: boqToggleCol } = useColumnVisibility(BOQ_COLS.map(c => c.key), [], 'boq-grid')
+  // Column width management — drag to resize, persisted to localStorage.
+  const { widths: colWidths, startDrag: colStartDrag } = useColumnWidths('boq-grid', {
+    code: 64, qty: 96, uom: 56, rate: 112, amount: 112, type: 96, ra: 40,
+  })
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
   // Drag-and-drop state
@@ -582,14 +586,14 @@ export function BoqModule() {
           <StickyTableHeader>
             <div className="w-6" />
             <div className="w-7" />
-            {boqIsVisible('code') && <div className="w-16 px-2">Code</div>}
+            {boqIsVisible('code') && <div className="px-2 relative" style={{ width: `${colWidths.code || 64}px` }}>Code<ColumnResizeHandle columnKey="code" currentWidth={colWidths.code || 64} onDragStart={colStartDrag} /></div>}
             <div className="flex-1 px-2">Description</div>
-            {boqIsVisible('qty') && <div className="w-24 px-2 text-right">Qty</div>}
-            {boqIsVisible('uom') && <div className="w-14 px-2">UOM</div>}
-            {boqIsVisible('rate') && <div className="w-28 px-2 text-right">Rate (NPR)</div>}
-            {boqIsVisible('amount') && <div className="w-28 px-2 text-right">Amount (NPR)</div>}
-            {boqIsVisible('type') && <div className="w-24 px-2">Type</div>}
-            {boqIsVisible('ra') && <div className="w-10 text-center">RA</div>}
+            {boqIsVisible('qty') && <div className="px-2 text-right relative" style={{ width: `${colWidths.qty || 96}px` }}>Qty<ColumnResizeHandle columnKey="qty" currentWidth={colWidths.qty || 96} onDragStart={colStartDrag} /></div>}
+            {boqIsVisible('uom') && <div className="px-2 relative" style={{ width: `${colWidths.uom || 56}px` }}>UOM<ColumnResizeHandle columnKey="uom" currentWidth={colWidths.uom || 56} onDragStart={colStartDrag} /></div>}
+            {boqIsVisible('rate') && <div className="px-2 text-right relative" style={{ width: `${colWidths.rate || 112}px` }}>Rate (NPR)<ColumnResizeHandle columnKey="rate" currentWidth={colWidths.rate || 112} onDragStart={colStartDrag} /></div>}
+            {boqIsVisible('amount') && <div className="px-2 text-right relative" style={{ width: `${colWidths.amount || 112}px` }}>Amount (NPR)<ColumnResizeHandle columnKey="amount" currentWidth={colWidths.amount || 112} onDragStart={colStartDrag} /></div>}
+            {boqIsVisible('type') && <div className="px-2 relative" style={{ width: `${colWidths.type || 96}px` }}>Type<ColumnResizeHandle columnKey="type" currentWidth={colWidths.type || 96} onDragStart={colStartDrag} /></div>}
+            {boqIsVisible('ra') && <div className="text-center relative" style={{ width: `${colWidths.ra || 40}px` }}>RA<ColumnResizeHandle columnKey="ra" currentWidth={colWidths.ra || 40} onDragStart={colStartDrag} /></div>}
             <div className="flex-shrink-0 pr-2"><ColumnToggle columns={BOQ_COLS} visible={boqColVisible} onToggle={boqToggleCol} /></div>
           </StickyTableHeader>
           <StickyTableBody>
@@ -616,6 +620,7 @@ export function BoqModule() {
                 onUpdateItem={updateItem}
                 onSetEditing={setEditing}
                 isVisible={boqIsVisible}
+                colWidths={colWidths}
               />
               <DragOverlay>
                 {draggedItem ? (
