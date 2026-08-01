@@ -5,7 +5,11 @@ import { undoableToast } from '@/components/ui/confirm-dialog'
 import { BOQ_DATA, type BoqItem } from './types'
 import { flattenTree, rebuildTreeFromRows, findItemAndParent, updateLevels } from '@/lib/tree-utils'
 
-// Deep-clone helper using immer (replaces deepClone())
+// Deep-clone helper using immer's produce() with a no-op recipe.
+// Intentionally used instead of structuredClone() for undo/redo snapshots:
+// immer's structural sharing means that for large trees where only a few
+// leaves changed, the clone is much cheaper (shares unchanged subtrees by
+// reference) than structuredClone which deep-copies everything.
 const deepClone = <T>(obj: T): T => produce(obj, () => {})
 
 // ─── BOQ-specific tree helpers ────────────────────────────────────────────

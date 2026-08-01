@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Bell, CheckCircle2, AlertTriangle, Clock, FileText, ShieldAlert, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { useApp, type ModuleId } from '@/lib/app-store'
+import { type ModuleId } from '@/lib/app-store'
 import { sendNotification, type NotificationType } from '@/lib/notifications'
 
 interface Notification {
@@ -133,7 +134,7 @@ export function NotificationsBell() {
   const [items, setItems] = useState<Notification[]>(NOTIFICATIONS)
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all')
   const ref = useRef<HTMLDivElement>(null)
-  const { setActiveModule } = useApp()
+  const router = useRouter()
   const unreadCount = items.filter((n) => n.unread).length
   const visibleItems = items.filter((n) =>
     filter === 'all' ? true : filter === 'unread' ? n.unread : n.severity === 'critical'
@@ -278,7 +279,7 @@ export function NotificationsBell() {
                     onClick={() => {
                       markRead(n.id)
                       if (n.module) {
-                        setActiveModule(n.module)
+                        router.push(`/${n.module}`)
                         setOpen(false)
                       }
                     }}

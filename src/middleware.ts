@@ -18,8 +18,17 @@ const SECURITY_HEADERS: Record<string, string> = {
 }
 
 /**
- * Edge middleware — checks Supabase session cookie and redirects
- * unauthenticated users to /login. Sets security headers on all responses.
+ * Edge middleware — sets security headers on all responses.
+ *
+ * Auth gating is handled client-side in the (workspace) layout, which reads
+ * the Supabase auth state directly (persisted to localStorage by the
+ * @supabase/supabase-js client). The previous cookie-based middleware check
+ * caused a login loop because the client-side Supabase SDK uses localStorage,
+ * not cookies — so the middleware always saw "no session" and redirected to
+ * /login even after a successful sign-in.
+ *
+ * To add server-side auth gating (for SSR/SSG protection), migrate to
+ * @supabase/ssr which manages cookies properly for server-side reads.
  */
 export function middleware(req: NextRequest) {
   const res = NextResponse.next()
@@ -27,28 +36,6 @@ export function middleware(req: NextRequest) {
   // Set all security headers
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     res.headers.set(key, value)
-  }
-
-  const { pathname } = req.nextUrl
-
-  // Skip auth check for: /login, /api/*, /_next/*, public assets
-  if (
-    pathname === '/login' ||
-    pathname.startsWith('/api/') ||
-    pathname.startsWith('/_next/') ||
-    pathname === '/logo.svg'
-  ) {
-    return res
-  }
-
-  // Check for Supabase session cookie
-  const hasSession = req.cookies.getAll().some((c) => c.name.startsWith('sb-'))
-  const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL
-
-  if (supabaseConfigured && !hasSession) {
-    const loginUrl = new URL('/login', req.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
   }
 
   return res

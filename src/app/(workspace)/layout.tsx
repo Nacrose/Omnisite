@@ -90,6 +90,9 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   }, [userMenuOpen])
 
   // ─── Auth gating ──────────────────────────────────────────────────────────
+  // When Supabase is configured and the user is genuinely not signed in
+  // (loading finished, no user), bounce them to /login. The early return
+  // below prevents the shell from flashing before the redirect fires.
   useEffect(() => {
     if (isSupabaseConfigured() && !loading && !user) {
       router.replace('/login')
@@ -121,6 +124,13 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     )
+  }
+
+  // Auth resolved but no user (Supabase configured, not signed in). Render
+  // nothing — the effect above is already navigating to /login. Without this
+  // early return, the full shell would flash before the redirect completes.
+  if (isSupabaseConfigured() && !user) {
+    return null
   }
 
   return (

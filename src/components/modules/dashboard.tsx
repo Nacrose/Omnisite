@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useApp, ModuleId } from '@/lib/app-store'
+import { ModuleId } from '@/lib/app-store'
 import { Separator } from '@/components/ui/separator'
 import {
   TrendingUp,
@@ -175,7 +176,8 @@ const GANTT_MINI_TASKS = [
 ]
 
 export function DashboardModule() {
-  const { setActiveModule } = useApp()
+  const router = useRouter()
+  const navigateToModule = (id: string) => router.push(`/${id}`)
   // Compute totals from the real arrays so the badges never lie.
   const backlogTotal = BACKLOG.reduce((s, b) => s + b.value, 0)
   const miniCritical = GANTT_MINI_TASKS.filter((t) =>
@@ -226,11 +228,11 @@ export function DashboardModule() {
                   : '—'}
               </span>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setActiveModule('daily-ops')}>
+            <Button variant="outline" size="sm" onClick={() => navigateToModule('daily-ops')}>
               <Cloud className="mr-1.5 h-4 w-4" />
               24°C · Partly Cloudy
             </Button>
-            <Button size="sm" onClick={() => setActiveModule('reports')}>
+            <Button size="sm" onClick={() => navigateToModule('reports')}>
               <Plus className="mr-1.5 h-4 w-4" />
               New Report
             </Button>
@@ -245,7 +247,7 @@ export function DashboardModule() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 60, duration: 0.4, ease: 'easeOut' }}
-              onClick={() => setActiveModule(k.module)}
+              onClick={() => navigateToModule(k.module)}
             >
               <Card className="group hover:border-primary/40 cursor-pointer p-4 transition-shadow hover:shadow-md">
                 <div className="flex items-center justify-between">
@@ -311,7 +313,7 @@ export function DashboardModule() {
               {URGENT_ACTIONS.map((a, i) => (
                 <div
                   key={i}
-                  onClick={() => setActiveModule(a.module)}
+                  onClick={() => navigateToModule(a.module)}
                   className="hover:bg-accent/50 hover:border-primary/30 group cursor-pointer rounded-md border border-[var(--pane-divider)] p-2.5 transition-colors"
                 >
                   <div className="flex items-start gap-2">
@@ -542,7 +544,7 @@ export function DashboardModule() {
                 variant="ghost"
                 size="sm"
                 className="w-full"
-                onClick={() => setActiveModule('daily-ops')}
+                onClick={() => navigateToModule('daily-ops')}
               >
                 Open Daily Operations <ArrowRight className="ml-1 h-3.5 w-3.5" />
               </Button>

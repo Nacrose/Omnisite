@@ -1,6 +1,7 @@
 'use client'
 
-import { useApp, ModuleId } from '@/lib/app-store'
+import { useApp, type ModuleId } from '@/lib/app-store'
+import { useRouter } from 'next/navigation'
 import {
   X,
   ClipboardList,
@@ -80,7 +81,12 @@ const ACTIONS: {
 ]
 
 export function QuickAddMenu() {
-  const { quickAddOpen, setQuickAddOpen, setActiveModule } = useApp()
+  const { quickAddOpen, setQuickAddOpen } = useApp()
+  const router = useRouter()
+  const navigateToModule = (id: string) => {
+    router.push(`/${id}`)
+    setQuickAddOpen(false)
+  }
 
   return (
     <>
@@ -109,11 +115,10 @@ export function QuickAddMenu() {
                   <button
                     key={a.id}
                     onClick={() => {
-                      setActiveModule(a.module)
+                      navigateToModule(a.module)
                       toast.success(`Navigated to ${a.label}`, {
                         description: `Switched to the ${a.module} module`,
                       })
-                      setQuickAddOpen(false)
                     }}
                     className="hover:bg-accent hover:border-primary/30 group flex flex-col items-start gap-1.5 rounded-lg border border-[var(--pane-divider)] p-3 text-left transition-all"
                   >

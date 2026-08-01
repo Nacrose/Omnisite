@@ -18,7 +18,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'bun run dev',
+    // In CI, use the pre-built production server (faster, closer to real
+    // deployment). In dev, use next dev for HMR.
+    command: process.env.CI ? 'bun run start' : 'bun run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

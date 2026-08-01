@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Plus, Copy, Mail, Camera, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useApp } from '@/lib/app-store'
 import { DsrEntry, StatusDot } from './types'
 import {
   useColumnVisibility,
@@ -28,7 +28,7 @@ export function WorkProgressView({
   const selected = entries.find((e) => e.id === selectedId)
   // Stable ITR ID — generated once per mount so it doesn't change on every render.
   const [itrId] = useState(() => Math.floor(Math.random() * 9000) + 1000)
-  const { setActiveModule } = useApp()
+  const router = useRouter()
   const COLS: ColumnDef[] = [
     { key: 'dsr', label: 'DSR #' },
     { key: 'task', label: 'Task' },
@@ -73,7 +73,7 @@ export function WorkProgressView({
             size="sm"
             variant="outline"
             className="h-6 gap-1 text-[10px]"
-            onClick={() => setActiveModule('qs')}
+            onClick={() => router.push('/qs')}
           >
             View ITR
           </Button>

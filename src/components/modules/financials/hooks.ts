@@ -3,6 +3,11 @@ import { CBS, type CbsNode } from './types'
 import { undoableToast } from '@/components/ui/confirm-dialog'
 import { flattenTree, rebuildTreeFromRows as rebuildTree } from '@/lib/tree-utils'
 
+// Deep-clone helper using immer's produce() with a no-op recipe.
+// Intentionally used instead of structuredClone() for undo/redo snapshots:
+// immer's structural sharing means that for large trees where only a few
+// leaves changed, the clone is much cheaper (shares unchanged subtrees by
+// reference) than structuredClone which deep-copies everything.
 const deepClone = <T>(obj: T): T => produce(obj, () => {})
 
 // ─── Field normalization ──────────────────────────────────────────────────

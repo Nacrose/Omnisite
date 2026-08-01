@@ -8,6 +8,12 @@ on:
     branches:
       - main
 
+# Cancel in-progress runs on the same ref when a new commit is pushed.
+# Saves CI minutes and prevents stale builds from overwriting fresh ones.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     name: Lint + TypeCheck + Test + Audit
@@ -17,6 +23,12 @@ jobs:
       - uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Lint
         run: bun run lint
@@ -39,11 +51,18 @@ jobs:
       - uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Build
         run: bun run build
       - name: Bundle size guard
-        # Fails if total chunk JS exceeds the threshold (default 600 KB).
+        # Fails if total chunk JS exceeds 3500 KB or any single chunk exceeds
+        # 1300 KB. See scripts/check-bundle-size.mjs for details.
         run: bun run size-check
       - name: Cache .next
         uses: actions/cache@v4
@@ -60,7 +79,18 @@ jobs:
       - uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - name: Build for E2E
+        # Pre-build the app so the e2e job runs `next start` (production
+        # server) instead of `next dev` (JIT compilation). Faster + closer
+        # to the real deployment.
+        run: bun run build
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
       - name: Run Playwright tests
