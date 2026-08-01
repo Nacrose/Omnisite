@@ -8,6 +8,8 @@ import { toast } from 'sonner'
 
 interface Project {
   id: string
+  /** UUID matching the projects table in Supabase. 'p1' maps to the seeded project. */
+  dbId: string
   name: string
   code: string
   location: string
@@ -17,11 +19,11 @@ interface Project {
 }
 
 export const PROJECTS: Project[] = [
-  { id: 'p1', name: 'Kathmandu Ring Road Expansion — Package 3', code: 'KRR-P3', location: 'Kathmandu', value: 'NPR 487M', progress: 62, status: 'active' },
-  { id: 'p2', name: 'Melamchi Water Supply — Treatment Plant', code: 'MWS-TP', location: 'Sindhupalchok', value: 'NPR 1.2B', progress: 78, status: 'active' },
-  { id: 'p3', name: 'Pokhara International Airport — Terminal', code: 'PIA-T', location: 'Pokhara', value: 'NPR 640M', progress: 45, status: 'active' },
-  { id: 'p4', name: 'Fast Track Expressway — Section 4', code: 'FT-E4', location: 'Makwanpur', value: 'NPR 2.1B', progress: 12, status: 'active' },
-  { id: 'p5', name: 'Bharatpur Hospital — New Wing', code: 'BHR-NW', location: 'Chitwan', value: 'NPR 320M', progress: 100, status: 'closed' },
+  { id: 'p1', dbId: '00000000-0000-0000-0000-000000000001', name: 'Kathmandu Ring Road Expansion — Package 3', code: 'KRR-P3', location: 'Kathmandu', value: 'NPR 487M', progress: 62, status: 'active' },
+  { id: 'p2', dbId: '00000000-0000-0000-0000-000000000002', name: 'Melamchi Water Supply — Treatment Plant', code: 'MWS-TP', location: 'Sindhupalchok', value: 'NPR 1.2B', progress: 78, status: 'active' },
+  { id: 'p3', dbId: '00000000-0000-0000-0000-000000000003', name: 'Pokhara International Airport — Terminal', code: 'PIA-T', location: 'Pokhara', value: 'NPR 640M', progress: 45, status: 'active' },
+  { id: 'p4', dbId: '00000000-0000-0000-0000-000000000004', name: 'Fast Track Expressway — Section 4', code: 'FT-E4', location: 'Makwanpur', value: 'NPR 2.1B', progress: 12, status: 'active' },
+  { id: 'p5', dbId: '00000000-0000-0000-0000-000000000005', name: 'Bharatpur Hospital — New Wing', code: 'BHR-NW', location: 'Chitwan', value: 'NPR 320M', progress: 100, status: 'closed' },
 ]
 
 export function ProjectSwitcher() {
@@ -40,7 +42,7 @@ export function ProjectSwitcher() {
   const current = PROJECTS.find(p => p.id === activeProjectId) ?? PROJECTS[0]
 
   const selectProject = (p: Project) => {
-    setActiveProject(p.name, p.id)
+    setActiveProject(p.name, p.id, p.dbId)
     setOpen(false)
     toast.success(`Switched to project`, { description: p.name })
   }

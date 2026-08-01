@@ -24,8 +24,9 @@ interface AppState {
   activeModule: ModuleId
   activeProject: string
   activeProjectId: string
+  activeProjectDbId: string
   setActiveModule: (m: ModuleId) => void
-  setActiveProject: (p: string, id: string) => void
+  setActiveProject: (p: string, id: string, dbId: string) => void
   // Persisted pane state
   leftPaneOpen: boolean
   rightPaneOpen: boolean
@@ -48,13 +49,14 @@ export const useApp = create<AppState>()(
       activeModule: 'dashboard',
       activeProject: 'Kathmandu Ring Road Expansion — Package 3',
       activeProjectId: 'p1',
+      activeProjectDbId: '00000000-0000-0000-0000-000000000001',
       setActiveModule: (m) => {
         set({ activeModule: m })
         // Track recent — dedupe and prepend, cap at 5
         const prev = get().recentModules.filter(x => x !== m)
         set({ recentModules: [m, ...prev].slice(0, 5) })
       },
-      setActiveProject: (p, id) => set({ activeProject: p, activeProjectId: id }),
+      setActiveProject: (p, id, dbId) => set({ activeProject: p, activeProjectId: id, activeProjectDbId: dbId }),
       leftPaneOpen: true,
       rightPaneOpen: true,
       toggleLeftPane: () => set((s) => ({ leftPaneOpen: !s.leftPaneOpen })),
@@ -77,6 +79,7 @@ export const useApp = create<AppState>()(
         activeModule: state.activeModule,
         activeProject: state.activeProject,
         activeProjectId: state.activeProjectId,
+        activeProjectDbId: state.activeProjectDbId,
         recentModules: state.recentModules,
         leftPaneOpen: state.leftPaneOpen,
         rightPaneOpen: state.rightPaneOpen,

@@ -77,9 +77,9 @@ export function useSyncedState<T>(
   const [localState, setLocalState] = usePersistentState(localStorageKey, initial)
   const [supabaseState, setSupabaseState] = useState<T | null>(null)
   const [loading, setLoading] = useState(useSupabase)
-  // Read the active project ID from the app store so data is scoped per-project.
+  // Read the active project's DB UUID from the app store so data is scoped per-project.
   // When the user switches projects, this hook re-fetches with the new project_id.
-  const { activeProjectId } = useApp()
+  const { activeProjectDbId } = useApp()
 
   const pk = config?.primaryKey || 'id'
   const fmap = config?.fieldMap || {}
@@ -144,7 +144,7 @@ export function useSyncedState<T>(
       try {
         // Pass the active project_id as a query param so the API route
         // can filter data per-project.
-        const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectId ? { project_id: activeProjectId } : undefined)
+        const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectDbId ? { project_id: activeProjectDbId } : undefined)
         if (!mounted) return
         if (rows.length > 0) {
           const transformed = rows.map(row => fromDb(row))
@@ -172,7 +172,7 @@ export function useSyncedState<T>(
         { event: '*', schema: 'public', table: supabaseTable },
         async () => {
           try {
-            const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectId ? { project_id: activeProjectId } : undefined)
+            const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectDbId ? { project_id: activeProjectDbId } : undefined)
             if (rows && mounted) {
               const transformed = rows.map(row => fromDb(row))
               setSupabaseState(transformed as unknown as T)
@@ -188,7 +188,7 @@ export function useSyncedState<T>(
       mounted = false
       supabase!.removeChannel(channel)
     }
-  }, [supabaseTable, activeProjectId])
+  }, [supabaseTable, activeProjectDbId])
 
   // ─── State setter — race-condition-free ───────────────────────────────────
   // Uses a FUNCTIONAL setSupabaseState(prev => ...) so the updater always
@@ -226,7 +226,7 @@ export function useSyncedState<T>(
           if (prevItem !== undefined && JSON.stringify(prevItem) === JSON.stringify(item)) {
             continue
           }
-          upsertOne(apiEndpoint, { ...row, id, project_id: activeProjectId }).catch(e => {
+          upsertOne(apiEndpoint, { ...row, id, project_id: activeProjectDbId }).catch(e => {
             console.warn(`[useSyncedState] upsert failed for ${supabaseTable}:${id}`, e)
           })
         }

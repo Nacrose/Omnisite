@@ -29,14 +29,12 @@ CREATE INDEX IF NOT EXISTS audit_log_changed_by_idx
 CREATE INDEX IF NOT EXISTS audit_log_timestamp_idx
   ON audit_log (timestamp DESC);
 
--- Row Level Security — restricts who can read/modify audit rows.
--- The "dev" policy below is wide-open so the anon key works during development.
--- In production, replace this with role-based policies (e.g. only PMs and
--- auditors can SELECT; only the service_role can INSERT; no UPDATE/DELETE).
+-- Row Level Security — the audit_log is immutable for regular users.
+-- Only the service_role can INSERT (used by API routes for logging).
+-- PMs can SELECT audit entries for their projects.
+-- No UPDATE/DELETE — the audit trail is append-only.
+-- See supabase-rls-policies.sql for the full policy definitions.
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
+-- Drop the old wide-open dev policy if it exists.
 DROP POLICY IF EXISTS "dev" ON audit_log;
-CREATE POLICY "dev" ON audit_log
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);

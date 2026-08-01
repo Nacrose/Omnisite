@@ -21,10 +21,15 @@ CREATE TABLE IF NOT EXISTS projects (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert default project
-INSERT INTO projects (name, code, location, value, progress, status)
-VALUES ('Kathmandu Ring Road Expansion — Package 3', 'KRR-P3', 'Kathmandu', 487400000, 62, 'active')
-ON CONFLICT DO NOTHING;
+-- Insert default projects (with fixed UUIDs that match the client-side PROJECTS array)
+INSERT INTO projects (id, name, code, location, value, progress, status)
+VALUES
+  ('00000000-0000-0000-0000-000000000001', 'Kathmandu Ring Road Expansion — Package 3', 'KRR-P3', 'Kathmandu', 487400000, 62, 'active'),
+  ('00000000-0000-0000-0000-000000000002', 'Melamchi Water Supply — Treatment Plant', 'MWS-TP', 'Sindhupalchok', 1200000000, 78, 'active'),
+  ('00000000-0000-0000-0000-000000000003', 'Pokhara International Airport — Terminal', 'PIA-T', 'Pokhara', 640000000, 45, 'active'),
+  ('00000000-0000-0000-0000-000000000004', 'Fast Track Expressway — Section 4', 'FT-E4', 'Makwanpur', 2100000000, 12, 'active'),
+  ('00000000-0000-0000-0000-000000000005', 'Bharatpur Hospital — New Wing', 'BHR-NW', 'Chitwan', 320000000, 100, 'closed')
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
 -- BOQ Items
@@ -293,6 +298,9 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 -- ============================================================
 -- Enable Row Level Security (multi-tenancy)
 -- ============================================================
+-- RLS is enabled on all tables. The actual policies are in
+-- supabase-rls-policies.sql — run that file AFTER this one.
+-- DO NOT create "Allow all" policies here; they defeat the purpose of RLS.
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE boq_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
@@ -307,23 +315,6 @@ ALTER TABLE equipment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subcontractors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
-
--- For development phase: allow all access (no auth yet)
--- In production, replace with proper RLS policies per user role
-CREATE POLICY "Allow all for development" ON projects FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON boq_items FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON tasks FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON dsr_entries FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON cbs_nodes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON requisitions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON purchase_orders FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON drawings FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON letters FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON qs_items FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON equipment FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON subcontractors FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON workers FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for development" ON chat_messages FOR ALL USING (true) WITH CHECK (true);
 
 -- ============================================================
 -- Enable Realtime for live updates
