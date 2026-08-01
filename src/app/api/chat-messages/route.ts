@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth } from '@/lib/api-auth'
+import { requireAuth, requireRole } from '@/lib/api-auth'
 import { logAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody, chatMessageSchema } from '@/lib/validation'
@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const roleError = requireRole(user, 'chat_messages')
+  if (roleError) return roleError
 
   const rateLimitError = checkRateLimit(req)
   if (rateLimitError) return rateLimitError
@@ -41,6 +43,10 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.json()
   const { data: body, error: validationError } = validateBody(chatMessageSchema, rawBody)
   if (validationError) return validationError
+
+  // Override sender fields with the authenticated user's identity
+  body.sender_id = user.id
+  body.sender_name = user.email
 
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
@@ -69,6 +75,8 @@ export async function DELETE(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const roleError = requireRole(user, 'chat_messages')
+  if (roleError) return roleError
 
   const rateLimitError = checkRateLimit(req)
   if (rateLimitError) return rateLimitError

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth } from '@/lib/api-auth'
+import { requireAuth, requireRole } from '@/lib/api-auth'
 import { logAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody, boqItemSchema } from '@/lib/validation'
@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const roleError = requireRole(user, 'boq_items')
+  if (roleError) return roleError
 
   const rateLimitError = checkRateLimit(req)
   if (rateLimitError) return rateLimitError
@@ -58,6 +60,12 @@ export async function POST(req: NextRequest) {
 
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
+
+  // Fetch old values for audit (before the upsert overwrites them).
+  const { data: oldData } = body.id
+    ? await userClient.from('boq_items').select('*').eq('id', body.id).single()
+    : { data: null }
+
   const { data, error } = await userClient
     .from('boq_items')
     .upsert(body)
@@ -73,6 +81,7 @@ export async function POST(req: NextRequest) {
     record_id: body.id || data?.[0]?.id || 'unknown',
     action: 'UPDATE',
     changed_by: user.email,
+    changed_fields: oldData ? { old: oldData, new: body } : undefined,
   }).catch(() => {})
 
   return NextResponse.json(data)
@@ -83,6 +92,8 @@ export async function DELETE(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const roleError = requireRole(user, 'boq_items')
+  if (roleError) return roleError
 
   const rateLimitError = checkRateLimit(req)
   if (rateLimitError) return rateLimitError

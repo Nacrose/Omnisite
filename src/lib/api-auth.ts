@@ -1,28 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, isServerSupabaseConfigured } from '@/lib/supabase-server'
+import type { Role } from '@/lib/permissions'
 
 export interface AuthenticatedUser {
   id: string
   email: string
-  role: string
+  role: Role
   /** The user's Supabase access token — pass to createUserClient() for RLS-scoped queries. */
   accessToken: string
 }
 
+// ─── Permission map: API table → required role for write operations ────────
+// Read access is controlled by RLS (any authenticated user with project access
+// can read). Write access is enforced here, server-side.
+const TABLE_WRITE_ROLES: Record<string, Role[]> = {
+  boq_items: ['PM', 'SITE_ENGINEER'],
+  tasks: ['PM', 'SITE_ENGINEER'],
+  dsr_entries: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
+  cbs_nodes: ['PM'],
+  requisitions: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  purchase_orders: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  drawings: ['PM', 'SITE_ENGINEER'],
+  letters: ['PM', 'SITE_ENGINEER'],
+  qs_items: ['PM', 'SITE_ENGINEER'],
+  equipment: ['PM', 'SITE_ENGINEER'],
+  subcontractors: ['PM'],
+  workers: ['PM', 'SITE_ENGINEER', 'FOREMAN'],
+  chat_messages: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
+  projects: ['PM'],
+  user_projects: ['PM'],
+}
+
 /**
  * Verify that the incoming API request has a valid Supabase session.
- *
- * SECURITY MODEL:
- * - If Supabase is NOT configured (true demo mode — no env vars at all),
- *   requests pass through with a demo user. This is safe because there's
- *   no database to expose.
- * - If Supabase IS configured, the request MUST have a valid Bearer token.
- *   No exceptions, no bypass flags, no demo backdoors. An unauthenticated
- *   request gets a 401.
- *
- * The returned `accessToken` should be passed to `createUserClient()` to
- * create a per-request Supabase client that impersonates the user — all
- * queries are then scoped by RLS policies.
+ * No demo bypass. No backdoors. If Supabase is configured, a valid
+ * Bearer token is required.
  */
 export async function requireAuth(req: NextRequest): Promise<{
   user: AuthenticatedUser | null
@@ -37,7 +49,6 @@ export async function requireAuth(req: NextRequest): Promise<{
   }
 
   try {
-    // Extract the Bearer token from the Authorization header.
     const authHeader = req.headers.get('authorization')
     if (!authHeader?.startsWith('Bearer ')) {
       return {
@@ -50,10 +61,6 @@ export async function requireAuth(req: NextRequest): Promise<{
     }
 
     const token = authHeader.replace('Bearer ', '')
-
-    // Verify the token with Supabase. This checks that the token is valid
-    // and not expired. The user's RLS policies will apply when this token
-    // is used to create a user-scoped client.
     const { data, error } = await supabase.auth.getUser(token)
     if (error || !data.user) {
       return {
@@ -67,11 +74,12 @@ export async function requireAuth(req: NextRequest): Promise<{
 
     const u = data.user
     const meta = (u.user_metadata || {}) as Record<string, unknown>
+    const role = (meta.role as Role) || 'FOREMAN'
     return {
       user: {
         id: u.id,
         email: u.email || '',
-        role: (meta.role as string) || 'PM',
+        role,
         accessToken: token,
       },
       error: null,
@@ -85,4 +93,51 @@ export async function requireAuth(req: NextRequest): Promise<{
       ),
     }
   }
+}
+
+/**
+ * Require that the authenticated user has permission to WRITE to a table.
+ * Call this in POST/DELETE handlers after requireAuth().
+ *
+ * @example
+ *   const { user, error } = await requireAuth(req)
+ *   if (error) return error
+ *   const roleError = requireRole(user, 'boq_items')  // write access
+ *   if (roleError) return roleError
+ */
+export function requireRole(
+  user: AuthenticatedUser | null,
+  table: string,
+): NextResponse | null {
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Demo mode — PM has full access
+  if (user.id === 'demo-user') return null
+
+  const allowedRoles = TABLE_WRITE_ROLES[table]
+  if (!allowedRoles) {
+    // Unknown table — allow (table might not be in the map yet)
+    return null
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    return NextResponse.json(
+      {
+        error: `Forbidden — role '${user.role}' cannot write to '${table}'. Required: ${allowedRoles.join(' or ')}.`,
+      },
+      { status: 403 }
+    )
+  }
+
+  return null
+}
+
+/**
+ * Check if a user can read a table (for potential future use).
+ * Currently all authenticated users with project access can read (enforced by RLS).
+ */
+export function canRead(_user: AuthenticatedUser | null, _table: string): boolean {
+  return true // RLS handles read access
 }

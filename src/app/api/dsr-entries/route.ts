@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth } from '@/lib/api-auth'
+import { requireAuth, requireRole } from '@/lib/api-auth'
 import { logAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody } from '@/lib/validation'
@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const roleError = requireRole(user, 'dsr_entries')
+  if (roleError) return roleError
 
   const rateLimitError = checkRateLimit(req)
   if (rateLimitError) return rateLimitError
@@ -101,6 +103,8 @@ export async function DELETE(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const roleError = requireRole(user, 'dsr_entries')
+  if (roleError) return roleError
 
   const rateLimitError = checkRateLimit(req)
   if (rateLimitError) return rateLimitError
