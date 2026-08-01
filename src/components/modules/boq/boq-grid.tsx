@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, useRef, useMemo } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ChevronDown, ChevronRight, GripVertical, Lock } from 'lucide-react'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import {
   useDraggable, useDroppable,
 } from '@dnd-kit/core'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { BoqItem } from './types'
 
 export interface BoqEditingState {
@@ -29,45 +30,102 @@ export interface BoqGridProps {
   onToggleSelect: (id: string, value: boolean) => void
   onUpdateItem: (id: string, field: 'qty' | 'rate', value: number) => void
   onSetEditing: (e: BoqEditingState | null) => void
-  /** Column visibility checker. If provided, cells whose key returns false are hidden. */
   isVisible?: (key: string) => boolean
-  /** Column widths map (pixels). If provided, cells use these widths instead of CSS classes. */
   colWidths?: Record<string, number>
 }
 
-/**
- * Recursive BOQ grid renderer (formerly `renderRows` inside BoqModule).
- * Renders each item as a row, and recursively renders children when expanded.
- */
-export function BoqGrid(props: BoqGridProps & { depth?: number }) {
-  const { items, depth = 0, expanded, selectedId, draggedItem, dragOverHeading } = props
-  return (
-    <>
-      {items.map(item => {
-        const isHeading = item.type === 'Heading'
-        const isExpanded = expanded.has(item.id)
-        const hasChildren = item.children && item.children.length > 0
-        const isSelected = item.id === selectedId
+// ─── Flatten the tree into a visible-rows list (respecting expand state) ────
 
-        return (
-          <Fragment key={item.id}>
-            <BoqDndRow
-              item={item}
-              isHeading={isHeading}
-              isDragged={draggedItem?.id === item.id}
-              isDragOver={dragOverHeading === item.id && !!draggedItem}
+interface FlatRow {
+  item: BoqItem
+  depth: number
+  hasChildren: boolean
+  isExpanded: boolean
+  isHeading: boolean
+  isSelected: boolean
+}
+
+function flattenVisible(items: BoqItem[], depth: number, expanded: Set<string>, selectedId: string): FlatRow[] {
+  const out: FlatRow[] = []
+  for (const item of items) {
+    const hasChildren = !!(item.children && item.children.length > 0)
+    const isExpanded = expanded.has(item.id)
+    out.push({
+      item,
+      depth,
+      hasChildren,
+      isExpanded,
+      isHeading: item.type === 'Heading',
+      isSelected: item.id === selectedId,
+    })
+    if (hasChildren && isExpanded) {
+      out.push(...flattenVisible(item.children!, depth + 1, expanded, selectedId))
+    }
+  }
+  return out
+}
+
+// ─── Virtualized BOQ grid ───────────────────────────────────────────────────
+
+const ROW_HEIGHT = 36 // h-9 = 36px
+
+export function BoqGrid(props: BoqGridProps) {
+  const { items, expanded, selectedId } = props
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const flatRows = useMemo(
+    () => flattenVisible(items, 0, expanded, selectedId),
+    [items, expanded, selectedId],
+  )
+
+  const virtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  })
+
+  return (
+    <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
+      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}>
+        {virtualizer.getVirtualItems().map(virtualRow => {
+          const row = flatRows[virtualRow.index]
+          return (
+            <div
+              key={row.item.id}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
             >
-              <BoqRow item={item} depth={depth} isHeading={isHeading} isSelected={isSelected} hasChildren={!!hasChildren} isExpanded={isExpanded} props={props} />
-            </BoqDndRow>
-            {hasChildren && isExpanded && (
-              <BoqGrid {...props} items={item.children!} depth={depth + 1} />
-            )}
-          </Fragment>
-        )
-      })}
-    </>
+              <BoqDndRow
+                item={row.item}
+                isHeading={row.isHeading}
+                isDragged={props.draggedItem?.id === row.item.id}
+                isDragOver={props.dragOverHeading === row.item.id && !!props.draggedItem}
+              >
+                <BoqRow
+                  item={row.item}
+                  depth={row.depth}
+                  isHeading={row.isHeading}
+                  isSelected={row.isSelected}
+                  hasChildren={row.hasChildren}
+                  isExpanded={row.isExpanded}
+                  props={props}
+                />
+              </BoqDndRow>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
+
+// ─── Row components (unchanged from original) ───────────────────────────────
 
 function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, props }: {
   item: BoqItem
@@ -79,10 +137,8 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
   props: BoqGridProps
 }) {
   const { selected, editing, onSelectId, onContextMenu, onToggleExpand, onToggleSelect, onUpdateItem, onSetEditing } = props
-  // Column visibility — defaults to always-visible if not provided.
   const vis = props.isVisible ?? (() => true)
   const cw = props.colWidths || {}
-  const wp = (key: string, fallback: string) => cw[key] ? { width: `${cw[key]}px` } : { className: fallback }
   return (
     <div
       onClick={() => onSelectId(item.id)}
@@ -94,12 +150,9 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
       className={cn(
         'flex items-center h-9 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover transition-colors',
         isSelected && 'bg-accent',
-        // Heading rows get a subtle background tint so they stand out
-        // without needing indentation.
         isHeading && !isSelected && 'bg-secondary/20',
       )}
     >
-      {/* Checkbox column — same position for all rows */}
       <div className="w-6 flex-shrink-0 flex items-center justify-center">
         {!isHeading && (
           <Checkbox
@@ -109,7 +162,6 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
           />
         )}
       </div>
-      {/* Expand/collapse — same position for all rows */}
       <div className="w-7 flex-shrink-0 flex items-center justify-center">
         {hasChildren && (
           <button onClick={(e) => { e.stopPropagation(); onToggleExpand(item.id) }} className="p-0.5 hover:bg-accent-foreground/10 rounded">
@@ -117,38 +169,16 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
           </button>
         )}
       </div>
-      {/* Code — same position for all rows; hierarchy shown by numbering (1, 1.1, 1.1.1) */}
       {vis('code') && <div className={cn('flex-shrink-0 px-2 font-mono', !cw.code && 'w-16', isHeading ? 'text-foreground font-semibold' : 'text-muted-foreground')} style={cw.code ? { width: `${cw.code}px` } : undefined}>{item.code}</div>}
-      {/* Description — only the TEXT indents based on depth; the cell boundary stays aligned. */}
-      <div
-        className={cn('flex-1 min-w-0 truncate px-2', isHeading && 'font-semibold')}
-        style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      >
-        {item.desc}
-      </div>
-      {/* Qty cell — inline editable for non-heading items */}
+      <div className={cn('flex-1 min-w-0 truncate px-2', isHeading && 'font-semibold')} style={{ paddingLeft: `${depth * 14 + 8}px` }}>{item.desc}</div>
       {vis('qty') && <div className={cn('flex-shrink-0 pr-2', !cw.qty && 'w-24')} style={cw.qty ? { width: `${cw.qty}px` } : undefined}>
         {isHeading || item.type === 'Provisional Sum' ? (
           <span className="text-right block text-muted-foreground">{item.qty > 0 ? item.qty.toLocaleString() : '—'}</span>
         ) : (
-          <input
-            type="number"
-            value={item.qty || ''}
-            onChange={(e) => onUpdateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
-            onFocus={() => onSetEditing({ id: item.id, field: 'qty' })}
-            onBlur={() => onSetEditing(null)}
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
-              editing?.id === item.id && editing.field === 'qty'
-                ? 'border-primary bg-background ring-1 ring-primary/30'
-                : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
-            )}
-          />
+          <input type="number" value={item.qty || ''} onChange={(e) => onUpdateItem(item.id, 'qty', parseFloat(e.target.value) || 0)} onFocus={() => onSetEditing({ id: item.id, field: 'qty' })} onBlur={() => onSetEditing(null)} onClick={(e) => e.stopPropagation()} className={cn('w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent', editing?.id === item.id && editing.field === 'qty' ? 'border-primary bg-background ring-1 ring-primary/30' : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50')} />
         )}
       </div>}
       {vis('uom') && <div className={cn('flex-shrink-0 text-muted-foreground', !cw.uom && 'w-14')} style={cw.uom ? { width: `${cw.uom}px` } : undefined}>{item.uom || '—'}</div>}
-      {/* Rate cell — inline editable for non-heading items (locked for Provisional Sum) */}
       {vis('rate') && <div className={cn('flex-shrink-0 pr-2', !cw.rate && 'w-28')} style={cw.rate ? { width: `${cw.rate}px` } : undefined}>
         {isHeading ? (
           <span className="text-right block font-mono text-muted-foreground">—</span>
@@ -158,23 +188,9 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
             <span className="font-mono">{item.rate.toLocaleString()}</span>
           </div>
         ) : (
-          <input
-            type="number"
-            value={item.rate || ''}
-            onChange={(e) => onUpdateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
-            onFocus={() => onSetEditing({ id: item.id, field: 'rate' })}
-            onBlur={() => onSetEditing(null)}
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              'w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent',
-              editing?.id === item.id && editing.field === 'rate'
-                ? 'border-primary bg-background ring-1 ring-primary/30'
-                : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50'
-            )}
-          />
+          <input type="number" value={item.rate || ''} onChange={(e) => onUpdateItem(item.id, 'rate', parseFloat(e.target.value) || 0)} onFocus={() => onSetEditing({ id: item.id, field: 'rate' })} onBlur={() => onSetEditing(null)} onClick={(e) => e.stopPropagation()} className={cn('w-full h-6 text-right text-xs font-mono px-1.5 rounded border transition-colors bg-transparent', editing?.id === item.id && editing.field === 'rate' ? 'border-primary bg-background ring-1 ring-primary/30' : 'border-transparent hover:border-[var(--pane-divider)] hover:bg-accent/50')} />
         )}
       </div>}
-      {/* Amount cell — auto-calculated, live updates */}
       {vis('amount') && <div className={cn('flex-shrink-0 text-right pr-3 font-mono font-medium tabular-nums', !cw.amount && 'w-28')} style={cw.amount ? { width: `${cw.amount}px` } : undefined}>
         {item.qty * item.rate > 0 ? (item.qty * item.rate).toLocaleString() : '—'}
       </div>}
@@ -182,12 +198,7 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
         {isHeading ? (
           <Badge variant="outline" className="text-[10px]">Heading</Badge>
         ) : (
-          <Badge
-            variant="secondary"
-            className={cn('text-[10px]', item.type === 'Provisional Sum' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300', item.type === 'Daywork' && 'bg-violet-500/15 text-violet-700 dark:text-violet-300')}
-          >
-            {item.type}
-          </Badge>
+          <Badge variant="secondary" className={cn('text-[10px]', item.type === 'Provisional Sum' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300', item.type === 'Daywork' && 'bg-violet-500/15 text-violet-700 dark:text-violet-300')}>{item.type}</Badge>
         )}
       </div>}
       {vis('ra') && <div className={cn('flex-shrink-0 flex justify-center', !cw.ra && 'w-10')} style={cw.ra ? { width: `${cw.ra}px` } : undefined}>
@@ -201,13 +212,7 @@ export function ContextMenuItem({ icon, label, shortcut, onClick, danger }: {
   icon: React.ReactNode; label: string; shortcut?: string; onClick: () => void; danger?: boolean
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'w-full flex items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-accent text-left transition-colors',
-        danger && 'text-red-600 hover:bg-red-500/10 dark:text-red-400'
-      )}
-    >
+    <button onClick={onClick} className={cn('w-full flex items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-accent text-left transition-colors', danger && 'text-red-600 hover:bg-red-500/10 dark:text-red-400')}>
       <span className={cn('text-muted-foreground', danger && 'text-red-500')}>{icon}</span>
       <span className="flex-1">{label}</span>
       {shortcut && <kbd className="text-[9px] px-1 py-0.5 rounded bg-secondary text-muted-foreground font-mono">{shortcut}</kbd>}
@@ -215,57 +220,20 @@ export function ContextMenuItem({ icon, label, shortcut, onClick, danger }: {
   )
 }
 
-/**
- * Draggable + Droppable wrapper for BOQ rows.
- * - All rows are draggable (useDraggable) so they can be moved.
- * - Heading rows are also droppable (useDroppable) so items can be reparented under them.
- * - Shows a drag handle (GripVertical) on hover.
- * - Highlights heading rows when another item is dragged over them.
- */
-export function BoqDndRow({
-  item,
-  isHeading,
-  isDragged,
-  isDragOver,
-  children,
-}: {
-  item: BoqItem
-  isHeading: boolean
-  isDragged: boolean
-  isDragOver: boolean
-  children: React.ReactNode
+export function BoqDndRow({ item, isHeading, isDragged, isDragOver, children }: {
+  item: BoqItem; isHeading: boolean; isDragged: boolean; isDragOver: boolean; children: React.ReactNode
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: item.id,
-    disabled: false,
-  })
-
-  const droppable = useDroppable({
-    id: item.id,
-    disabled: !isHeading,
-  })
-
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id, disabled: false })
+  const droppable = useDroppable({ id: item.id, disabled: !isHeading })
   return (
     <div
-      ref={(node) => {
-        setNodeRef(node)
-        if (isHeading) droppable.setNodeRef(node)
-      }}
+      ref={(node) => { setNodeRef(node); if (isHeading) droppable.setNodeRef(node) }}
       {...attributes}
       {...listeners}
-      className={cn(
-        'relative group/dnd',
-        isDragging && 'opacity-40',
-        isHeading && isDragOver && !isDragged && 'ring-2 ring-primary ring-inset bg-primary/5',
-        droppable.isOver && isHeading && 'bg-primary/10',
-      )}
+      className={cn('relative group/dnd', isDragging && 'opacity-40', isHeading && isDragOver && !isDragged && 'ring-2 ring-primary ring-inset bg-primary/5', droppable.isOver && isHeading && 'bg-primary/10')}
     >
       {children}
-      {/* Drag handle — appears on hover */}
-      <div className={cn(
-        'absolute left-0 top-0 bottom-0 w-5 flex items-center justify-center cursor-grab opacity-0 group-hover/dnd:opacity-100 transition-opacity',
-        isDragging && 'cursor-grabbing'
-      )}>
+      <div className={cn('absolute left-0 top-0 bottom-0 w-5 flex items-center justify-center cursor-grab opacity-0 group-hover/dnd:opacity-100 transition-opacity', isDragging && 'cursor-grabbing')}>
         <GripVertical className="w-3 h-3 text-muted-foreground/60" />
       </div>
     </div>

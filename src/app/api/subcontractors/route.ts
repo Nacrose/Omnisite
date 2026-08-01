@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const rateLimitError = checkRateLimit(req)
+  const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
 
   const { searchParams } = new URL(req.url)
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const roleError = requireRole(user, 'subcontractors')
   if (roleError) return roleError
 
-  const rateLimitError = checkRateLimit(req)
+  const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
 
   const rawBody = await req.json()
@@ -102,7 +102,7 @@ export async function DELETE(req: NextRequest) {
   const roleError = requireRole(user, 'subcontractors')
   if (roleError) return roleError
 
-  const rateLimitError = checkRateLimit(req)
+  const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
 
   const { searchParams } = new URL(req.url)
