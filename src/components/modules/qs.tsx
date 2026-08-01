@@ -46,6 +46,7 @@ const NCR_WORKFLOW: Record<string, string | null> = {
 export function QsModule() {
   const [selectedId, setSelectedId] = useState('NCR-034')
   const [filter, setFilter] = useState<'All' | 'ITR' | 'NCR' | 'Punch' | 'Incident' | 'Near-Miss'>('All')
+  const [searchQuery, setSearchQuery] = useState('')
   const [items, setItems] = useSyncedState<QsItem[]>(
     'omnisite-qs-items',
     'qs_items',
@@ -55,7 +56,14 @@ export function QsModule() {
       primaryKey: 'id',
     }
   ) as [QsItem[], (v: QsItem[] | ((prev: QsItem[]) => QsItem[])) => void, boolean]
-  const filtered = filter === 'All' ? items : items.filter(i => i.type === filter)
+  const filteredByType = filter === 'All' ? items : items.filter(i => i.type === filter)
+  const filtered = searchQuery.trim()
+    ? filteredByType.filter(i =>
+        i.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        i.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (i.assignee || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (i.linkedBoq || '').toLowerCase().includes(searchQuery.toLowerCase()))
+    : filteredByType
   // Inspector should follow the filter — if the selected item isn't in the
   // filtered list, fall back to the first filtered item instead of showing
   // a stale selection from a different category.
@@ -99,7 +107,7 @@ export function QsModule() {
       leftPane={
         <>
           <PaneHeader title="Categories">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New register item', { description: 'Pick type (ITR/NCR/Punch/Incident/Near-Miss) — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             {(['All', 'ITR', 'NCR', 'Punch', 'Incident', 'Near-Miss'] as const).map(f => {
@@ -122,7 +130,7 @@ export function QsModule() {
             <div className="mt-4 px-3">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Search register…" className="h-8 pl-7 text-xs" />
+                <Input placeholder="Search register…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
             </div>
           </PaneBody>
@@ -519,11 +527,11 @@ function QsInspector({ item, onAdvance, onSaveCap }: {
                 </>
               )}
             </Button>
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2">
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('View Attachments', { description: `${photos.length} photo(s) attached to ${item.id}.` })}>
               <FileText className="w-3.5 h-3.5" />
               View Attachments ({photos.length} photos)
             </Button>
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><Users className="w-3.5 h-3.5" />Assign / Reassign</Button>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Assign / Reassign', { description: `Pick a new owner for ${item.id} — coming soon.` })}><Users className="w-3.5 h-3.5" />Assign / Reassign</Button>
 
             {!storageConfigured && (
               <p className="text-[10px] text-muted-foreground text-center pt-1">

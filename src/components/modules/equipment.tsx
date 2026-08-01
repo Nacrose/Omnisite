@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { toast } from 'sonner'
 
 interface Equip {
   id: string; name: string; type: string; status: 'active' | 'breakdown' | 'idle'; owned: boolean; operator?: string; licenseExp?: string;
@@ -65,6 +66,8 @@ function effectiveHours(e: Equip): number {
 
 export function EquipmentModule() {
   const [selectedId, setSelectedId] = useState('E-001')
+  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [searchQuery, setSearchQuery] = useState('')
   const [equipList, setEquipList] = useSyncedState<Equip[]>(
     'omnisite-equipment',
     'equipment',
@@ -80,24 +83,48 @@ export function EquipmentModule() {
   // ~NPR 34K and pushing wrong numbers to Financials ACWP).
   const totalCost = equipList.reduce((s, e) => s + (e.chargeRate || 0) * effectiveHours(e), 0)
 
+  // Filter categories by the search query (matches category name OR any
+  // equipment name/id/type within that category).
+  const allCategories = ['All', 'Excavator', 'Tipper Truck', 'Mixer', 'Vibrator', 'Plant', 'Compactor', 'Crane']
+  const visibleCategories = searchQuery.trim()
+    ? allCategories.filter(cat => {
+        if (cat === 'All') return true
+        const q = searchQuery.toLowerCase()
+        if (cat.toLowerCase().includes(q)) return true
+        return equipList.some(e =>
+          e.type === cat &&
+          (e.name.toLowerCase().includes(q) ||
+            e.id.toLowerCase().includes(q) ||
+            e.type.toLowerCase().includes(q)))
+      })
+    : allCategories
+
+  const selectCategory = (cat: string) => {
+    setSelectedCategory(cat)
+    if (cat !== 'All') {
+      const firstInCat = equipList.find(e => e.type === cat)
+      if (firstInCat) setSelectedId(firstInCat.id)
+    }
+  }
+
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Fleet Categories">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add equipment', { description: 'Equipment registration form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             <div className="px-3 mb-2">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Search fleet…" className="h-8 pl-7 text-xs" />
+                <Input placeholder="Search fleet…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
             </div>
-            {['Excavator', 'Tipper Truck', 'Mixer', 'Vibrator', 'Plant', 'Compactor', 'Crane'].map(cat => {
-              const count = equipList.filter(e => e.type === cat).length
+            {visibleCategories.map(cat => {
+              const count = cat === 'All' ? equipList.length : equipList.filter(e => e.type === cat).length
               return (
-                <button key={cat} className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-accent/50">
+                <button key={cat} onClick={() => selectCategory(cat)} className={cn('w-full flex items-center justify-between px-3 py-1.5 text-xs', selectedCategory === cat ? 'bg-accent border-l-2 border-l-primary' : 'hover:bg-accent/50 border-l-2 border-transparent')}>
                   <span className="flex items-center gap-2"><Truck className="w-3 h-3 text-muted-foreground" />{cat}</span>
                   <Badge variant="secondary" className="text-[9px] h-4 px-1">{count}</Badge>
                 </button>
@@ -248,7 +275,7 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
           <TabsContent value="docs" className="mt-0 px-4 py-3 space-y-2 text-xs">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Document Vault</div>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1"><Plus className="w-3 h-3" />Upload</Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => toast.info('Upload document', { description: 'Drag-and-drop a PDF/image into the document vault — coming soon.' })}><Plus className="w-3 h-3" />Upload</Button>
             </div>
             {equip.docs.map((d, i) => (
               <div key={i} className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)] hover:bg-accent/30 cursor-pointer">

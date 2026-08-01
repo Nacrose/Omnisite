@@ -9,6 +9,7 @@ import {
   Plus, FileText, Image, BarChart3, Calendar, Cloud, Table, Type, Download, Save, Eye, Layout,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 const TEMPLATES = [
   { id: 't1', name: 'Weekly Progress Report', pages: 4, lastUsed: '3 days ago' },
@@ -38,13 +39,13 @@ export function ReportsModule() {
       leftPane={
         <>
           <PaneHeader title="Templates & Widgets">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New template', { description: 'Creates a blank report template.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-3">
             <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Templates</div>
             <div className="space-y-1 px-2 mb-4">
               {TEMPLATES.map(t => (
-                <button key={t.id} className="w-full text-left p-2 rounded hover:bg-accent/50 border border-transparent hover:border-[var(--pane-divider)]">
+                <button key={t.id} className="w-full text-left p-2 rounded hover:bg-accent/50 border border-transparent hover:border-[var(--pane-divider)]" onClick={() => toast.info('Template loaded', { description: `${t.name} · ${t.pages} pages` })}>
                   <div className="text-xs font-medium">{t.name}</div>
                   <div className="text-[10px] text-muted-foreground">{t.pages} pages · {t.lastUsed}</div>
                 </button>
@@ -78,8 +79,8 @@ export function ReportsModule() {
       centerPane={
         <>
           <PaneHeader title="PDF Canvas · A4 Portrait">
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Eye className="w-3.5 h-3.5" />Preview</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Save className="w-3.5 h-3.5" />Save</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Preview', { description: 'Opens a print preview of the report.' })}><Eye className="w-3.5 h-3.5" />Preview</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.success('Report saved', { description: 'Layout stored. Next export will use this configuration.' })}><Save className="w-3.5 h-3.5" />Save</Button>
             <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => window.print()}><Download className="w-3.5 h-3.5" />Export PDF</Button>
           </PaneHeader>
           <PaneBody className="p-6 flex justify-center bg-secondary/20">
@@ -102,7 +103,7 @@ export function ReportsModule() {
                 <div className="text-[10px] text-slate-400 uppercase tracking-wider">Section 1 — Project Summary</div>
 
                 {/* S-Curve widget */}
-                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move">
+                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move" onClick={() => setSelectedWidget('w1')}>
                   <div className="text-[10px] font-semibold text-slate-700 mb-2">S-Curve · Planned vs Earned</div>
                   <div className="h-32 flex items-end gap-1">
                     {Array.from({ length: 12 }).map((_, i) => {
@@ -119,7 +120,7 @@ export function ReportsModule() {
                 </div>
 
                 {/* BOQ table widget */}
-                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move">
+                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move" onClick={() => setSelectedWidget('w2')}>
                   <div className="text-[10px] font-semibold text-slate-700 mb-2">BOQ Progress Summary</div>
                   <table className="w-full text-[10px] text-slate-700">
                     <thead className="bg-slate-50">
@@ -140,7 +141,7 @@ export function ReportsModule() {
                 </div>
 
                 {/* Photo gallery widget */}
-                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move">
+                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move" onClick={() => setSelectedWidget('w3')}>
                   <div className="text-[10px] font-semibold text-slate-700 mb-2">Photo Gallery · Week 28</div>
                   <div className="grid grid-cols-4 gap-1.5">
                     {[1, 2, 3, 4].map(i => (
@@ -150,7 +151,7 @@ export function ReportsModule() {
                 </div>
 
                 {/* Weather widget */}
-                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move">
+                <div className="rounded-md border border-slate-200 p-3 hover:border-slate-400 cursor-move" onClick={() => setSelectedWidget('w4')}>
                   <div className="text-[10px] font-semibold text-slate-700 mb-2">Weather Log</div>
                   <div className="grid grid-cols-7 gap-1 text-[9px] text-center">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
@@ -164,7 +165,7 @@ export function ReportsModule() {
                 </div>
 
                 {/* Drop target */}
-                <div className="rounded-md border-2 border-dashed border-slate-300 p-6 text-center text-[10px] text-slate-400">
+                <div className="rounded-md border-2 border-dashed border-slate-300 p-6 text-center text-[10px] text-slate-400" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('widget'); const w = WIDGETS.find(x => x.id === id); if (w) { setSelectedWidget(id); toast.success(`${w.name} added`, { description: 'Widget dropped onto the canvas.' }); } }}>
                   Drag a widget here to add it to the page
                 </div>
               </div>
@@ -185,7 +186,7 @@ export function ReportsModule() {
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Selected widget</div>
               <div className="p-2.5 rounded-md border border-primary/40 bg-primary/5">
-                <div className="font-medium">BOQ Table</div>
+                <div className="font-medium">{selectedWidget ? WIDGETS.find(w => w.id === selectedWidget)?.name ?? 'None' : 'None'}</div>
                 <div className="text-[10px] text-muted-foreground">Section 1 · Page 1</div>
               </div>
             </div>
@@ -240,7 +241,7 @@ export function ReportsModule() {
                   <div className="font-medium">Completed items</div>
                   <div className="text-muted-foreground">Green badge if % done = 100</div>
                 </div>
-                <Button variant="outline" size="sm" className="w-full h-7 text-xs gap-1"><Plus className="w-3 h-3" />Add rule</Button>
+                <Button variant="outline" size="sm" className="w-full h-7 text-xs gap-1" onClick={() => toast.info('Add formatting rule', { description: 'Opens the conditional formatting rule builder.' })}><Plus className="w-3 h-3" />Add rule</Button>
               </div>
             </div>
             <Separator />

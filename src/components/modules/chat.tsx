@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { toast } from 'sonner'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export function ChatModule() {
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
   const [showMembers, setShowMembers] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Load messages from Supabase
@@ -116,6 +118,23 @@ export function ChatModule() {
 
   const channelMessages = messages.filter(m => m.channel_id === activeChannel)
   const activeChannelInfo = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0]
+
+  // Filter channels and team members by the search query (matches channel
+  // name/desc/last-message or member name/role).
+  const q = searchQuery.trim().toLowerCase()
+  const visibleChannels = q
+    ? CHANNELS.filter(ch => {
+        if (ch.name.toLowerCase().includes(q) || ch.desc.toLowerCase().includes(q)) return true
+        return messages.some(m =>
+          m.channel_id === ch.id &&
+          (m.content.toLowerCase().includes(q) ||
+            m.sender_name.toLowerCase().includes(q)))
+      })
+    : CHANNELS
+  const visibleTeamMembers = q
+    ? TEAM_MEMBERS.filter(m =>
+        m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q))
+    : TEAM_MEMBERS
 
   const sendMessage = async () => {
     if (!input.trim()) return
@@ -176,12 +195,12 @@ export function ChatModule() {
       listPane={
         <>
           <PaneHeader title="Messages">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New channel', { description: 'Channel creation form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Search messages…" className="h-8 pl-7 text-xs" />
+              <Input placeholder="Search messages…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
           </div>
           <PaneBody className="py-2">
@@ -189,7 +208,7 @@ export function ChatModule() {
             <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               Channels
             </div>
-            {CHANNELS.map(ch => {
+            {visibleChannels.map(ch => {
               const Icon = ch.icon
               const count = messages.filter(m => m.channel_id === ch.id).length
               const lastMsg = messages.filter(m => m.channel_id === ch.id).pop()
@@ -220,9 +239,10 @@ export function ChatModule() {
             <div className="px-3 py-1.5 mt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               Team
             </div>
-            {TEAM_MEMBERS.map(m => (
+            {visibleTeamMembers.map(m => (
               <button
                 key={m.id}
+                onClick={() => toast.info('Direct messages', { description: `DMs with ${m.name} coming soon.` })}
                 className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50 transition-colors"
               >
                 <div className="relative flex-shrink-0">
@@ -259,10 +279,10 @@ export function ChatModule() {
             >
               <Users className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground">
+            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="Call" onClick={() => toast.info('Voice call', { description: 'VoIP integration coming soon.' })}>
               <Phone className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground">
+            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="More" onClick={() => toast.info('Channel options', { description: 'Mute, pin, archive — coming soon.' })}>
               <MoreVertical className="w-4 h-4" />
             </button>
           </div>
@@ -344,10 +364,10 @@ export function ChatModule() {
           {/* Composer */}
           <div className="flex-shrink-0 p-3 border-t border-[var(--pane-divider)]">
             <div className="flex items-center gap-2">
-              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground" title="Attach file">
+              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground" title="Attach file" onClick={() => toast.info('Attach file', { description: 'File picker coming soon.' })}>
                 <Paperclip className="w-4 h-4" />
               </button>
-              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground hidden sm:block" title="Attach image">
+              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground hidden sm:block" title="Attach image" onClick={() => toast.info('Attach image', { description: 'Image picker coming soon.' })}>
                 <ImageIcon className="w-4 h-4" />
               </button>
               <div className="flex-1 flex items-center gap-2 bg-secondary rounded-2xl px-3 py-1.5">
@@ -359,7 +379,7 @@ export function ChatModule() {
                   placeholder={`Message #${activeChannel}…`}
                   className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
                 />
-                <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="Emoji">
+                <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="Emoji" onClick={() => toast.info('Emoji picker', { description: 'Emoji selection coming soon.' })}>
                   <Smile className="w-4 h-4" />
                 </button>
               </div>

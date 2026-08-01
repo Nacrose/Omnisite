@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, Search, Mountain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { toast } from 'sonner'
 import type { Subcontractor } from './types'
 import { INITIAL_SCS } from './types'
 import { SubBoqTab } from './sub-boq-tab'
@@ -24,8 +25,15 @@ export function SubcontractorModule() {
   const [selectedId, setSelectedId] = usePersistentState('omnisite-sc-selected', 'SC-01')
   const [scs, setScs] = usePersistentState<Subcontractor[]>('omnisite-scs', () => JSON.parse(JSON.stringify(INITIAL_SCS)))
   const [activeTab, setActiveTab] = useState('subboq')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const selected = scs.find(s => s.id === selectedId) ?? scs[0]
+  const filteredScs = searchQuery.trim()
+    ? scs.filter(s =>
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.scope.toLowerCase().includes(searchQuery.toLowerCase()))
+    : scs
 
   return (
     <>
@@ -33,16 +41,16 @@ export function SubcontractorModule() {
         leftPane={
           <>
             <PaneHeader title="Subcontractors">
-              <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add subcontractor', { description: 'Vendor onboarding form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
             </PaneHeader>
             <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Search subcontractors…" className="h-8 pl-7 text-xs" />
+                <Input placeholder="Search subcontractors…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
             </div>
             <PaneBody className="py-2">
-              {scs.map(s => (
+              {filteredScs.map(s => (
                 <button
                   key={s.id}
                   onClick={() => setSelectedId(s.id)}

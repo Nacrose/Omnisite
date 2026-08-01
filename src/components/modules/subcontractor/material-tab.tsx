@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Plus, Package, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { Subcontractor } from './types'
 import { fmtNPR } from './types'
 
@@ -168,7 +169,7 @@ export function MaterialTab({ sc }: { sc: Subcontractor }) {
         </div>
       )}
 
-      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Issue Material to SC</Button>
+      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Issue Material to SC', { description: 'Material Issue Note (MIN) form will open here — coming soon.' })}><Plus className="w-3.5 h-3.5" />Issue Material to SC</Button>
     </div>
   )
 }

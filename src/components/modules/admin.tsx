@@ -12,6 +12,7 @@ import {
   Plus, Search, Users, Package, FileText, Zap, Edit3, Copy, Trash2, ShieldCheck, Settings as SettingsIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 type Cat = 'users' | 'materials' | 'vendors' | 'rates' | 'presets'
 
@@ -44,21 +45,25 @@ const ROLES = [
 
 export function AdminModule() {
   const [cat, setCat] = useState<Cat>('users')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedRole, setSelectedRole] = useState(ROLES[4])
+  const [selectedMaterial, setSelectedMaterial] = useState<Material>(MATERIALS[0])
+  const [selectedVendor, setSelectedVendor] = useState(VENDORS[0])
   // Compute counts from the real arrays so badges never lie.
   const totalUsers = ROLES.reduce((s, r) => s + r.users, 0)
   const CATS: { id: Cat; name: string; icon: typeof Users; count: number }[] = [
     { id: 'users', name: 'User Management', icon: Users, count: totalUsers },
     { id: 'materials', name: 'Material Master', icon: Package, count: MATERIALS.length },
     { id: 'vendors', name: 'Vendor Master', icon: FileText, count: VENDORS.length },
-    { id: 'rates', name: '3-Tier Rate Library', icon: Zap, count: 3 }, // 3 tiers
-    { id: 'presets', name: 'RA Preset Library', icon: SettingsIcon, count: 5 }, // 5 preset rows
+    { id: 'rates', name: '3-Tier Rate Library', icon: Zap, count: 3 },
+    { id: 'presets', name: 'RA Preset Library', icon: SettingsIcon, count: 5 },
   ]
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Master Data">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => {}}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('New entry', { description: `Create a new ${cat === 'users' ? 'user' : cat === 'materials' ? 'material' : cat === 'vendors' ? 'vendor' : 'entry'}.` })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             {CATS.map(c => {
@@ -79,20 +84,20 @@ export function AdminModule() {
           <PaneHeader title={cat === 'users' ? 'User Management · PM-Centric' : cat === 'materials' ? 'Material Master · Two-tier' : cat === 'vendors' ? 'Vendor Master · AVL' : cat === 'rates' ? '3-Tier Rate Library' : 'RA Preset Library'}>
             <div className="relative w-40">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Search…" className="h-7 pl-7 text-xs" />
+              <Input placeholder="Search…" className="h-7 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />New</Button>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('New entry', { description: `Create a new ${cat === 'users' ? 'user invite' : cat === 'materials' ? 'material' : cat === 'vendors' ? 'vendor' : 'entry'}.` })}><Plus className="w-3.5 h-3.5" />New</Button>
           </PaneHeader>
 
-          {cat === 'users' && <UsersView />}
-          {cat === 'materials' && <MaterialsView />}
-          {cat === 'vendors' && <VendorsView />}
+          {cat === 'users' && <UsersView selectedRole={selectedRole} onSelectRole={setSelectedRole} searchQuery={searchQuery} />}
+          {cat === 'materials' && <MaterialsView selectedMaterial={selectedMaterial} onSelectMaterial={setSelectedMaterial} searchQuery={searchQuery} />}
+          {cat === 'vendors' && <VendorsView selectedVendor={selectedVendor} onSelectVendor={setSelectedVendor} searchQuery={searchQuery} />}
           {cat === 'rates' && <RatesView />}
           {cat === 'presets' && <PresetsView />}
         </>
       }
       rightPane={
-        cat === 'users' ? <UsersInspector /> : cat === 'materials' ? <MaterialInspector /> : cat === 'vendors' ? <VendorInspector /> : cat === 'rates' ? <RateInspector /> : <PresetInspector />
+        cat === 'users' ? <UsersInspector role={selectedRole} /> : cat === 'materials' ? <MaterialInspector material={selectedMaterial} /> : cat === 'vendors' ? <VendorInspector vendor={selectedVendor} /> : cat === 'rates' ? <RateInspector /> : <PresetInspector />
       }
       leftPaneWidth="240px"
       rightPaneWidth="380px"
@@ -100,13 +105,15 @@ export function AdminModule() {
   )
 }
 
-function UsersView() {
+function UsersView({ selectedRole, onSelectRole, searchQuery }: { selectedRole: typeof ROLES[0]; onSelectRole: (r: typeof ROLES[0]) => void; searchQuery: string }) {
+  const q = searchQuery.toLowerCase()
+  const filteredRoles = ROLES.filter(r => r.name.toLowerCase().includes(q))
   return (
     <PaneBody className="p-4 space-y-3">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pre-configured Role Templates</div>
       <div className="grid grid-cols-1 gap-2">
-        {ROLES.map(r => (
-          <div key={r.name} className="rounded-lg border border-[var(--pane-divider)] p-3 hover:bg-accent/30 cursor-pointer">
+        {filteredRoles.map(r => (
+          <div key={r.name} onClick={() => onSelectRole(r)} className={cn('rounded-lg border p-3 cursor-pointer transition-colors', selectedRole.name === r.name ? 'border-primary bg-accent' : 'border-[var(--pane-divider)] hover:bg-accent/30')}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-medium text-sm">{r.name}</div>
               <Badge variant="secondary" className="text-[10px]">{r.users} users</Badge>
@@ -130,7 +137,7 @@ function UsersView() {
           { name: 'Bikash Rai', email: 'bikash@omnisite.com', role: 'Site Engineer', status: 'Active' },
           { name: 'Sita Gurung', email: 'sita@omnisite.com', role: 'Storekeeper', status: 'Active' },
           { name: 'Ram Bahadur', email: 'ram.b@omnisite.com', role: 'Foreman', status: 'Active' },
-        ].map((u, i) => (
+        ].filter(u => !q || u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)).map((u, i) => (
           <div key={i} className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-xs font-semibold">{u.name.charAt(0)}</div>
             <div className="flex-1 min-w-0">
@@ -141,12 +148,14 @@ function UsersView() {
           </div>
         ))}
       </div>
-      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Invite User</Button>
+      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Invite user', { description: 'Sends an email invite with a role assignment.' })}><Plus className="w-3.5 h-3.5" />Invite User</Button>
     </PaneBody>
   )
 }
 
-function MaterialsView() {
+function MaterialsView({ selectedMaterial, onSelectMaterial, searchQuery }: { selectedMaterial: Material; onSelectMaterial: (m: Material) => void; searchQuery: string }) {
+  const q = searchQuery.toLowerCase()
+  const filtered = MATERIALS.filter(m => m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q))
   return (
     <PaneBody className="px-0">
       <div className="px-4 py-2 bg-secondary/20 text-[11px] text-muted-foreground border-b border-[var(--pane-divider)]">
@@ -161,8 +170,8 @@ function MaterialsView() {
         <div className="w-20 px-2">Tier</div>
         <div className="w-16 px-2 text-center">Alt UOM</div>
       </div>
-      {MATERIALS.map(m => (
-        <div key={m.code} className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover', m.archived && 'opacity-50')}>
+      {filtered.map(m => (
+        <div key={m.code} onClick={() => onSelectMaterial(m)} className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer transition-colors', m.archived && 'opacity-50', selectedMaterial.code === m.code && 'bg-accent border-l-2 border-l-primary')}>
           <div className="w-28 px-2 font-mono text-muted-foreground">{m.code}</div>
           <div className="flex-1 px-2 font-medium flex items-center gap-1.5">
             {m.archived && <Badge variant="outline" className="text-[9px]">Archived</Badge>}
@@ -183,7 +192,9 @@ function MaterialsView() {
   )
 }
 
-function VendorsView() {
+function VendorsView({ selectedVendor, onSelectVendor, searchQuery }: { selectedVendor: typeof VENDORS[0]; onSelectVendor: (v: typeof VENDORS[0]) => void; searchQuery: string }) {
+  const q = searchQuery.toLowerCase()
+  const filtered = VENDORS.filter(v => v.name.toLowerCase().includes(q) || v.id.toLowerCase().includes(q))
   return (
     <PaneBody className="px-0">
       <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
@@ -194,8 +205,8 @@ function VendorsView() {
         <div className="w-32 px-2">Brand / Material</div>
         <div className="w-16 px-2 text-center">Compliance</div>
       </div>
-      {VENDORS.map(v => (
-        <div key={v.id} className="flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover">
+      {filtered.map(v => (
+        <div key={v.id} onClick={() => onSelectVendor(v)} className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer transition-colors', selectedVendor.id === v.id && 'bg-accent border-l-2 border-l-primary')}>
           <div className="w-16 px-2 font-mono text-muted-foreground">{v.id}</div>
           <div className="flex-1 px-2 font-medium">{v.name}</div>
           <div className="w-28 px-2 font-mono text-[10px] text-muted-foreground">{v.pan}</div>
@@ -233,7 +244,7 @@ function RatesView() {
       <div className="rounded-lg border border-[var(--pane-divider)] overflow-hidden">
         <div className="px-3 py-2 bg-secondary/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
           Tier 2 · Project Rate Library (snapshot · PM-editable inline)
-          <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1"><Edit3 className="w-3 h-3" />Inline edit in RA Builder</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1" onClick={() => toast.info('Inline edit', { description: 'Opens the RA Builder with these rates pre-loaded for inline editing.' })}><Edit3 className="w-3 h-3" />Inline edit in RA Builder</Button>
         </div>
         <div className="p-3 space-y-1.5">
           {MATERIALS.slice(0, 3).map(m => (
@@ -266,7 +277,7 @@ function PresetsView() {
         { name: 'Stone Soling 150mm', items: 3, used: 5 },
         { name: 'DBM 50mm — Pavement', items: 5, used: 2 },
       ].map((p, i) => (
-        <div key={i} className="rounded-lg border border-[var(--pane-divider)] p-3 hover:bg-accent/30 cursor-pointer">
+        <div key={i} className="rounded-lg border border-[var(--pane-divider)] p-3 hover:bg-accent/30 cursor-pointer" onClick={() => toast.info('Preset loaded', { description: `${p.name} · ${p.items} resources. Coefficients loaded into the RA Builder.` })}>
           <div className="flex items-center justify-between mb-1">
             <div className="font-medium text-sm">{p.name}</div>
             <Badge variant="secondary" className="text-[10px]">Used {p.used}×</Badge>
@@ -278,21 +289,20 @@ function PresetsView() {
   )
 }
 
-function UsersInspector() {
+function UsersInspector({ role }: { role: typeof ROLES[0] }) {
   return (
     <>
       <PaneHeader title="Role Inspector" />
       <PaneBody className="p-4">
-        <div className="text-xs text-muted-foreground mb-3">Select a role to view permission matrix</div>
         <div className="p-3 rounded-md border border-[var(--pane-divider)]">
-          <div className="text-sm font-semibold">Project Manager</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">1 user · Full access</div>
+          <div className="text-sm font-semibold">{role.name}</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">{role.users} user{role.users !== 1 ? 's' : ''} · {Object.values(role.perms).every(v => v === 'Edit') ? 'Full access' : 'Scoped access'}</div>
           <Separator className="my-2" />
           <div className="space-y-1.5 text-xs">
-            {Object.entries(ROLES[4].perms).map(([k, v]) => (
+            {Object.entries(role.perms).map(([k, v]) => (
               <div key={k} className="flex justify-between">
                 <span>{k}</span>
-                <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-700 dark:text-emerald-300">{v}</Badge>
+                <Badge variant="outline" className={cn('text-[9px]', v === 'Edit' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', v === 'None' && 'border-slate-400/40 text-muted-foreground', v === 'Read' && 'border-sky-500/40 text-sky-700 dark:text-sky-300')}>{v}</Badge>
               </div>
             ))}
           </div>
@@ -302,79 +312,89 @@ function UsersInspector() {
   )
 }
 
-function MaterialInspector() {
+function MaterialInspector({ material: m }: { material: Material }) {
   return (
     <>
       <PaneHeader title="Material Inspector" />
       <PaneBody className="p-4 space-y-3 text-xs">
         <div>
-          <Badge variant="outline" className="text-[10px]">Org Master</Badge>
-          <div className="text-sm font-semibold mt-2">Cement OPC 53 Grade (Udaipur)</div>
-          <div className="text-[10px] text-muted-foreground font-mono">M-CEM-OPC</div>
+          <Badge variant="outline" className="text-[10px]">{m.org ? 'Org Master' : 'Project'}</Badge>
+          {m.archived && <Badge variant="outline" className="text-[10px] ml-1 text-amber-600">Archived</Badge>}
+          <div className="text-sm font-semibold mt-2">{m.name}</div>
+          <div className="text-[10px] text-muted-foreground font-mono">{m.code}</div>
         </div>
         <Separator />
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Alternate UOMs</div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
-              <span className="flex-1">Bag (primary)</span>
-              <span className="font-mono">NPR 920</span>
-            </div>
-            <div className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
-              <span className="flex-1">Ton (factor 20)</span>
-              <Input className="w-24 h-7 text-xs font-mono" defaultValue={18360} />
-              <button className="p-1 hover:bg-accent rounded"><Zap className="w-3 h-3 text-amber-500" /></button>
-            </div>
-            <div className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
-              <span className="flex-1">Kg (factor 0.05)</span>
-              <Input className="w-24 h-7 text-xs font-mono" defaultValue={0.46} />
-              <button className="p-1 hover:bg-accent rounded"><Zap className="w-3 h-3 text-amber-500" /></button>
-            </div>
-          </div>
+        <div className="space-y-1.5">
+          <div className="flex justify-between"><span className="text-muted-foreground">UOM</span><span className="font-mono">{m.uom}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Org Rate</span><span className="font-mono">NPR {m.rate.toLocaleString()}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Project Rate</span><span className="font-mono font-medium text-primary">NPR {(m.projectRate ?? m.rate).toLocaleString()}</span></div>
         </div>
+        {m.altUoms && (
+          <>
+            <Separator />
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Alternate UOMs</div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
+                  <span className="flex-1">{m.uom} (primary)</span>
+                  <span className="font-mono">NPR {m.rate.toLocaleString()}</span>
+                </div>
+                {m.altUoms.map((alt, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
+                    <span className="flex-1">{alt.uom} (factor {alt.factor})</span>
+                    <Input className="w-24 h-7 text-xs font-mono" defaultValue={alt.rate} />
+                    <button className="p-1 hover:bg-accent rounded" onClick={() => toast.info('Auto-calc', { description: `Recalculates ${alt.uom} rate from the primary UOM rate.` })} title="Auto-calc from primary UOM"><Zap className="w-3 h-3 text-amber-500" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
         <Separator />
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Actions</div>
           <div className="space-y-1.5">
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><Copy className="w-3.5 h-3.5" />Duplicate</Button>
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><Edit3 className="w-3.5 h-3.5" />Edit</Button>
-            <Button variant="ghost" size="sm" className="w-full h-8 text-xs justify-start gap-2 text-amber-600"><Trash2 className="w-3.5 h-3.5" />Soft Archive (no delete)</Button>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Duplicate', { description: `${m.code} duplicated as a project-level copy.` })}><Copy className="w-3.5 h-3.5" />Duplicate</Button>
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Edit', { description: `Editing ${m.name} — inline form opens.` })}><Edit3 className="w-3.5 h-3.5" />Edit</Button>
+            <Button variant="ghost" size="sm" className="w-full h-8 text-xs justify-start gap-2 text-amber-600" onClick={() => toast.info('Soft archive', { description: `${m.code} archived (no delete). Remains visible but greyed out.` })}><Trash2 className="w-3.5 h-3.5" />Soft Archive (no delete)</Button>
           </div>
-        </div>
-        <div className="p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px]">
-          <div className="font-medium">Duplicate detected</div>
-          <div className="text-muted-foreground mt-0.5">3 materials with similar names found. Merge tool available.</div>
         </div>
       </PaneBody>
     </>
   )
 }
 
-function VendorInspector() {
+function VendorInspector({ vendor: v }: { vendor: typeof VENDORS[0] }) {
   return (
     <>
       <PaneHeader title="Vendor Inspector" />
       <PaneBody className="p-4 space-y-3 text-xs">
         <div>
           <Badge variant="outline" className="text-[10px]">AVL · Approved</Badge>
-          <div className="text-sm font-semibold mt-2">Udaipur Cement Ltd</div>
-          <div className="text-[10px] text-muted-foreground font-mono">V-001</div>
+          <div className="text-sm font-semibold mt-2">{v.name}</div>
+          <div className="text-[10px] text-muted-foreground font-mono">{v.id}</div>
         </div>
         <Separator />
         <div className="space-y-1.5">
-          <div className="flex justify-between"><span className="text-muted-foreground">PAN</span><span className="font-mono">123456789</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">GST</span><span className="font-mono">N/A (Nepal)</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Rating</span><Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-300">A</Badge></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">PAN</span><span className="font-mono">{v.pan}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">GST</span><span className="font-mono">{v.gst}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Rating</span><Badge variant="outline" className={cn('text-[10px]', v.rating.startsWith('A') && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', v.rating.startsWith('B') && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{v.rating}</Badge></div>
         </div>
         <Separator />
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Material Catalog Mapping</div>
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between p-2 rounded border border-[var(--pane-divider)]">
-              <span className="text-[10px] font-mono text-muted-foreground">M-CEM-OPC</span>
-              <span className="text-xs">Udaipur OPC 53</span>
-              <span className="font-mono">NPR 920/bag</span>
-            </div>
+            {v.materials.map(mc => {
+              const mat = MATERIALS.find(m => m.code === mc)
+              return (
+                <div key={mc} className="flex items-center justify-between p-2 rounded border border-[var(--pane-divider)]">
+                  <span className="text-[10px] font-mono text-muted-foreground">{mc}</span>
+                  <span className="text-xs">{mat?.name ?? mc}</span>
+                  <span className="font-mono">NPR {(mat?.projectRate ?? mat?.rate ?? 0).toLocaleString()}</span>
+                </div>
+              )
+            })}
+            <div className="text-[10px] text-muted-foreground">Brand: {v.brand}</div>
           </div>
         </div>
       </PaneBody>

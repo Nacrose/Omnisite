@@ -194,6 +194,7 @@ export function FinancialsModule() {
 
   // Non-persistent UI state
   const [editing, setEditing] = useState<{ code: string; field: 'committed' | 'actual' | 'forecast' } | null>(null)
+  const [cbsSearch, setCbsSearch] = useState('')
 
   // Update a CBS node's committed/actual/forecast.
   // After updating a leaf, walk back UP the tree and re-aggregate parent
@@ -340,17 +341,22 @@ export function FinancialsModule() {
       leftPane={
         <>
           <PaneHeader title="CBS Tree">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add CBS node', { description: 'Form to create a new CBS node — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             <div className="px-3 mb-2">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Filter CBS nodes…" className="h-8 pl-7 text-xs" />
+                <Input placeholder="Filter CBS nodes…" className="h-8 pl-7 text-xs" value={cbsSearch} onChange={(e) => setCbsSearch(e.target.value)} />
               </div>
             </div>
             <div className="text-[10px] text-muted-foreground px-3 py-2">Mirrors BOQ WBS · 3 top nodes · 7 leaf items</div>
-            {CBS.map(c => {
+            {CBS.filter(c => {
+              if (!cbsSearch.trim()) return true
+              const q = cbsSearch.toLowerCase()
+              const liveNode = cbsData.find(n => n.code === c.code) ?? c
+              return liveNode.code.toLowerCase().includes(q) || liveNode.name.toLowerCase().includes(q)
+            }).map(c => {
               // Use the LIVE tree (cbsData) for display so the left-pane
               // reflects user edits. Previously this rendered from the CBS
               // constant, so edits to the P&L grid never updated the outline.
@@ -385,8 +391,8 @@ export function FinancialsModule() {
               )
               toast.success('Financials exported', { description: `${flattenCbs(cbsData).length} CBS nodes exported to CSV` })
             }}><Download className="w-3.5 h-3.5" />Export CSV</Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5"><Upload className="w-3.5 h-3.5" />Upload RA Bill</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Quick Expense</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Upload RA Bill', { description: 'Drag-and-drop RA bill PDF — coming soon.' })}><Upload className="w-3.5 h-3.5" />Upload RA Bill</Button>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Quick Expense', { description: 'Add an ad-hoc expense line — coming soon.' })}><Plus className="w-3.5 h-3.5" />Quick Expense</Button>
           </PaneHeader>
           {/* Top KPI strip */}
           <div className="grid grid-cols-4 gap-3 p-3 border-b border-[var(--pane-divider)] bg-secondary/20">

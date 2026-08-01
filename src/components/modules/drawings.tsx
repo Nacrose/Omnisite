@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import {
   ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface Dwg {
   id: string; number: string; title: string; revision: string; date: string; status: 'Approved for Construction' | 'Pending' | 'Superseded' | 'Rejected'
@@ -48,33 +49,89 @@ const DWS: Dwg[] = [
   },
 ]
 
+// Derive disciplines from the actual data so empty categories don't show.
+const DISCIPLINES = ['All', ...Array.from(new Set(DWS.map(d => d.discipline)))]
+
 export function DrawingsModule() {
   const [selectedId, setSelectedId] = useState('DWG-001')
+  const [discipline, setDiscipline] = useState('All')
+  const [searchQuery, setSearchQuery] = useState('')
   const selected = DWS.find(d => d.id === selectedId) ?? DWS[0]
 
+  const filtered = DWS.filter(d => {
+    if (discipline !== 'All' && d.discipline !== discipline) return false
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      return d.number.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
+    }
+    return true
+  })
+
   return (
-    <Workspace2Pane
+    <Workspace3Pane
       leftPane={
         <>
           <PaneHeader title="Disciplines">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Upload drawing', { description: 'Opens the drawing upload form (PDF/DWG).' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Filter drawings…" className="h-8 pl-7 text-xs" />
+              <Input placeholder="Filter drawings…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
           </div>
           <PaneBody className="py-2">
-            {['All', 'Bridge', 'Roads', 'Drainage', 'Structural', 'Electrical', 'Signage'].map(d => {
+            {DISCIPLINES.map(d => {
               const count = d === 'All' ? DWS.length : DWS.filter(x => x.discipline === d).length
               return (
-                <button key={d} className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-accent/50">
+                <button key={d} onClick={() => setDiscipline(d)} className={cn('w-full flex items-center justify-between px-3 py-1.5 text-xs', discipline === d ? 'bg-accent border-l-2 border-primary' : 'hover:bg-accent/50 border-l-2 border-transparent')}>
                   <span className="flex items-center gap-2"><FileStack className="w-3 h-3 text-muted-foreground" />{d}</span>
                   <Badge variant="secondary" className="text-[9px] h-4 px-1">{count}</Badge>
                 </button>
               )
             })}
+          </PaneBody>
+        </>
+      }
+      centerPane={
+        <>
+          <PaneHeader title={`Drawings Register · ${filtered.length} of ${DWS.length}`}>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Upload drawing', { description: 'Opens the drawing upload form.' })}><Upload className="w-3.5 h-3.5" />Upload</Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Export register', { description: 'Exports the drawing register to CSV.' })}><Download className="w-3.5 h-3.5" />Export</Button>
+          </PaneHeader>
+          {/* Column header */}
+          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
+            <div className="w-32 px-2">Number</div>
+            <div className="flex-1 px-2">Title</div>
+            <div className="w-16 px-2">Discipline</div>
+            <div className="w-20 px-2">Rev</div>
+            <div className="w-12 px-2">Size</div>
+            <div className="w-24 px-2">Status</div>
+          </div>
+          <PaneBody className="px-0">
+            {filtered.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">No drawings match this filter.</div>
+            ) : (
+              filtered.map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => setSelectedId(d.id)}
+                  className={cn(
+                    'w-full flex items-center h-10 border-b border-[var(--pane-divider)] text-xs hover:bg-accent/50 transition-colors text-left',
+                    selectedId === d.id && 'bg-accent border-l-2 border-l-primary'
+                  )}
+                >
+                  <div className="w-32 px-2 font-mono text-muted-foreground">{d.number}</div>
+                  <div className="flex-1 px-2 font-medium truncate">{d.title}</div>
+                  <div className="w-16 px-2 text-muted-foreground">{d.discipline}</div>
+                  <div className="w-20 px-2 font-mono">{d.revision}</div>
+                  <div className="w-12 px-2">{d.size}</div>
+                  <div className="w-24 px-2">
+                    <Badge variant="outline" className={cn('text-[9px]', d.status === 'Approved for Construction' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', d.status === 'Pending' && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{d.status === 'Approved for Construction' ? 'AFC' : d.status}</Badge>
+                  </div>
+                </button>
+              ))
+            )}
           </PaneBody>
         </>
       }
@@ -136,13 +193,13 @@ function DrawingInspector({ dwg }: { dwg: Dwg }) {
 
             {/* Top-right controls */}
             <div className="absolute top-2 right-2 flex gap-1">
-              <Button size="sm" variant="secondary" className="h-7 w-7 p-0" title="Fullscreen"><Maximize2 className="w-3.5 h-3.5" /></Button>
+              <Button size="sm" variant="secondary" className="h-7 w-7 p-0" title="Fullscreen" onClick={() => toast.info('Fullscreen', { description: 'Opens the drawing in a fullscreen viewer.' })}><Maximize2 className="w-3.5 h-3.5" /></Button>
             </div>
 
             {/* Markup toolbar */}
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 pane border border-[var(--pane-divider)] rounded-md p-1 shadow-md">
-              {['✎', '▢', '◯', '↔', 'T'].map(t => (
-                <button key={t} className="w-7 h-7 rounded text-sm hover:bg-accent flex items-center justify-center">{t}</button>
+              {['✎', '▢', '◯', '↔', 'T'].map((t, i) => (
+                <button key={i} className="w-7 h-7 rounded text-sm hover:bg-accent flex items-center justify-center" onClick={() => toast.info('Markup tool', { description: `Selected: ${t === '✎' ? 'Pen' : t === '▢' ? 'Rectangle' : t === '◯' ? 'Circle' : t === '↔' ? 'Measure' : 'Text'}` })} title={`Markup: ${t}`}>{t}</button>
               ))}
             </div>
           </div>
@@ -212,7 +269,7 @@ function DrawingInspector({ dwg }: { dwg: Dwg }) {
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5"><Link2 className="w-3 h-3" />Bi-Directional Links</div>
             <div className="space-y-1.5">
               {dwg.links.map((l, i) => (
-                <div key={i} className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)] text-xs hover:bg-accent/30 cursor-pointer">
+                <div key={i} className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)] text-xs hover:bg-accent/30 cursor-pointer" onClick={() => toast.info('Open link', { description: `${l.type} → ${l.ref}` })}>
                   <Badge variant="outline" className="text-[9px]">{l.type}</Badge>
                   <span className="flex-1 truncate">{l.ref}</span>
                   <Eye className="w-3 h-3 text-muted-foreground" />

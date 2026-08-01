@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { Subcontractor } from './types'
 import { fmtNPR } from './types'
 
@@ -72,7 +73,7 @@ export function ConsumablesTab({ sc }: { sc: Subcontractor }) {
         })()}
       </div>
 
-      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Add Consumable Issue</Button>
+      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Add Consumable Issue', { description: 'Consumable issue + norm entry form will open here — coming soon.' })}><Plus className="w-3.5 h-3.5" />Add Consumable Issue</Button>
     </div>
   )
 }

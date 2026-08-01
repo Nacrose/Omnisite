@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Layers, Mountain, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { Subcontractor } from './types'
 import { fmtNPR } from './types'
 
@@ -148,7 +149,7 @@ export function SubBoqTab({ sc }: { sc: Subcontractor }) {
         </div>
       )}
 
-      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Add SC BOQ Item</Button>
+      <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => toast.info('Add SC BOQ Item', { description: 'Line-item picker will open here — coming soon.' })}><Plus className="w-3.5 h-3.5" />Add SC BOQ Item</Button>
     </div>
   )
 }

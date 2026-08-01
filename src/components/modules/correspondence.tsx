@@ -34,7 +34,15 @@ type Filter = 'All' | 'Incoming' | 'Outgoing' | 'Site Instruction'
 export function CorrespondenceModule() {
   const [filter, setFilter] = useState<Filter>('All')
   const [selectedId, setSelectedId] = useState('L-001')
-  const filtered = filter === 'All' ? LETTERS : LETTERS.filter(l => l.type === filter)
+  const [searchQuery, setSearchQuery] = useState('')
+  const filteredByType = filter === 'All' ? LETTERS : LETTERS.filter(l => l.type === filter)
+  const filtered = searchQuery.trim()
+    ? filteredByType.filter(l =>
+        l.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.from.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.to.toLowerCase().includes(searchQuery.toLowerCase()))
+    : filteredByType
   // Inspector should follow the filter — if the selected letter isn't in the
   // filtered list, fall back to the first filtered letter.
   const selected = filtered.find(l => l.id === selectedId) ?? filtered[0]
@@ -44,7 +52,7 @@ export function CorrespondenceModule() {
       leftPane={
         <>
           <PaneHeader title="Categories">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add category', { description: 'Custom correspondence category — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             {(['All', 'Incoming', 'Outgoing', 'Site Instruction'] as const).map(f => {
@@ -69,7 +77,7 @@ export function CorrespondenceModule() {
             <div className="mt-4 px-3">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Search letters…" className="h-8 pl-7 text-xs" />
+                <Input placeholder="Search letters…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
             </div>
           </PaneBody>
@@ -195,9 +203,9 @@ export function CorrespondenceModule() {
               <Separator />
 
               <div className="space-y-1.5">
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><FileText className="w-3.5 h-3.5" />View PDF</Button>
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><Mail className="w-3.5 h-3.5" />Draft Reply</Button>
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2"><Calendar className="w-3.5 h-3.5" />Schedule follow-up</Button>
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('View PDF', { description: `Opening ${selected.number} PDF preview — coming soon.` })}><FileText className="w-3.5 h-3.5" />View PDF</Button>
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Draft Reply', { description: `Compose reply to ${selected.number} — coming soon.` })}><Mail className="w-3.5 h-3.5" />Draft Reply</Button>
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Schedule follow-up', { description: `Pick a date to follow up on ${selected.number} — coming soon.` })}><Calendar className="w-3.5 h-3.5" />Schedule follow-up</Button>
               </div>
             </div>
           </PaneBody>

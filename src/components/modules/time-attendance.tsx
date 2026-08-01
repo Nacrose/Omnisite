@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { toast } from 'sonner'
 
 interface Worker {
   id: string; name: string; trade: string; phone: string; status: 'on-site' | 'off-site' | 'break';
@@ -52,6 +53,8 @@ const WORKERS: Worker[] = [
 
 export function TimeAttendanceModule() {
   const [selectedId, setSelectedId] = useState('W-001')
+  const [selectedTrade, setSelectedTrade] = useState('All Trades')
+  const [searchQuery, setSearchQuery] = useState('')
   const [workerList, setWorkerList] = useSyncedState<Worker[]>(
     'omnisite-workers',
     'workers',
@@ -61,7 +64,15 @@ export function TimeAttendanceModule() {
       primaryKey: 'id',
     }
   ) as [Worker[], (v: Worker[] | ((prev: Worker[]) => Worker[])) => void, boolean]
-  const selected = workerList.find(w => w.id === selectedId) ?? workerList[0]
+  const filteredByTrade = selectedTrade === 'All Trades' ? workerList : workerList.filter(w => w.trade === selectedTrade)
+  const filteredWorkers = searchQuery.trim()
+    ? filteredByTrade.filter(w =>
+        w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        w.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        w.trade.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        w.phone.toLowerCase().includes(searchQuery.toLowerCase()))
+    : filteredByTrade
+  const selected = filteredWorkers.find(w => w.id === selectedId) ?? filteredWorkers[0] ?? workerList[0]
 
   const totalOnSite = workerList.filter(w => w.status === 'on-site').length
   const totalHours = workerList.reduce((s, w) => s + (w.todayHours || 0), 0)
@@ -72,19 +83,19 @@ export function TimeAttendanceModule() {
       leftPane={
         <>
           <PaneHeader title="Trades">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Add worker', { description: 'Worker onboarding form — coming soon.' })}><Plus className="w-3.5 h-3.5" /></Button>
           </PaneHeader>
           <PaneBody className="py-2">
             <div className="px-3 mb-2">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Search workers…" className="h-8 pl-7 text-xs" />
+                <Input placeholder="Search workers…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
             </div>
             {['All Trades', 'Mason (Skilled)', 'Mazdoor (Unskilled)', 'Bar bender', 'Operator', 'Helper', 'Carpenter'].map(t => {
               const count = t === 'All Trades' ? workerList.length : workerList.filter(w => w.trade === t).length
               return (
-                <button key={t} className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-accent/50">
+                <button key={t} onClick={() => setSelectedTrade(t)} className={cn('w-full flex items-center justify-between px-3 py-1.5 text-xs', selectedTrade === t ? 'bg-accent border-l-2 border-l-primary' : 'hover:bg-accent/50 border-l-2 border-transparent')}>
                   <span className="flex items-center gap-2"><Fingerprint className="w-3 h-3 text-muted-foreground" />{t}</span>
                   <Badge variant="secondary" className="text-[9px] h-4 px-1">{count}</Badge>
                 </button>
@@ -103,7 +114,7 @@ export function TimeAttendanceModule() {
             <div className="flex justify-between"><span className="text-muted-foreground">On site now</span><span className="font-mono font-semibold text-emerald-600">{totalOnSite}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Total hours logged</span><span className="font-mono">{totalHours}h</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Geo-fence alerts</span><span className={cn('font-mono', geoFenceBreaches > 0 ? 'text-amber-600' : '')}>{geoFenceBreaches}</span></div>
-            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1.5"><Download className="w-3.5 h-3.5" />Payroll Export</Button>
+            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1.5" onClick={() => toast.info('Payroll Export', { description: `Exporting ${workerList.length} workers to CSV — coming soon.` })}><Download className="w-3.5 h-3.5" />Payroll Export</Button>
           </div>
         </>
       }
@@ -175,7 +186,7 @@ function WorkerInspector({ worker }: { worker: Worker }) {
                 <span className="font-mono">{worker.allocated.reduce((s, a) => s + a.hours, 0)}h / 8h</span>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1"><Plus className="w-3 h-3" />Split hours to another task</Button>
+            <Button variant="outline" size="sm" className="w-full h-7 mt-2 text-xs gap-1" onClick={() => toast.info('Split hours to another task', { description: `Reallocate hours from ${worker.id} — coming soon.` })}><Plus className="w-3 h-3" />Split hours to another task</Button>
           </div>
 
           <Separator />
