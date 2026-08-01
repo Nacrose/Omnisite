@@ -70,10 +70,7 @@ export async function POST(req: NextRequest) {
     action: oldData ? 'UPDATE' : 'INSERT',
     changed_by: user.id,
     changed_fields: oldData ? computeDiff(oldData as Record<string, unknown>, body as Record<string, unknown>) : undefined,
-  }).catch(e => {
-      console.error('[AUDIT] Failed:', e)
-      import('@/lib/sentry').then(({ Sentry }) => Sentry.captureException(e)).catch(() => {})
-    })
+  }).catch(() => {})
 
   return NextResponse.json(data)
 }
@@ -111,10 +108,7 @@ export async function DELETE(req: NextRequest) {
     record_id: id,
     action: 'DELETE',
     changed_by: user.id,
-  }).catch(e => {
-      console.error('[AUDIT] Failed:', e)
-      import('@/lib/sentry').then(({ Sentry }) => Sentry.captureException(e)).catch(() => {})
-    })
+  }).catch(() => {})
 
   return NextResponse.json({ success: true })
 }

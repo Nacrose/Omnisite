@@ -176,10 +176,10 @@ describe('Auth demo-mode behavior', () => {
   })
 
   it('mapSupabaseUser extracts role from user_metadata', () => {
-    // Replicate the mapping logic
+    // Replicate the mapping logic (matches auth.tsx)
     function mapSupabaseUser(u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) {
       const meta = u.user_metadata || {}
-      const role = (meta.role as string) || 'PM'
+      const role = (meta.role as string) || 'FOREMAN'
       const name = (meta.name as string) || (meta.full_name as string) || 'Unknown'
       return { id: u.id, email: u.email || '', name, role, isDemo: false }
     }
@@ -194,15 +194,15 @@ describe('Auth demo-mode behavior', () => {
     expect(result.isDemo).toBe(false)
   })
 
-  it('mapSupabaseUser falls back to PM role when metadata missing', () => {
+  it('mapSupabaseUser falls back to FOREMAN role when metadata missing', () => {
     function mapSupabaseUser(u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) {
       const meta = u.user_metadata || {}
-      const role = (meta.role as string) || 'PM'
+      const role = (meta.role as string) || 'FOREMAN'
       return { id: u.id, email: u.email || '', role, isDemo: false }
     }
 
     const result = mapSupabaseUser({ id: 'uuid-456', email: 'new@test.com' })
-    expect(result.role).toBe('PM') // default fallback
+    expect(result.role).toBe('FOREMAN') // least-privilege default
   })
 })
 

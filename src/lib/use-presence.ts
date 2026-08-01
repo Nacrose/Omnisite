@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useApp } from '@/lib/app-store'
+import { supabase } from '@/lib/supabase'
 
 export interface PresenceUser {
   id: string
@@ -69,13 +70,59 @@ export function usePresence() {
     if (!fallbackActive) {
       fallbackActive = true
       setUsingFallback(true)
-      setIsConnected(true) // simulated presence is "connected"
-      setUsers(SIMULATED_USERS)
-      setCursors({
-        'sim-br': { ...SIMULATED_CURSORS[0] },
-        'sim-sg': { ...SIMULATED_CURSORS[1] },
-      })
-      console.info('[OmniSite Presence] Simulated collaborators active')
+      // Try real Supabase Realtime Presence; fall back to simulated if unavailable
+      if (supabase) {
+        try {
+          const channel = supabase.channel('presence', {
+            config: { presence: { key: CURRENT_USER.id } },
+          })
+          channel
+            .on('presence', { event: 'sync' }, () => {
+              const state = channel.presenceState()
+              const remoteUsers: PresenceUser[] = []
+              for (const [key, presences] of Object.entries(state)) {
+                if (key === CURRENT_USER.id) continue
+                for (const p of presences) {
+                  const pu = p as unknown as PresenceUser
+                  if (pu.id) remoteUsers.push(pu)
+                }
+              }
+              if (remoteUsers.length > 0) {
+                setUsers(remoteUsers)
+                setIsConnected(true)
+                setUsingFallback(false)
+              }
+            })
+            .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+              if (key === CURRENT_USER.id) return
+              for (const p of newPresences) {
+                const pu = p as unknown as PresenceUser
+                if (pu.id) {
+                  setUsers(prev => prev.find(u => u.id === pu.id) ? prev : [...prev, pu])
+                }
+              }
+            })
+            .subscribe((status: string) => {
+              if (status === 'SUBSCRIBED') {
+                setIsConnected(true)
+                channel.track({ ...CURRENT_USER, module: activeModule })
+              } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                setIsConnected(false)
+                // Fall back to simulated
+                if (!fallbackActive) {
+                  fallbackActive = true
+                  setUsingFallback(true)
+                  setUsers(SIMULATED_USERS)
+                }
+              }
+            })
+        } catch {
+          // Supabase not configured or error — use simulated
+          setUsers(SIMULATED_USERS)
+        }
+      } else {
+        setUsers(SIMULATED_USERS)
+      }
     }
 
     // Simulated cursor movement — updates every 3.5 seconds

@@ -89,31 +89,27 @@ export function createUpdateNode(
     const prevNode = flat.find(c => c.code === code)
     const oldValue = prevNode ? prevNode[field] : 0
     setCbsData(prev => {
-      const updated = deepClone(prev) as CbsNode[]
-      // walk() returns true if the target was found in this subtree, so the
-      // caller can re-aggregate the parent on the way back up the recursion.
-      const walk = (items: CbsNode[]): boolean => {
-        for (const n of items) {
-          if (n.code === code) {
-            n[field] = Math.max(0, value)
-            // Recalculate margin: (budget - forecast) / budget * 100
-            n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
-            return true
+      return produce(prev, draft => {
+        const walk = (items: CbsNode[]): boolean => {
+          for (const n of items) {
+            if (n.code === code) {
+              n[field] = Math.max(0, value)
+              n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
+              return true
+            }
+            if (n.children && walk(n.children)) {
+              n.actual = n.children.reduce((s, c) => s + c.actual, 0)
+              n.committed = n.children.reduce((s, c) => s + c.committed, 0)
+              n.forecast = n.children.reduce((s, c) => s + c.forecast, 0)
+              n.budget = n.children.reduce((s, c) => s + c.budget, 0)
+              n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
+              return true
+            }
           }
-          if (n.children && walk(n.children)) {
-            // Re-aggregate this parent from its children after a child changed.
-            n.actual = n.children.reduce((s, c) => s + c.actual, 0)
-            n.committed = n.children.reduce((s, c) => s + c.committed, 0)
-            n.forecast = n.children.reduce((s, c) => s + c.forecast, 0)
-            n.budget = n.children.reduce((s, c) => s + c.budget, 0)
-            n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
-            return true
-          }
+          return false
         }
-        return false
-      }
-      walk(updated)
-      return updated
+        walk(draft as CbsNode[])
+      })
     })
     undoableToast(
       `${field[0].toUpperCase()}${field.slice(1)} updated`,

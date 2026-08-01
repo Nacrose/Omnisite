@@ -274,43 +274,41 @@ export function reparentItem(
   }
 
   commitBoqData(prev => {
-    const updated = deepClone(prev) as BoqItem[]
-    let movedItem: BoqItem | null = null
+    return produce(prev, draft => {
+      let movedItem: BoqItem | null = null
 
-    // Step 1: Remove the dragged item from its current location.
-    const removeFromTree = (items: BoqItem[]): BoqItem[] => {
-      return items.filter(it => {
-        if (it.id === draggedId) {
-          movedItem = it
+      // Step 1: Remove the dragged item from its current location
+      const removeFromTree = (items: BoqItem[]): BoqItem[] => {
+        return items.filter(it => {
+          if (it.id === draggedId) {
+            movedItem = it
+            return false
+          }
+          if (it.children) it.children = removeFromTree(it.children)
+          return true
+        })
+      }
+      const cleaned = removeFromTree(draft as BoqItem[])
+
+      // Step 2: Find target heading and add the moved item
+      if (movedItem) {
+        const target = findItemAndParent(cleaned as unknown as Record<string, any>[], targetHeadingId, 'id')
+        const targetLevel = target?.depth ?? 0
+        movedItem = updateLevels(movedItem as unknown as Record<string, any>, targetLevel + 1) as unknown as BoqItem
+        const addToTarget = (items: BoqItem[]): boolean => {
+          for (const it of items) {
+            if (it.id === targetHeadingId) {
+              if (!it.children) it.children = []
+              it.children.push(movedItem!)
+              return true
+            }
+            if (it.children && addToTarget(it.children)) return true
+          }
           return false
         }
-        if (it.children) it.children = removeFromTree(it.children)
-        return true
-      })
-    }
-    const cleaned = removeFromTree(updated)
-
-    // Step 2: Find the target heading and add the item to its children,
-    // re-leveling the moved subtree so depths stay consistent.
-    if (movedItem) {
-      const target = findItemAndParent(cleaned as unknown as Record<string, any>[], targetHeadingId, 'id')
-      const targetLevel = target?.depth ?? 0
-      movedItem = updateLevels(movedItem as unknown as Record<string, any>, targetLevel + 1) as unknown as BoqItem
-      const addToTarget = (items: BoqItem[]): boolean => {
-        for (const it of items) {
-          if (it.id === targetHeadingId) {
-            if (!it.children) it.children = []
-            it.children.push(movedItem!)
-            return true
-          }
-          if (it.children && addToTarget(it.children)) return true
-        }
-        return false
+        addToTarget(cleaned)
       }
-      addToTarget(cleaned)
-    }
-
-    return cleaned
+    })
   }, ctx)
 
   // Auto-expand the target heading

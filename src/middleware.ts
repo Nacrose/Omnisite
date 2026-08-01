@@ -1,26 +1,37 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com https://api.twilio.com",
+    "frame-ancestors 'none'",
+  ].join('; '),
+}
+
 /**
  * Edge middleware — checks Supabase session cookie and redirects
- * unauthenticated users to /login (except on /login itself and API routes).
- *
- * Also sets security headers on all responses.
+ * unauthenticated users to /login. Sets security headers on all responses.
  */
 export function middleware(req: NextRequest) {
   const res = NextResponse.next()
 
-  // Security headers on every response
-  res.headers.set('X-Frame-Options', 'DENY')
-  res.headers.set('X-Content-Type-Options', 'nosniff')
+  // Set all security headers
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    res.headers.set(key, value)
+  }
 
   const { pathname } = req.nextUrl
 
-  // Skip auth check for:
-  // - /login (the login page itself)
-  // - /api/* (API routes have their own auth via requireAuth)
-  // - /_next/* (Next.js internals)
-  // - /logo.svg (public asset)
+  // Skip auth check for: /login, /api/*, /_next/*, public assets
   if (
     pathname === '/login' ||
     pathname.startsWith('/api/') ||
@@ -30,17 +41,11 @@ export function middleware(req: NextRequest) {
     return res
   }
 
-  // Check for Supabase session cookie.
-  // The browser Supabase client stores the session in cookies named
-  // sb-<project-ref>-auth-token. We check for any cookie starting with 'sb-'.
+  // Check for Supabase session cookie
   const hasSession = req.cookies.getAll().some(c => c.name.startsWith('sb-'))
-
-  // If Supabase is not configured (demo mode), allow through — the client-side
-  // AuthProvider will auto-login as the demo user.
   const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL
 
   if (supabaseConfigured && !hasSession) {
-    // Redirect to login with the original URL as redirect param
     const loginUrl = new URL('/login', req.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)

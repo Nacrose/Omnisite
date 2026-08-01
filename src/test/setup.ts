@@ -1,1 +1,1 @@
-import '@testing-library/jest-dom'
+// Test setup — no external imports needed for vitest

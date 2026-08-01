@@ -23,6 +23,7 @@ import { TaskInspector } from './task-inspector'
 import { AddTaskModal, CriticalPathBreachModal, EMPTY_NEW_TASK, type NewTaskDraft } from './modals'
 import { calculateCpm, type CpmTask } from '@/lib/cpm'
 import { useMemo } from 'react'
+import { produce } from 'immer'
 
 export function SchedulerModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
@@ -104,8 +105,7 @@ export function SchedulerModule() {
 
   // Update a task's start date when dragged
   const updateTaskStart = (id: string, newStart: number) => {
-    setTasks(prev => {
-      const updated = JSON.parse(JSON.stringify(prev)) as Task[]
+    setTasks(prev => produce(prev, draft => {
       const walk = (items: Task[]) => {
         for (const t of items) {
           if (t.id === id) {
@@ -116,15 +116,13 @@ export function SchedulerModule() {
         }
         return false
       }
-      walk(updated)
-      return updated
-    })
+      walk(draft as Task[])
+    }))
   }
 
   // Update a task's duration when resized
   const updateTaskDuration = (id: string, newDuration: number) => {
-    setTasks(prev => {
-      const updated = JSON.parse(JSON.stringify(prev)) as Task[]
+    setTasks(prev => produce(prev, draft => {
       const walk = (items: Task[]) => {
         for (const t of items) {
           if (t.id === id) {
@@ -135,9 +133,8 @@ export function SchedulerModule() {
         }
         return false
       }
-      walk(updated)
-      return updated
-    })
+      walk(draft as Task[])
+    }))
   }
 
   // Add a new task to the top level
