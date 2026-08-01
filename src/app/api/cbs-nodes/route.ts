@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(data)
 }
 
-// DELETE /api/cbs-nodes — delete a CBS node by id
+// DELETE /api/cbs-nodes — delete a CBS node by code (cbs_nodes uses 'code' as PK, not 'id')
 export async function DELETE(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
@@ -86,12 +86,14 @@ export async function DELETE(req: NextRequest) {
   if (rateLimitError) return rateLimitError
 
   const { searchParams } = new URL(req.url)
-  const id = searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  // cbs_nodes has no 'id' column — its primary key is 'code'. Accept either
+  // ?code= or ?id= (the latter for backward compat) but always filter on 'code'.
+  const code = searchParams.get('code') || searchParams.get('id')
+  if (!code) return NextResponse.json({ error: 'code required' }, { status: 400 })
 
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
-  const { error } = await userClient.from('cbs_nodes').delete().eq('id', id)
+  const { error } = await userClient.from('cbs_nodes').delete().eq('code', code)
 
   if (error) {
     console.error('[API] cbs_nodes error:', error)
@@ -101,7 +103,7 @@ export async function DELETE(req: NextRequest) {
   // Audit log the deletion.
   logAudit({
     table_name: 'cbs_nodes',
-    record_id: id,
+    record_id: code,
     action: 'DELETE',
     changed_by: user.id,
   }).catch(() => {})

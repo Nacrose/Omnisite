@@ -1,5 +1,25 @@
 // ─── Types & constants for the Scheduler module ─────────────────────────────
 
+/**
+ * A dependency link between two tasks.
+ * - FS (Finish-to-Start): predecessor must finish before successor starts
+ * - SS (Start-to-Start):  predecessor must start before successor starts
+ * - FF (Finish-to-Finish): predecessor must finish before successor finishes
+ * - SF (Start-to-Finish):  predecessor must start before successor finishes
+ *
+ * Lag is in weeks (can be negative for lead/acceleration).
+ */
+export type LinkType = 'FS' | 'SS' | 'FF' | 'SF'
+
+export interface TaskDependency {
+  /** Successor task id (the task that depends on the predecessor). */
+  taskId: string
+  /** Predecessor task id (the task that must finish/start first). */
+  predecessorId: string
+  linkType: LinkType
+  lagWeeks: number
+}
+
 export interface Task {
   id: string
   name: string
@@ -14,6 +34,12 @@ export interface Task {
   boqAllocated?: number
   boqTotal?: number
   children?: Task[]
+  /**
+   * Dependency links — this task depends on these predecessors.
+   * Fed into calculateCpm() to compute the real critical path.
+   * Empty array means no explicit dependencies (ASAP scheduling).
+   */
+  dependencies?: TaskDependency[]
 }
 
 export const TASKS: Task[] = [
@@ -37,6 +63,7 @@ export const TASKS: Task[] = [
         baseline: [0, 3],
         resources: ['M-1'],
         constraints: 'ASAP',
+        dependencies: [{ taskId: 'T-101', predecessorId: 'T-100', linkType: 'SS', lagWeeks: 0 }],
       },
       {
         id: 'T-102',
@@ -47,6 +74,7 @@ export const TASKS: Task[] = [
         progress: 100,
         baseline: [2, 6],
         resources: ['E-1', 'E-2'],
+        dependencies: [{ taskId: 'T-102', predecessorId: 'T-101', linkType: 'SS', lagWeeks: 2 }],
       },
       {
         id: 'T-103',
@@ -58,6 +86,7 @@ export const TASKS: Task[] = [
         baseline: [6, 6],
         resources: [],
         constraints: 'FNLT',
+        dependencies: [{ taskId: 'T-103', predecessorId: 'T-102', linkType: 'FS', lagWeeks: 0 }],
       },
     ],
   },
@@ -83,6 +112,7 @@ export const TASKS: Task[] = [
         boqAllocated: 1240,
         boqTotal: 1240,
         constraints: 'SNET',
+        dependencies: [{ taskId: 'T-201', predecessorId: 'T-103', linkType: 'FS', lagWeeks: 0 }],
       },
       {
         id: 'T-202',
@@ -95,6 +125,7 @@ export const TASKS: Task[] = [
         resources: ['L-1', 'L-2'],
         boqAllocated: 285,
         boqTotal: 320,
+        dependencies: [{ taskId: 'T-202', predecessorId: 'T-201', linkType: 'FS', lagWeeks: 0 }],
       },
       {
         id: 'T-203',
@@ -108,6 +139,7 @@ export const TASKS: Task[] = [
         boqAllocated: 88,
         boqTotal: 88,
         critical: true,
+        dependencies: [{ taskId: 'T-203', predecessorId: 'T-202', linkType: 'FS', lagWeeks: 0 }],
       },
       {
         id: 'T-204',
@@ -119,6 +151,7 @@ export const TASKS: Task[] = [
         baseline: [15, 20],
         resources: [],
         constraints: 'FS+5',
+        dependencies: [{ taskId: 'T-204', predecessorId: 'T-203', linkType: 'FS', lagWeeks: 0 }],
       },
     ],
   },
@@ -143,6 +176,7 @@ export const TASKS: Task[] = [
         resources: ['L-3'],
         constraints: 'Must Finish On: Wk 32',
         critical: true,
+        dependencies: [{ taskId: 'T-301', predecessorId: 'T-103', linkType: 'FS', lagWeeks: 0 }],
       },
       {
         id: 'T-302',
@@ -153,6 +187,7 @@ export const TASKS: Task[] = [
         progress: 70,
         baseline: [14, 19],
         resources: ['L-1', 'E-4'],
+        dependencies: [{ taskId: 'T-302', predecessorId: 'T-301', linkType: 'SS', lagWeeks: 0 }],
       },
       {
         id: 'T-303',
@@ -164,6 +199,7 @@ export const TASKS: Task[] = [
         baseline: [18, 26],
         resources: ['L-1', 'L-2'],
         critical: true,
+        dependencies: [{ taskId: 'T-303', predecessorId: 'T-302', linkType: 'FS', lagWeeks: 0 }],
       },
     ],
   },
@@ -186,6 +222,7 @@ export const TASKS: Task[] = [
         progress: 25,
         baseline: [30, 36],
         resources: ['E-3'],
+        dependencies: [{ taskId: 'T-401', predecessorId: 'T-204', linkType: 'FS', lagWeeks: 0 }],
       },
       {
         id: 'T-402',
@@ -196,6 +233,7 @@ export const TASKS: Task[] = [
         progress: 0,
         baseline: [36, 44],
         resources: ['E-5', 'L-4'],
+        dependencies: [{ taskId: 'T-402', predecessorId: 'T-401', linkType: 'FS', lagWeeks: 0 }],
       },
       {
         id: 'T-403',
@@ -206,6 +244,7 @@ export const TASKS: Task[] = [
         progress: 0,
         baseline: [44, 50],
         resources: ['E-5'],
+        dependencies: [{ taskId: 'T-403', predecessorId: 'T-402', linkType: 'FS', lagWeeks: 0 }],
       },
       {
         id: 'T-404',
@@ -217,6 +256,7 @@ export const TASKS: Task[] = [
         baseline: [50, 50],
         resources: [],
         constraints: 'MFO: Wk 48',
+        dependencies: [{ taskId: 'T-404', predecessorId: 'T-403', linkType: 'FS', lagWeeks: 0 }],
       },
     ],
   },

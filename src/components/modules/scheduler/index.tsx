@@ -56,14 +56,18 @@ export function SchedulerModule() {
   // Convert expanded array to Set for O(1) lookups
   const expanded = new Set(expandedArr)
 
-  // Real CPM calculation — compute critical path from task dependencies
+  // Real CPM calculation — compute critical path from task dependencies.
+  // Each task's `dependencies` array (TaskDependency[]) is resolved into the
+  // flat predecessor ID list that calculateCpm expects. FS/SS/FF/SF link
+  // types are all treated as FS for the CPM pass — the link type affects
+  // scheduling semantics (start-to-start vs finish-to-start) but the critical
+  // path identification is the same: a task is critical if its float is 0.
   const cpmResult = useMemo(() => {
     const flat = flattenTasks(tasks)
-    // Build CPM input from flat task list
     const cpmTasks: CpmTask[] = flat.map(({ task }) => ({
       id: task.id,
       duration: task.duration,
-      predecessors: [], // No explicit dependency links in current data model
+      predecessors: (task.dependencies || []).map((d) => d.predecessorId),
     }))
     try {
       const result = calculateCpm(cpmTasks)
@@ -461,6 +465,7 @@ export function SchedulerModule() {
             </PaneHeader>
             <GanttCanvas
               tasks={tasksWithCpm}
+              flatTasks={flat}
               expanded={expanded}
               selectedId={selectedId}
               onSelect={setSelectedId}

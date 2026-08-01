@@ -116,27 +116,33 @@ export function TaskInspector({ task }: { task: Task }) {
             </label>
             <Separator />
             <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
-              Dependencies
+              Dependencies ({task.dependencies?.length || 0})
             </div>
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5">
-                <Link2 className="text-muted-foreground h-3 w-3" />
-                <span className="font-mono text-[10px]">T-201</span>
-                <Badge variant="secondary" className="text-[9px]">
-                  FS
-                </Badge>
-                <span className="text-muted-foreground flex-1 text-[10px]">
-                  Excavation ch. 0+000
-                </span>
-              </div>
-              <div className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5">
-                <Link2 className="text-muted-foreground h-3 w-3" />
-                <span className="font-mono text-[10px]">T-204</span>
-                <Badge variant="secondary" className="text-[9px]">
-                  SS+2
-                </Badge>
-                <span className="text-muted-foreground flex-1 text-[10px]">Curing period</span>
-              </div>
+              {task.dependencies && task.dependencies.length > 0 ? (
+                task.dependencies.map((dep, i) => (
+                  <div
+                    key={`${dep.predecessorId}-${dep.linkType}-${i}`}
+                    className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5"
+                  >
+                    <Link2 className="text-muted-foreground h-3 w-3" />
+                    <span className="font-mono text-[10px]">{dep.predecessorId}</span>
+                    <Badge variant="secondary" className="text-[9px]">
+                      {dep.linkType}
+                      {dep.lagWeeks !== 0 && (dep.lagWeeks > 0 ? `+${dep.lagWeeks}` : dep.lagWeeks)}
+                    </Badge>
+                    <span className="text-muted-foreground flex-1 truncate text-[10px]">
+                      {dep.lagWeeks !== 0
+                        ? `${dep.lagWeeks > 0 ? '+' : ''}${dep.lagWeeks}w lag`
+                        : 'no lag'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-muted-foreground rounded border border-dashed border-[var(--pane-divider)] p-2 text-center text-[10px]">
+                  No dependencies — ASAP scheduling
+                </div>
+              )}
             </div>
           </TabsContent>
 

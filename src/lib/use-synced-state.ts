@@ -324,7 +324,12 @@ export function useSyncedState<T>(
           if (prevItem !== undefined && JSON.stringify(prevItem) === JSON.stringify(item)) {
             continue
           }
-          upsertOne(apiEndpoint, { ...row, id, project_id: activeProjectDbId }).catch((e) => {
+          // Use the table's actual primary key (pk), not a hardcoded 'id'.
+          // This fixes CBS/Financials sync where cbs_nodes uses 'code' as PK
+          // and has no 'id' column — the previous hardcoded { ...row, id }
+          // was rejected by PostgREST for the unknown column.
+          const dbRow = { ...row, [pk]: id, project_id: activeProjectDbId }
+          upsertOne(apiEndpoint, dbRow).catch((e) => {
             console.warn(`[useSyncedState] upsert failed for ${supabaseTable}:${id}`, e)
           })
         }

@@ -6,6 +6,8 @@ import { TOTAL_WEEKS, WEEK_WIDTH, type Task, type DragState } from './types'
 
 export interface GanttCanvasProps {
   tasks: Task[]
+  /** Flattened task list (from flattenTasks) — used for dependency arrow lookup. */
+  flatTasks: { task: Task; depth: number }[]
   expanded: Set<string>
   selectedId: string
   onSelect: (id: string) => void
@@ -22,6 +24,7 @@ export interface GanttCanvasProps {
 
 export function GanttCanvas({
   tasks,
+  flatTasks,
   expanded,
   selectedId,
   onSelect,
@@ -68,6 +71,13 @@ export function GanttCanvas({
           <div ref={canvasRef} className="relative">
             {(() => {
               const rows: React.ReactNode[] = []
+              // Collect task positions during the walk so we can draw
+              // dependency arrows in an SVG overlay after all rows render.
+              const taskPositions = new Map<
+                string,
+                { rowIndex: number; barLeft: number; barRight: number; barTop: number }
+              >()
+              let rowIndex = 0
               const walk = (items: Task[], depth: number) => {
                 for (const t of items) {
                   const isExpanded = expanded.has(t.id)
@@ -80,6 +90,15 @@ export function GanttCanvas({
                   const baseLeft = t.baseline[0] * WEEK_WIDTH
                   const baseWidth = Math.max((t.baseline[1] - t.baseline[0]) * WEEK_WIDTH, 4)
                   const varianceWeeks = t.start - t.baseline[0]
+                  // Record this task's bar position for dependency arrow rendering.
+                  // Row height is 32px (h-8); bar vertical center is at rowIndex*32 + 16.
+                  taskPositions.set(t.id, {
+                    rowIndex,
+                    barLeft: left,
+                    barRight: left + width,
+                    barTop: rowIndex * 32 + 16,
+                  })
+                  rowIndex++
                   rows.push(
                     <div
                       key={t.id}
@@ -203,13 +222,6 @@ export function GanttCanvas({
                             )}
                           </div>
                         )}
-                        {/* Critical path dependency arrow (simple visual) */}
-                        {t.critical && t.type === 'Work' && (
-                          <div
-                            className="absolute top-1/2 h-1 w-1 -translate-y-1/2 rounded-full bg-red-500"
-                            style={{ left: left - 4 }}
-                          />
-                        )}
                       </div>
                     </div>
                   )
@@ -217,7 +229,78 @@ export function GanttCanvas({
                 }
               }
               walk(tasks, 0)
-              return rows
+
+              // Build dependency arrows as SVG paths. Each arrow connects the
+              // predecessor's finish (right edge) to the successor's start
+              // (left edge) with a right-angle elbow. Critical-path links are
+              // drawn in red; non-critical links in muted gray.
+              const arrows: React.ReactNode[] = []
+              let arrowIndex = 0
+              for (const [taskId, pos] of taskPositions) {
+                const task = flatTasks.find(({ task }) => task.id === taskId)?.task
+                if (!task?.dependencies) continue
+                for (const dep of task.dependencies) {
+                  const predPos = taskPositions.get(dep.predecessorId)
+                  if (!predPos) continue
+                  const successor = task
+                  const x1 = predPos.barRight
+                  const y1 = predPos.barTop
+                  const x2 = pos.barLeft
+                  const y2 = pos.barTop
+                  // Elbow path: right from predecessor finish, down/up to successor row, left to successor start.
+                  const midX = Math.max(x1 + 8, x2 - 8)
+                  const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
+                  const isCritical = successor.critical
+                  arrows.push(
+                    <path
+                      key={`arrow-${arrowIndex++}`}
+                      d={path}
+                      stroke={isCritical ? '#ef4444' : 'rgba(100, 116, 139, 0.4)'}
+                      strokeWidth={isCritical ? 1.5 : 1}
+                      fill="none"
+                      markerEnd={`url(#arrowhead-${isCritical ? 'critical' : 'normal'})`}
+                    />
+                  )
+                }
+              }
+
+              return (
+                <>
+                  {rows}
+                  {/* SVG overlay for dependency arrows. Pointer-events none so
+                      it doesn't intercept bar clicks/drag. */}
+                  <svg
+                    className="pointer-events-none absolute top-0 left-[480px] z-[15]"
+                    width={TOTAL_WEEKS * WEEK_WIDTH}
+                    height={rowIndex * 32}
+                    style={{ overflow: 'visible' }}
+                  >
+                    <defs>
+                      <marker
+                        id="arrowhead-critical"
+                        markerWidth="6"
+                        markerHeight="6"
+                        refX="5"
+                        refY="3"
+                        orient="auto"
+                      >
+                        <polygon points="0 0, 6 3, 0 6" fill="#ef4444" />
+                      </marker>
+                      <marker
+                        id="arrowhead-normal"
+                        markerWidth="6"
+                        markerHeight="6"
+                        refX="5"
+                        refY="3"
+                        orient="auto"
+                      >
+                        <polygon points="0 0, 6 3, 0 6" fill="rgba(100, 116, 139, 0.6)" />
+                      </marker>
+                    </defs>
+                    {arrows}
+                  </svg>
+                </>
+              )
             })()}
             {/* Today vertical line */}
             <div

@@ -71,6 +71,32 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Task dependency links for CPM (Critical Path Method) scheduling.
+-- Each row represents a dependency: successor (task_id) depends on
+-- predecessor (predecessor_id) with a given relationship type and lag.
+--
+-- Relationship types (standard CPM):
+--   FS = Finish-to-Start (predecessor must finish before successor starts)
+--   SS = Start-to-Start  (predecessor must start before successor starts)
+--   FF = Finish-to-Finish (predecessor must finish before successor finishes)
+--   SF = Start-to-Finish  (predecessor must start before successor finishes)
+-- Lag is in weeks (can be negative for lead/acceleration).
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES projects(id),
+  task_id TEXT NOT NULL,          -- successor task
+  predecessor_id TEXT NOT NULL,   -- predecessor task
+  link_type TEXT NOT NULL DEFAULT 'FS' CHECK (link_type IN ('FS', 'SS', 'FF', 'SF')),
+  lag_weeks INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(task_id, predecessor_id, link_type),
+  -- Soft FK (no hard FK because tasks use TEXT ids and may be cross-project)
+  FOREIGN KEY (task_id, project_id) REFERENCES tasks(id, project_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_deps_successor ON task_dependencies(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_deps_predecessor ON task_dependencies(predecessor_id);
+
 CREATE TABLE IF NOT EXISTS dsr_entries (
   id TEXT PRIMARY KEY,
   project_id UUID REFERENCES projects(id),
@@ -313,3 +339,65 @@ CREATE TRIGGER update_equipment_updated_at BEFORE UPDATE ON equipment FOR EACH R
 CREATE TRIGGER update_subcontractors_updated_at BEFORE UPDATE ON subcontractors FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER update_workers_updated_at BEFORE UPDATE ON workers FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER update_chat_messages_updated_at BEFORE UPDATE ON chat_messages FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ─── CBS subtree recompute trigger ─────────────────────────────────────────
+-- After any INSERT/UPDATE/DELETE on cbs_nodes, walks UP the tree and
+-- recomputes each ancestor's budget/committed/actual/forecast/margin_pct
+-- from its children. Ensures rollups stay correct regardless of write path.
+CREATE OR REPLACE FUNCTION recompute_cbs_subtree()
+RETURNS TRIGGER AS $$
+DECLARE
+  parent_code_val TEXT;
+  current_code_val TEXT;
+BEGIN
+  current_code_val := COALESCE(NEW.code, OLD.code);
+  parent_code_val := COALESCE(NEW.parent_code, OLD.parent_code);
+
+  WHILE parent_code_val IS NOT NULL LOOP
+    UPDATE cbs_nodes SET
+      budget = COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      committed = COALESCE((SELECT SUM(committed) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      actual = COALESCE((SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      forecast = COALESCE((SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      margin_pct = CASE
+        WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val), 0) > 0
+        THEN ROUND(
+          ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) -
+           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = parent_code_val)) /
+          (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) * 100.0,
+          2
+        )
+        ELSE 0
+      END,
+      updated_at = NOW()
+    WHERE code = parent_code_val;
+    SELECT parent_code INTO parent_code_val FROM cbs_nodes WHERE code = parent_code_val;
+  END LOOP;
+
+  IF EXISTS (SELECT 1 FROM cbs_nodes WHERE parent_code = current_code_val) THEN
+    UPDATE cbs_nodes SET
+      budget = COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      committed = COALESCE((SELECT SUM(committed) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      actual = COALESCE((SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      forecast = COALESCE((SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      margin_pct = CASE
+        WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val), 0) > 0
+        THEN ROUND(
+          ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) -
+           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = current_code_val)) /
+          (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) * 100.0,
+          2
+        )
+        ELSE 0
+      END,
+      updated_at = NOW()
+    WHERE code = current_code_val;
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER cbs_nodes_subtree_recompute
+  AFTER INSERT OR UPDATE OR DELETE ON cbs_nodes
+  FOR EACH ROW EXECUTE FUNCTION recompute_cbs_subtree();
