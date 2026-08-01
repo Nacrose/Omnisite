@@ -72,13 +72,28 @@ export function DockNav() {
 
   return (
     <>
+      {/* ─── Mobile dock: fixed bottom bar, always visible, no animation ─── */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 pane border-t border-[var(--pane-divider)]">
+        <div className="flex items-center justify-around px-2 py-1.5" style={{ paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom))' }}>
+          {grouped.map(g => g.items.map(item => (
+            <MobileDockIcon
+              key={item.id}
+              item={item}
+              isActive={activeModule === item.id}
+              onClick={() => setActiveModule(item.id)}
+            />
+          )))}
+        </div>
+      </div>
+
+      {/* ─── Desktop dock: auto-hide with magnification ─── */}
       {/* Invisible hover trigger zone — desktop only */}
       <div
         className="fixed bottom-0 left-0 right-0 h-20 z-40 hidden md:block"
         onMouseEnter={() => setIsVisible(true)}
       />
 
-      {/* The dock */}
+      {/* The dock — desktop only */}
       <AnimatePresence>
         {isVisible && (
           <motion.div
@@ -87,7 +102,7 @@ export function DockNav() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30, mass: 0.5 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-1rem)]"
+            className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-1rem)]"
             onMouseLeave={() => {
               const isMobile = window.matchMedia('(max-width: 767px)').matches
               if (!isMobile) {
@@ -268,6 +283,32 @@ function DockActionButton({ icon: Icon, label, onClick, highlight }: {
       )}
     >
       <Icon className="w-4 h-4" />
+    </button>
+  )
+}
+
+// ─── Mobile dock icon — compact, always visible ──────────────────────────────
+
+function MobileDockIcon({ item, isActive, onClick }: {
+  item: DockItem
+  isActive: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-1 rounded-lg transition-colors',
+        isActive ? 'text-primary' : 'text-muted-foreground',
+      )}
+    >
+      <div className={cn(
+        'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+        isActive ? 'bg-primary/15' : '',
+      )}>
+        <ModuleIcon name={item.icon} className="w-4 h-4" />
+      </div>
+      <span className="text-[8px] font-medium truncate w-full text-center leading-tight">{item.shortName}</span>
     </button>
   )
 }

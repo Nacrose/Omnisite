@@ -18,7 +18,7 @@ import { ROLE_TEMPLATES } from '@/lib/permissions'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Search, ChevronDown, PanelRight, Building2, Loader2, LogOut,
+  Search, ChevronDown, PanelRight, Building2, Loader2, LogOut, Plus,
 } from 'lucide-react'
 import { DashboardModule } from '@/components/modules/dashboard'
 import { BoqModule } from '@/components/modules/boq'
@@ -55,7 +55,7 @@ const MODULE_RENDERERS: Record<ModuleId, () => React.ReactNode> = {
 }
 
 export default function Home() {
-  const { activeModule, toggleRightPane, setCommandOpen } = useApp()
+  const { activeModule, toggleRightPane, setCommandOpen, setQuickAddOpen } = useApp()
   const { user, loading, signOut, isDemo } = useAuth()
   const router = useRouter()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -140,19 +140,19 @@ export default function Home() {
 
         <div className="w-px h-8 bg-[var(--pane-divider)] mx-0.5 hidden sm:block" />
 
-        {/* Breadcrumb — module name only on mobile, full on desktop */}
+        {/* Breadcrumb — module name + project switcher on mobile too */}
         <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial">
           <span className="text-sm font-semibold truncate">{active.shortName}</span>
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hidden sm:block" />
           <span className="text-sm text-muted-foreground hidden md:inline">·</span>
-          <div className="hidden md:block">
+          <div className="min-w-0">
             <ProjectSwitcher />
           </div>
         </div>
 
         <div className="flex-1 hidden sm:block" />
 
-        {/* Right controls — simplified on mobile */}
+        {/* Right controls */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
           {/* Search — icon only on mobile */}
           <button
@@ -162,6 +162,16 @@ export default function Home() {
             <Search className="w-4 h-4" />
             <span className="hidden md:inline ml-1.5">Search…</span>
             <kbd className="ml-1 text-[10px] px-1 py-0.5 rounded bg-background border border-border font-mono hidden md:inline">⌘K</kbd>
+          </button>
+
+          {/* Quick Add — visible on mobile (was hidden) */}
+          <button
+            onClick={() => setQuickAddOpen(true)}
+            className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 rounded-md bg-primary text-primary-foreground text-sm transition-colors"
+            title="Quick Add"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden md:inline ml-1.5">Quick Add</span>
           </button>
 
           <NotificationsBell />

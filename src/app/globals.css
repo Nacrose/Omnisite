@@ -309,7 +309,12 @@
 /* Mobile: add bottom padding so dock doesn't overlap content */
 @media (max-width: 767px) {
   main {
-    padding-bottom: 70px;
+    /* Space for the fixed mobile dock at the bottom (icon + label ~56px + safe area) */
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Prevent horizontal scroll from table minWidth on mobile */
+  .sticky-table-shell > div {
+    min-width: 0 !important;
   }
 }
 
