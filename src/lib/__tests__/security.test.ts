@@ -85,11 +85,10 @@ describe('API client error handling', () => {
 describe('Rate limiter', () => {
   it('allows requests under the limit', async () => {
     const { checkRateLimit } = await import('@/lib/rate-limit')
-    // Create a mock request with a unique IP
     const mockReq = {
       headers: new Headers({ 'x-forwarded-for': '10.0.0.1' }),
     } as unknown as import('next/server').NextRequest
-    const result = checkRateLimit(mockReq)
+    const result = await checkRateLimit(mockReq, 'test-user-1')
     expect(result).toBeNull() // null = allowed
   })
 })

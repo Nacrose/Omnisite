@@ -3,6 +3,7 @@
 import { ReactNode, Component, ErrorInfo } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import * as Sentry from '@/lib/sentry'
 
 interface Props {
   children: ReactNode
@@ -29,8 +30,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log to console — in production this would go to Sentry/Logflare
     console.error('[OmniSite Error Boundary]', error, errorInfo)
+    // Send to Sentry if configured
+    Sentry.Sentry.captureException(error, { extra: { componentStack: errorInfo.componentStack } })
   }
 
   handleReset = () => {
