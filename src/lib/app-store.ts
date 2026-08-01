@@ -23,8 +23,9 @@ export type ModuleId =
 interface AppState {
   activeModule: ModuleId
   activeProject: string
+  activeProjectId: string
   setActiveModule: (m: ModuleId) => void
-  setActiveProject: (p: string) => void
+  setActiveProject: (p: string, id: string) => void
   // Persisted pane state
   leftPaneOpen: boolean
   rightPaneOpen: boolean
@@ -46,13 +47,14 @@ export const useApp = create<AppState>()(
     (set, get) => ({
       activeModule: 'dashboard',
       activeProject: 'Kathmandu Ring Road Expansion — Package 3',
+      activeProjectId: 'p1',
       setActiveModule: (m) => {
         set({ activeModule: m })
         // Track recent — dedupe and prepend, cap at 5
         const prev = get().recentModules.filter(x => x !== m)
         set({ recentModules: [m, ...prev].slice(0, 5) })
       },
-      setActiveProject: (p) => set({ activeProject: p }),
+      setActiveProject: (p, id) => set({ activeProject: p, activeProjectId: id }),
       leftPaneOpen: true,
       rightPaneOpen: true,
       toggleLeftPane: () => set((s) => ({ leftPaneOpen: !s.leftPaneOpen })),
@@ -74,6 +76,7 @@ export const useApp = create<AppState>()(
       partialize: (state) => ({
         activeModule: state.activeModule,
         activeProject: state.activeProject,
+        activeProjectId: state.activeProjectId,
         recentModules: state.recentModules,
         leftPaneOpen: state.leftPaneOpen,
         rightPaneOpen: state.rightPaneOpen,

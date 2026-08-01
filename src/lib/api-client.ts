@@ -64,8 +64,8 @@ function buildUrl(endpoint: string, query?: Record<string, string>): string {
  * @returns The parsed array. Returns `[]` if the server returned `null` /
  *          `undefined` (e.g. an empty table). Never returns `null`.
  */
-export async function fetchAll<T>(endpoint: string): Promise<T[]> {
-  const url = buildUrl(endpoint)
+export async function fetchAll<T>(endpoint: string, query?: Record<string, string>): Promise<T[]> {
+  const url = buildUrl(endpoint, query)
   let res: Response
   try {
     res = await fetch(url, {

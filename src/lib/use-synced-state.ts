@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { fetchAll, upsertOne } from '@/lib/api-client'
+import { useApp } from '@/lib/app-store'
 
 /**
  * useSyncedState — hybrid storage hook.
@@ -50,6 +51,22 @@ function endpointFor(table: string): string {
   return TABLE_TO_ENDPOINT[table] ?? table
 }
 
+/**
+ * Convert a snake_case string to camelCase.
+ * e.g. 'has_ra' → 'hasRa', 'parent_id' → 'parentId', 'created_at' → 'createdAt'
+ */
+function snakeToCamel(s: string): string {
+  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+}
+
+/**
+ * Convert a camelCase string to snake_case.
+ * e.g. 'hasRa' → 'has_ra', 'parentId' → 'parent_id'
+ */
+function camelToSnake(s: string): string {
+  return s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
+}
+
 export function useSyncedState<T>(
   localStorageKey: string,
   supabaseTable: string,
@@ -60,43 +77,63 @@ export function useSyncedState<T>(
   const [localState, setLocalState] = usePersistentState(localStorageKey, initial)
   const [supabaseState, setSupabaseState] = useState<T | null>(null)
   const [loading, setLoading] = useState(useSupabase)
+  // Read the active project ID from the app store so data is scoped per-project.
+  // When the user switches projects, this hook re-fetches with the new project_id.
+  const { activeProjectId } = useApp()
 
   const pk = config?.primaryKey || 'id'
   const fmap = config?.fieldMap || {}
   const apiEndpoint = endpointFor(supabaseTable)
 
-  // Transform a DB row → app object (reverse map column names to field names)
-  const fromDb = (row: Record<string, unknown>): Record<string, unknown> => {
+  // ─── Transform: DB row → app object ───────────────────────────────────────
+  // Reverse-map: for each {appField: dbCol} in fmap, copy row[dbCol] → obj[appField].
+  // For unmapped fields, convert snake_case → camelCase automatically so
+  // e.g. `has_ra`, `parent_id`, `created_at` become `hasRa`, `parentId`, `createdAt`.
+  const fromDb = useCallback((row: Record<string, unknown>): Record<string, unknown> => {
     const obj: Record<string, unknown> = {}
+    const mappedDbCols = new Set(Object.values(fmap))
+
+    // First pass: apply explicit fieldMap (appField ← row[dbCol])
     for (const [appField, dbCol] of Object.entries(fmap)) {
-      if (row[dbCol] !== undefined) obj[appField] = row[dbCol]
-    }
-    // Copy unmapped fields directly
-    for (const key of Object.keys(row)) {
-      if (!Object.values(fmap).includes(key)) {
-        // Convert snake_case to camelCase for known patterns
-        if (key === 'created_at' || key === 'updated_at' || key === 'project_id') continue
-        obj[key] = row[key]
+      if (row[dbCol] !== undefined) {
+        obj[appField] = row[dbCol]
       }
     }
-    return obj
-  }
 
-  // Transform an app object → DB row (map field names to column names)
-  const toDb = (item: Record<string, unknown>): Record<string, unknown> => {
+    // Second pass: copy unmapped fields, converting snake_case → camelCase
+    for (const key of Object.keys(row)) {
+      if (mappedDbCols.has(key)) continue // already handled by fieldMap
+      // Skip DB metadata columns that don't belong in app objects
+      if (key === 'created_at' || key === 'updated_at') continue
+      const appKey = snakeToCamel(key)
+      // Don't overwrite an explicit fieldMap entry
+      if (!(appKey in obj)) {
+        obj[appKey] = row[key]
+      }
+    }
+
+    return obj
+  }, [fmap])
+
+  // ─── Transform: app object → DB row ───────────────────────────────────────
+  // Forward-map: for each app field, look up the DB column via fieldMap.
+  // If not in fieldMap, convert camelCase → snake_case automatically.
+  const toDb = useCallback((item: Record<string, unknown>): Record<string, unknown> => {
     const row: Record<string, unknown> = {}
     for (const key of Object.keys(item)) {
-      const dbCol = fmap[key] || key
-      // Skip app-only fields that don't exist in DB (like 'children')
+      // Explicit fieldMap takes precedence
+      const dbCol = fmap[key] || camelToSnake(key)
+
+      // Complex fields that don't exist as DB columns — serialize as JSON
       if (key === 'children' || key === 'baseline') {
-        // Serialize complex fields as JSON
         row[dbCol] = JSON.stringify(item[key])
         continue
       }
+
       row[dbCol] = item[key]
     }
     return row
-  }
+  }, [fmap])
 
   useEffect(() => {
     if (!useSupabase || !supabase) return
@@ -105,14 +142,14 @@ export function useSyncedState<T>(
 
     const load = async () => {
       try {
-        // Initial read goes through the API client (server-side validated).
-        const rows = await fetchAll<Record<string, unknown>>(apiEndpoint)
+        // Pass the active project_id as a query param so the API route
+        // can filter data per-project.
+        const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectId ? { project_id: activeProjectId } : undefined)
         if (!mounted) return
         if (rows.length > 0) {
           const transformed = rows.map(row => fromDb(row))
           setSupabaseState(transformed as unknown as T)
         } else {
-          // No data — use initial (don't seed, the SQL seed already ran)
           const initialData = typeof initial === 'function' ? (initial as () => T)() : initial
           setSupabaseState(initialData)
         }
@@ -128,17 +165,14 @@ export function useSyncedState<T>(
 
     load()
 
-    // Real-time subscription — uses the Supabase client ONLY to receive
-    // change notifications. When a notification arrives, we re-fetch through
-    // the API client (the read path), keeping the write/read paths consistent
-    // and server-validated.
+    // Real-time subscription — re-fetch through the API client on change.
     const channel = supabase
       .channel(`${supabaseTable}-rt`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: supabaseTable },
         async () => {
           try {
-            const rows = await fetchAll<Record<string, unknown>>(apiEndpoint)
+            const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectId ? { project_id: activeProjectId } : undefined)
             if (rows && mounted) {
               const transformed = rows.map(row => fromDb(row))
               setSupabaseState(transformed as unknown as T)
@@ -154,22 +188,31 @@ export function useSyncedState<T>(
       mounted = false
       supabase!.removeChannel(channel)
     }
-  }, [supabaseTable])
+  }, [supabaseTable, activeProjectId])
 
-  // State setter — writes to API (when Supabase configured) or localStorage
+  // ─── State setter — race-condition-free ───────────────────────────────────
+  // Uses a FUNCTIONAL setSupabaseState(prev => ...) so the updater always
+  // receives the latest committed state, even if multiple setState calls
+  // fire in the same React batch. The diff + upsert logic also runs inside
+  // the functional update so it sees the true `prev`, not a stale closure.
+  const stateRef = useRef(supabaseState)
+  useEffect(() => { stateRef.current = supabaseState }, [supabaseState])
+
   const setState = (value: T | ((prev: T) => T)) => {
-    if (useSupabase && supabaseState !== null) {
-      const newValue = typeof value === 'function'
-        ? (value as (prev: T) => T)(supabaseState)
-        : value
-      setSupabaseState(newValue)
+    if (!useSupabase) {
+      setLocalState(value)
+      return
+    }
 
-      // Sync to API — upsert each item that has a primary key.
-      // We diff against the previous state so unchanged rows don't generate
-      // spurious POSTs (the original implementation upserted every row on
-      // every keystroke, which was wasteful).
+    // Use functional update so we always read the latest state.
+    setSupabaseState(prev => {
+      const newValue = typeof value === 'function'
+        ? (value as (prev: T) => T)(prev ?? (typeof initial === 'function' ? (initial as () => T)() : initial))
+        : value
+
+      // Diff + upsert inside the updater so we use the true `prev`.
       if (Array.isArray(newValue)) {
-        const prevArr = Array.isArray(supabaseState) ? (supabaseState as unknown[]) : []
+        const prevArr = Array.isArray(prev) ? (prev as unknown[]) : []
         const prevById = new Map<string, unknown>()
         for (const p of prevArr) {
           const pid = (p as Record<string, unknown>)[pk] as string | undefined
@@ -179,15 +222,11 @@ export function useSyncedState<T>(
           const row = toDb(item as Record<string, unknown>)
           const id = (item as Record<string, unknown>)[pk] as string | undefined
           if (!id) continue
-          // Skip rows that haven't changed since the previous render.
           const prevItem = prevById.get(id)
           if (prevItem !== undefined && JSON.stringify(prevItem) === JSON.stringify(item)) {
             continue
           }
-          // Fire-and-forget; the realtime channel will notify us when the
-          // write lands, and per-item failures are logged without blocking
-          // subsequent writes.
-          upsertOne(apiEndpoint, { ...row, id }).catch(e => {
+          upsertOne(apiEndpoint, { ...row, id, project_id: activeProjectId }).catch(e => {
             console.warn(`[useSyncedState] upsert failed for ${supabaseTable}:${id}`, e)
           })
         }
@@ -195,9 +234,9 @@ export function useSyncedState<T>(
 
       // Also save to localStorage as backup
       setLocalState(newValue)
-    } else {
-      setLocalState(value)
-    }
+
+      return newValue
+    })
   }
 
   const currentState = useSupabase

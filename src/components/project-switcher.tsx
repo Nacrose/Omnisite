@@ -16,7 +16,7 @@ interface Project {
   status: 'active' | 'on-hold' | 'closed'
 }
 
-const PROJECTS: Project[] = [
+export const PROJECTS: Project[] = [
   { id: 'p1', name: 'Kathmandu Ring Road Expansion — Package 3', code: 'KRR-P3', location: 'Kathmandu', value: 'NPR 487M', progress: 62, status: 'active' },
   { id: 'p2', name: 'Melamchi Water Supply — Treatment Plant', code: 'MWS-TP', location: 'Sindhupalchok', value: 'NPR 1.2B', progress: 78, status: 'active' },
   { id: 'p3', name: 'Pokhara International Airport — Terminal', code: 'PIA-T', location: 'Pokhara', value: 'NPR 640M', progress: 45, status: 'active' },
@@ -25,7 +25,7 @@ const PROJECTS: Project[] = [
 ]
 
 export function ProjectSwitcher() {
-  const { activeProject, setActiveProject } = useApp()
+  const { activeProject, activeProjectId, setActiveProject } = useApp()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -37,10 +37,10 @@ export function ProjectSwitcher() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const current = PROJECTS.find(p => p.name === activeProject) ?? PROJECTS[0]
+  const current = PROJECTS.find(p => p.id === activeProjectId) ?? PROJECTS[0]
 
   const selectProject = (p: Project) => {
-    setActiveProject(p.name)
+    setActiveProject(p.name, p.id)
     setOpen(false)
     toast.success(`Switched to project`, { description: p.name })
   }

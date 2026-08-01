@@ -572,7 +572,7 @@ function Row({ label, value, muted, bold, className }: { label: string; value: s
 }
 
 function CostBar({ label, amount, color, total }: { label: string; amount: number; color: string; total: number }) {
-  const pct = (amount / total) * 100
+  const pct = total > 0 ? (amount / total) * 100 : 0
   return (
     <div>
       <div className="flex justify-between text-[10px] mb-0.5">

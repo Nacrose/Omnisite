@@ -81,7 +81,10 @@ export function ReportsModule() {
           <PaneHeader title="PDF Canvas · A4 Portrait">
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Preview', { description: 'Opens a print preview of the report.' })}><Eye className="w-3.5 h-3.5" />Preview</Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.success('Report saved', { description: 'Layout stored. Next export will use this configuration.' })}><Save className="w-3.5 h-3.5" />Save</Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => window.print()}><Download className="w-3.5 h-3.5" />Export PDF</Button>
+            <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+              toast.info('Preparing PDF…', { description: 'Opening print dialog — save as PDF from the browser.' })
+              setTimeout(() => window.print(), 300)
+            }}><Download className="w-3.5 h-3.5" />Export PDF</Button>
           </PaneHeader>
           <PaneBody className="p-6 flex justify-center bg-secondary/20">
             {/* A4 mock canvas */}
