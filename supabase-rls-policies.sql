@@ -59,6 +59,21 @@ CREATE POLICY "pms_delete_assignments" ON user_projects
     )
   );
 
+-- PMs can update assignments (e.g. change a user's role on a project).
+DROP POLICY IF EXISTS "pms_update_assignments" ON user_projects;
+CREATE POLICY "pms_update_assignments" ON user_projects
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM user_projects up
+      WHERE up.user_id = auth.uid() AND up.role = 'PM'
+    )
+  ) WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM user_projects up
+      WHERE up.user_id = auth.uid() AND up.role = 'PM'
+    )
+  );
+
 -- ─── 2. Helper function: check if user has access to a project ─────────────
 -- Returns true if the user is assigned to the project (any role) or is a PM.
 CREATE OR REPLACE FUNCTION user_has_project_access(project_uuid UUID)

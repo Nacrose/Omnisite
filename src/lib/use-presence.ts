@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { io, Socket } from 'socket.io-client'
 import { useApp } from '@/lib/app-store'
 
 export interface PresenceUser {
@@ -41,7 +40,7 @@ const SIMULATED_CURSORS: RemoteCursor[] = [
   { id: 'sim-sg', name: 'Sita Gurung', initials: 'SG', color: '#10b981', x: 60, y: 50, canvas: 'gantt' },
 ]
 
-let socket: Socket | null = null
+let socket: { connected: boolean; on: (e: string, cb: (d: any) => void) => void; off: (e: string, cb?: any) => void; emit: (e: string, d?: unknown) => void; disconnect: () => void } | null = null
 let connectionCount = 0
 let fallbackActive = false
 
@@ -67,8 +66,7 @@ export function usePresence() {
         && !window.location.hostname.includes('localhost')
 
       if (isProduction) {
-        // Production (Vercel/VPS) — immediately use fallback
-        // WebSocket service runs separately; if not configured, use simulated presence
+        // Production — immediately use simulated presence (no WebSocket service).
         fallbackActive = true
         setUsingFallback(true)
         setUsers(SIMULATED_USERS)
@@ -78,59 +76,15 @@ export function usePresence() {
         })
         console.info('[OmniSite Presence] Production mode — simulated collaborators')
       } else if (isLocalDev) {
-        // Local dev — try to connect to the local WebSocket service on port 3003
-        try {
-          socket = io('http://localhost:3003', {
-            path: '/socket.io/',
-            transports: ['polling', 'websocket'],
-            forceNew: true,
-            reconnection: true,
-            reconnectionAttempts: 3,
-            reconnectionDelay: 1000,
-            timeout: 5000,
-          })
-
-          const fallbackTimer = setTimeout(() => {
-            if (!socket?.connected && !fallbackActive) {
-              fallbackActive = true
-              setUsingFallback(true)
-              setUsers(SIMULATED_USERS)
-              setCursors({
-                'sim-br': { ...SIMULATED_CURSORS[0] },
-                'sim-sg': { ...SIMULATED_CURSORS[1] },
-              })
-              console.warn('[OmniSite Presence] WebSocket unavailable — using simulated collaborators')
-            }
-          }, 8000)
-
-          socket.on('connect_error', () => {
-            // Will trigger fallback via the timer if it keeps failing
-          })
-
-          socket.on('connect', () => {
-            clearTimeout(fallbackTimer)
-            if (fallbackActive) return
-            setIsConnected(true)
-            setUsingFallback(false)
-            socket?.emit('presence:join', {
-              ...CURRENT_USER,
-              module: activeModule,
-            })
-          })
-
-          socket.on('disconnect', () => {
-            setIsConnected(false)
-          })
-        } catch (e) {
-          console.warn('[OmniSite Presence] Failed to create socket, using fallback', e)
-          fallbackActive = true
-          setUsingFallback(true)
-          setUsers(SIMULATED_USERS)
-          setCursors({
-            'sim-br': { ...SIMULATED_CURSORS[0] },
-            'sim-sg': { ...SIMULATED_CURSORS[1] },
-          })
-        }
+        // Local dev — skip WebSocket, go straight to fallback.
+        // (socket.io-client was removed; realtime is handled by Supabase channels.)
+        fallbackActive = true
+        setUsingFallback(true)
+        setUsers(SIMULATED_USERS)
+        setCursors({
+          'sim-br': { ...SIMULATED_CURSORS[0] },
+          'sim-sg': { ...SIMULATED_CURSORS[1] },
+        })
       }
     }
 

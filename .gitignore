@@ -68,3 +68,4 @@ presence.log
 # Agent skills sandbox (unrelated to the app — 61MB, 1074 files)
 skills/
 agent-ctx/
+worklog.md
