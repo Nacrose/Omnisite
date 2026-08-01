@@ -151,6 +151,43 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   status TEXT DEFAULT 'Pending',
   items INTEGER DEFAULT 0,
   has_grn BOOLEAN DEFAULT false,
+  req_id TEXT,             -- originating requisition (traceability)
+  material_code TEXT,      -- links to stock_items.code
+  rate NUMERIC DEFAULT 0,  -- unit rate at PO creation
+  po_qty NUMERIC DEFAULT 0, -- ordered quantity
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- GRN (Goods Received Notes) — 3-way match (PO vs GRN vs Invoice)
+CREATE TABLE IF NOT EXISTS grns (
+  id TEXT PRIMARY KEY,
+  project_id UUID REFERENCES projects(id),
+  po_id TEXT NOT NULL,
+  vendor TEXT NOT NULL,
+  po_qty NUMERIC NOT NULL DEFAULT 0,
+  grn_qty NUMERIC NOT NULL DEFAULT 0,
+  invoice_qty NUMERIC NOT NULL DEFAULT 0,
+  rate NUMERIC NOT NULL DEFAULT 0,
+  pay_status TEXT NOT NULL DEFAULT 'Awaiting GRN'
+    CHECK (pay_status IN ('Cleared', 'Hold', 'Partial Hold', 'Awaiting GRN')),
+  material_code TEXT,
+  date TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_grns_po ON grns(po_id);
+CREATE INDEX IF NOT EXISTS idx_grns_material ON grns(material_code);
+
+-- Stock items — live inventory
+CREATE TABLE IF NOT EXISTS stock_items (
+  code TEXT PRIMARY KEY,
+  project_id UUID REFERENCES projects(id),
+  name TEXT NOT NULL,
+  on_hand NUMERIC NOT NULL DEFAULT 0,
+  reserved NUMERIC NOT NULL DEFAULT 0,
+  avg_cost NUMERIC NOT NULL DEFAULT 0,
+  warehouse TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -302,15 +339,22 @@ ALTER TABLE equipment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subcontractors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE grns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_items ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- Enable Realtime for live updates
 -- ============================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE boq_items;
-ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
-ALTER PUBLICATION supabase_realtime ADD TABLE dsr_entries;
-ALTER PUBLICATION supabase_realtime ADD TABLE cbs_nodes;
-ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+DO $$
+BEGIN
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE boq_items; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE tasks; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE dsr_entries; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE cbs_nodes; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE grns; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE stock_items; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
 
 -- ============================================================
 -- Updated_at trigger

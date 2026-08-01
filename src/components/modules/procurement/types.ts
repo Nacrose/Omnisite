@@ -27,6 +27,39 @@ export interface Po {
   status: 'Delivered' | 'Partial' | 'Pending'
   items: number
   grn: boolean
+  /** Originating requisition ID — closes the traceability gap (REQ → PO → GRN). */
+  reqId?: string
+  /** Material code this PO delivers (links to StockItem for stock movements). */
+  materialCode?: string
+  /** Unit rate at PO creation — used for 3-way match locked-amount calc. */
+  rate?: number
+  /** Ordered quantity (may differ from requisition qty if split across vendors). */
+  poQty?: number
+}
+
+/** Goods Received Note — 3-way match (PO qty vs GRN qty vs Invoice qty). */
+export interface Grn {
+  id: string
+  poId: string
+  vendor: string
+  poQty: number
+  grnQty: number
+  invoiceQty: number
+  rate: number
+  payStatus: 'Cleared' | 'Hold' | 'Partial Hold' | 'Awaiting GRN'
+  /** Material code delivered — used to increment StockItem.onHand on GRN. */
+  materialCode?: string
+  date: string
+}
+
+/** Stock item — live inventory, derived from GRN receipts minus MIN issues. */
+export interface StockItem {
+  code: string
+  name: string
+  onHand: number
+  reserved: number
+  avgCost: number
+  warehouse: string
 }
 
 export const INITIAL_REQS: ReqItem[] = [
@@ -78,6 +111,10 @@ export const INITIAL_POS: Po[] = [
     status: 'Delivered',
     items: 1,
     grn: true,
+    reqId: 'REQ-0142',
+    materialCode: 'M-CEM-OPC',
+    rate: 920,
+    poQty: 1200,
   },
   {
     id: 'PO-2410-014',
@@ -87,6 +124,10 @@ export const INITIAL_POS: Po[] = [
     status: 'Partial',
     items: 2,
     grn: true,
+    reqId: 'REQ-0143',
+    materialCode: 'M-SAND-R',
+    rate: 3850,
+    poQty: 45,
   },
   {
     id: 'PO-2410-022',
@@ -96,16 +137,83 @@ export const INITIAL_POS: Po[] = [
     status: 'Pending',
     items: 3,
     grn: false,
+    reqId: 'REQ-0143',
+    materialCode: 'M-AGG-20',
+    rate: 2950,
+    poQty: 96,
+  },
+  {
+    id: 'PO-2410-016',
+    vendor: 'Ghorahi Ply',
+    date: '10 Aug 2026',
+    value: 167400,
+    status: 'Partial',
+    items: 1,
+    grn: true,
+    reqId: 'REQ-0144',
+    materialCode: 'M-PLY-18',
+    rate: 2790,
+    poQty: 60,
   },
 ]
 
-export const STOCK = [
+export const INITIAL_GRNS: Grn[] = [
+  {
+    id: 'GRN-0089',
+    poId: 'PO-2410-018',
+    vendor: 'Udaipur Cement',
+    poQty: 1200,
+    grnQty: 1200,
+    invoiceQty: 1200,
+    rate: 920,
+    payStatus: 'Cleared',
+    materialCode: 'M-CEM-OPC',
+    date: '13 Aug 2026',
+  },
+  {
+    id: 'GRN-0088',
+    poId: 'PO-2410-014',
+    vendor: 'Trishuli Sand',
+    poQty: 45,
+    grnQty: 38,
+    invoiceQty: 38,
+    rate: 3850,
+    payStatus: 'Partial Hold',
+    materialCode: 'M-SAND-R',
+    date: '09 Aug 2026',
+  },
+  {
+    id: 'GRN-0090',
+    poId: 'PO-2410-022',
+    vendor: 'Hetauda Aggregates',
+    poQty: 96,
+    grnQty: 0,
+    invoiceQty: 0,
+    rate: 2950,
+    payStatus: 'Awaiting GRN',
+    materialCode: 'M-AGG-20',
+    date: '—',
+  },
+  {
+    id: 'GRN-0087',
+    poId: 'PO-2410-016',
+    vendor: 'Ghorahi Ply',
+    poQty: 60,
+    grnQty: 60,
+    invoiceQty: 58,
+    rate: 2790,
+    payStatus: 'Hold',
+    materialCode: 'M-PLY-18',
+    date: '11 Aug 2026',
+  },
+]
+
+export const INITIAL_STOCK: StockItem[] = [
   {
     code: 'M-CEM-OPC',
     name: 'Cement OPC 53 (Bag)',
     onHand: 1240,
     reserved: 480,
-    available: 760,
     avgCost: 918,
     warehouse: 'Main Store · Kalanki',
   },
@@ -114,7 +222,6 @@ export const STOCK = [
     name: 'River Sand (cum)',
     onHand: 38.5,
     reserved: 12,
-    available: 26.5,
     avgCost: 3850,
     warehouse: 'Site Stockpile',
   },
@@ -123,7 +230,6 @@ export const STOCK = [
     name: 'Coarse Agg 20mm (cum)',
     onHand: 64.2,
     reserved: 28,
-    available: 36.2,
     avgCost: 2950,
     warehouse: 'Site Stockpile',
   },
@@ -132,7 +238,6 @@ export const STOCK = [
     name: 'TMT Steel 16mm (MT)',
     onHand: 4.8,
     reserved: 3.2,
-    available: 1.6,
     avgCost: 118200,
     warehouse: 'Rebar Yard',
   },
@@ -141,8 +246,11 @@ export const STOCK = [
     name: 'Shuttering Ply 18mm (Sheet)',
     onHand: 48,
     reserved: 24,
-    available: 24,
     avgCost: 2790,
     warehouse: 'Formwork Yard',
   },
 ]
+
+// Backward compat: STOCK is now a snapshot of INITIAL_STOCK. The live stock
+// state is managed via useSyncedState in the procurement module.
+export const STOCK = INITIAL_STOCK

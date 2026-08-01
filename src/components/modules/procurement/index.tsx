@@ -18,8 +18,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, ReqItem, Tab, STOCK } from './types'
-import { INITIAL_POS, INITIAL_REQS } from './types'
+import { Po, ReqItem, Grn, StockItem, Tab, STOCK } from './types'
+import { INITIAL_POS, INITIAL_REQS, INITIAL_GRNS, INITIAL_STOCK } from './types'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { ReqCenterView } from './req-view'
@@ -39,7 +39,37 @@ export function ProcurementModule() {
     'omnisite-procurement-pos',
     'purchase_orders',
     () => structuredClone(INITIAL_POS) as typeof INITIAL_POS,
-    { fieldMap: { hasGrn: 'has_grn' }, primaryKey: 'id' }
+    {
+      fieldMap: {
+        hasGrn: 'has_grn',
+        reqId: 'req_id',
+        materialCode: 'material_code',
+        poQty: 'po_qty',
+      },
+      primaryKey: 'id',
+    }
+  )
+  const [grns, setGrns, grnsLoading] = useSyncedState<Grn[]>(
+    'omnisite-procurement-grns',
+    'grns',
+    () => structuredClone(INITIAL_GRNS) as typeof INITIAL_GRNS,
+    {
+      fieldMap: {
+        poId: 'po_id',
+        poQty: 'po_qty',
+        grnQty: 'grn_qty',
+        invoiceQty: 'invoice_qty',
+        payStatus: 'pay_status',
+        materialCode: 'material_code',
+      },
+      primaryKey: 'id',
+    }
+  )
+  const [stock, setStock, stockLoading] = useSyncedState<StockItem[]>(
+    'omnisite-procurement-stock',
+    'stock_items',
+    () => structuredClone(INITIAL_STOCK) as typeof INITIAL_STOCK,
+    { fieldMap: { onHand: 'on_hand', avgCost: 'avg_cost' }, primaryKey: 'code' }
   )
   // Override modal state
   const [overrideModal, setOverrideModal] = useState<{
@@ -209,14 +239,19 @@ export function ProcurementModule() {
             <div className="py-2">
               {/* Compute counts from real arrays so badges never lie. */}
               {(() => {
-                const stockValue = STOCK.reduce((s, x) => s + x.onHand * x.avgCost, 0)
+                const stockValue = stock.reduce((s, x) => s + x.onHand * x.avgCost, 0)
                 const committed = pos.reduce((s, p) => s + p.value, 0)
                 const openPos = pos.filter((p) => p.status !== 'Delivered').length
                 const tabs = [
                   { id: 'req' as Tab, name: 'Requisitions', count: reqs.length, icon: FileText },
                   { id: 'po' as Tab, name: 'Purchase Orders', count: pos.length, icon: Package },
-                  { id: 'grn' as Tab, name: 'GRN / 3-Way Match', count: 4, icon: CheckCircle2 },
-                  { id: 'stock' as Tab, name: 'Live Stock', count: STOCK.length, icon: Boxes },
+                  {
+                    id: 'grn' as Tab,
+                    name: 'GRN / 3-Way Match',
+                    count: grns.length,
+                    icon: CheckCircle2,
+                  },
+                  { id: 'stock' as Tab, name: 'Live Stock', count: stock.length, icon: Boxes },
                   { id: 'min' as Tab, name: 'Material Issues (MIN)', count: 3, icon: ArrowRight },
                 ]
                 return (
@@ -317,8 +352,36 @@ export function ProcurementModule() {
               />
             )}
             {tab === 'po' && <PoCenterView pos={pos} />}
-            {tab === 'grn' && <GrnCenterView />}
-            {tab === 'stock' && <StockCenterView />}
+            {tab === 'grn' && (
+              <GrnCenterView
+                grns={grns}
+                onToggleApproval={(poId) => {
+                  setGrns((prev) =>
+                    prev.map((g) => {
+                      if (g.poId !== poId) return g
+                      const matched = g.poQty === g.grnQty && g.grnQty === g.invoiceQty
+                      if (!matched) {
+                        toast.error('Payment locked', {
+                          description: `${poId} fails 3-way match. PO ${g.poQty} ≠ GRN ${g.grnQty} ≠ Inv ${g.invoiceQty}. Cannot approve.`,
+                        })
+                        return g
+                      }
+                      const newPay: Grn['payStatus'] =
+                        g.payStatus === 'Cleared'
+                          ? 'Hold'
+                          : g.payStatus === 'Hold'
+                            ? 'Cleared'
+                            : g.payStatus
+                      toast.success(newPay === 'Cleared' ? 'Payment cleared' : 'Payment held', {
+                        description: `${poId} — 3-way match verified`,
+                      })
+                      return { ...g, payStatus: newPay }
+                    })
+                  )
+                }}
+              />
+            )}
+            {tab === 'stock' && <StockCenterView stock={stock} />}
             {tab === 'min' && <MinCenterView />}
           </>
         }

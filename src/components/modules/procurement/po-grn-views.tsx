@@ -1,12 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { PaneBody } from '@/components/workspace-3pane'
 import { CheckCircle2, AlertTriangle, Boxes } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, STOCK } from './types'
+import { Po, Grn, StockItem } from './types'
 import {
   useColumnVisibility,
   ColumnToggle,
@@ -91,53 +90,18 @@ export function PoCenterView({ pos }: { pos: Po[] }) {
   )
 }
 
-export function GrnCenterView() {
-  // Each row carries its own `rate` so the locked-amount calculation uses
-  // the real per-PO unit rate, not a single hard-coded rate for all rows.
-  const [rows, setRows] = useState([
-    {
-      po: 'PO-018',
-      vendor: 'Udaipur Cement',
-      poq: 1200,
-      grnq: 1200,
-      invq: 1200,
-      rate: 920,
-      pay: 'Cleared' as 'Cleared' | 'Hold' | 'Partial Hold' | 'Awaiting GRN',
-    },
-    {
-      po: 'PO-014',
-      vendor: 'Trishuli Sand',
-      poq: 45,
-      grnq: 38,
-      invq: 38,
-      rate: 3850,
-      pay: 'Partial Hold' as const,
-    },
-    {
-      po: 'PO-022',
-      vendor: 'Hetauda Aggregates',
-      poq: 96,
-      grnq: 0,
-      invq: 0,
-      rate: 2950,
-      pay: 'Awaiting GRN' as const,
-    },
-    {
-      po: 'PO-016',
-      vendor: 'Ghorahi Ply',
-      poq: 60,
-      grnq: 60,
-      invq: 58,
-      rate: 2790,
-      pay: 'Hold' as const,
-    },
-  ])
-
+export function GrnCenterView({
+  grns,
+  onToggleApproval,
+}: {
+  grns: Grn[]
+  onToggleApproval: (poId: string) => void
+}) {
   // 3-way match check: PO qty === GRN qty === Invoice qty
-  const isMatched = (r: (typeof rows)[0]) => r.poq === r.grnq && r.grnq === r.invq
-  const lockedAmount = rows
-    .filter((r) => !isMatched(r) && r.grnq > 0)
-    .reduce((sum, r) => sum + r.invq * r.rate, 0)
+  const isMatched = (g: Grn) => g.poQty === g.grnQty && g.grnQty === g.invoiceQty
+  const lockedAmount = grns
+    .filter((g) => !isMatched(g) && g.grnQty > 0)
+    .reduce((sum, g) => sum + g.invoiceQty * g.rate, 0)
 
   const COLS: ColumnDef[] = [
     { key: 'po', label: 'PO #' },
@@ -154,27 +118,6 @@ export function GrnCenterView() {
     [],
     'grn-3way'
   )
-
-  // Toggle payment approval — only allowed if 3-way match passes
-  const toggleApproval = (po: string) => {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.po !== po) return r
-        if (!isMatched(r)) {
-          toast.error('Payment locked', {
-            description: `${po} fails 3-way match. PO ${r.poq} ≠ GRN ${r.grnq} ≠ Inv ${r.invq}. Cannot approve.`,
-          })
-          return r
-        }
-        const newPay: typeof r.pay =
-          r.pay === 'Cleared' ? 'Hold' : r.pay === 'Hold' ? 'Cleared' : r.pay
-        toast.success(newPay === 'Cleared' ? 'Payment cleared' : 'Payment held', {
-          description: `${po} — 3-way match verified`,
-        })
-        return { ...r, pay: newPay }
-      })
-    )
-  }
 
   return (
     <PaneBody className="p-4">
@@ -200,23 +143,23 @@ export function GrnCenterView() {
             </div>
           </StickyTableHeader>
           <StickyTableBody>
-            {rows.map((r, i) => {
-              const matched = isMatched(r)
+            {grns.map((g) => {
+              const matched = isMatched(g)
               return (
                 <div
-                  key={i}
+                  key={g.id}
                   className="row-hover flex h-9 items-center border-t border-[var(--pane-divider)] text-xs"
                 >
-                  {isVisible('po') && <div className="w-24 px-2 font-mono">{r.po}</div>}
-                  {isVisible('vendor') && <div className="flex-1 truncate px-2">{r.vendor}</div>}
+                  {isVisible('po') && <div className="w-24 px-2 font-mono">{g.poId}</div>}
+                  {isVisible('vendor') && <div className="flex-1 truncate px-2">{g.vendor}</div>}
                   {isVisible('poq') && (
-                    <div className="w-20 px-2 text-right font-mono">{r.poq}</div>
+                    <div className="w-20 px-2 text-right font-mono">{g.poQty}</div>
                   )}
                   {isVisible('grnq') && (
-                    <div className="w-20 px-2 text-right font-mono">{r.grnq}</div>
+                    <div className="w-20 px-2 text-right font-mono">{g.grnQty}</div>
                   )}
                   {isVisible('invq') && (
-                    <div className="w-20 px-2 text-right font-mono">{r.invq}</div>
+                    <div className="w-20 px-2 text-right font-mono">{g.invoiceQty}</div>
                   )}
                   {isVisible('match') && (
                     <div className="w-20 px-2 text-center">
@@ -231,28 +174,28 @@ export function GrnCenterView() {
                     <div
                       className={cn(
                         'w-28 px-2 text-right text-[11px] font-medium',
-                        r.pay === 'Cleared' ? 'text-emerald-600' : 'text-amber-600'
+                        g.payStatus === 'Cleared' ? 'text-emerald-600' : 'text-amber-600'
                       )}
                     >
-                      {r.pay}
+                      {g.payStatus}
                     </div>
                   )}
                   {isVisible('action') && (
                     <div className="w-24 px-2 text-center">
                       <button
-                        onClick={() => toggleApproval(r.po)}
+                        onClick={() => onToggleApproval(g.poId)}
                         disabled={!matched}
                         className={cn(
                           'rounded px-2 py-0.5 text-[10px] font-medium transition-colors',
                           matched
-                            ? r.pay === 'Cleared'
+                            ? g.payStatus === 'Cleared'
                               ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25'
                               : 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25'
                             : 'bg-secondary text-muted-foreground/40 cursor-not-allowed'
                         )}
                         title={matched ? 'Toggle payment approval' : 'Locked — 3-way match fails'}
                       >
-                        {matched ? (r.pay === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
+                        {matched ? (g.payStatus === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
                       </button>
                     </div>
                   )}
@@ -285,7 +228,7 @@ export function GrnCenterView() {
         </div>
         <div className="text-muted-foreground mt-0.5">
           {lockedAmount > 0
-            ? `${rows.filter((r) => !isMatched(r) && r.grnq > 0).length} invoices on hold pending 3-way match reconciliation. NPR ${lockedAmount.toLocaleString()} locked.`
+            ? `${grns.filter((g) => !isMatched(g) && g.grnQty > 0).length} invoices on hold pending 3-way match reconciliation. NPR ${lockedAmount.toLocaleString()} locked.`
             : 'All 3-way matches verified. All payments approved.'}
         </div>
       </div>
@@ -293,10 +236,10 @@ export function GrnCenterView() {
   )
 }
 
-export function StockCenterView() {
-  // Compute live stats from STOCK so the header never lies.
-  const stockValue = STOCK.reduce((s, x) => s + x.onHand * x.avgCost, 0)
-  const warehouseCount = new Set(STOCK.map((s) => s.warehouse)).size
+export function StockCenterView({ stock }: { stock: StockItem[] }) {
+  // Compute live stats from the synced stock state so the header never lies.
+  const stockValue = stock.reduce((s, x) => s + x.onHand * x.avgCost, 0)
+  const warehouseCount = new Set(stock.map((s) => s.warehouse)).size
   const COLS: ColumnDef[] = [
     { key: 'code', label: 'Code' },
     { key: 'material', label: 'Material' },
@@ -316,7 +259,7 @@ export function StockCenterView() {
       <div className="bg-secondary/20 flex items-center gap-3 border-b border-[var(--pane-divider)] px-4 py-3 text-xs">
         <Badge variant="outline">
           <Boxes className="mr-1 h-3 w-3" />
-          {STOCK.length} SKUs · {warehouseCount} warehouses
+          {stock.length} SKUs · {warehouseCount} warehouses
         </Badge>
         <span className="text-muted-foreground">
           Total stock value:{' '}
@@ -339,8 +282,9 @@ export function StockCenterView() {
           </div>
         </StickyTableHeader>
         <StickyTableBody>
-          {STOCK.map((s) => {
-            const lowStock = s.available < s.onHand * 0.3
+          {stock.map((s) => {
+            const available = s.onHand - s.reserved
+            const lowStock = available < s.onHand * 0.3
             return (
               <div
                 key={s.code}
@@ -368,7 +312,7 @@ export function StockCenterView() {
                       lowStock && 'text-amber-600'
                     )}
                   >
-                    {s.available.toLocaleString()}
+                    {available.toLocaleString()}
                   </div>
                 )}
                 {isVisible('avgcost') && (

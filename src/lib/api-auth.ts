@@ -33,6 +33,8 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   chat_messages: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
   projects: ['PM'],
   user_projects: ['PM'],
+  grns: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  stock_items: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
 }
 
 /**
