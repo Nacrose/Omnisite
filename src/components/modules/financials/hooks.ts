@@ -1,52 +1,54 @@
 import { CBS, type CbsNode } from './types'
 import { undoableToast } from '@/components/ui/confirm-dialog'
+import { flattenTree, rebuildTreeFromRows as rebuildTree } from '@/lib/tree-utils'
+
+// ─── Field normalization ──────────────────────────────────────────────────
+//
+// The DB layer (useSyncedState) may return rows with snake_case column
+// names (`margin_pct`, `parent_code`). Normalize them into the app-side
+// CbsNode shape BEFORE rebuilding the tree — the shared tree-utils helpers
+// only handle tree structure, not field-name mapping.
+
+function normalizeCbsRow(row: Record<string, unknown>): CbsNode {
+  return {
+    code: row.code as string,
+    name: row.name as string,
+    budget: Number(row.budget) || 0,
+    committed: Number(row.committed) || 0,
+    actual: Number(row.actual) || 0,
+    forecast: Number(row.forecast) || 0,
+    marginPct: Number(row.marginPct ?? row.margin_pct) || 0,
+    level: Number(row.level) || 0,
+  }
+}
 
 // Flatten tree for saving — strips children and sets parentCode on each node.
 // This is the "save" flattener (as opposed to the display flattener in types.ts
 // which preserves the tree structure in its output).
+//
+// Delegates to the shared `flattenTree` helper, configured for the CbsNode
+// shape: id field is `code`, parent field is `parentCode`.
 export function flattenForSave(items: CbsNode[], parentCode: string | null = null): CbsNode[] {
-  const out: CbsNode[] = []
-  for (const item of items) {
-    out.push({ ...item, parentCode: parentCode || undefined, children: undefined })
-    if (item.children) out.push(...flattenForSave(item.children, item.code))
-  }
-  return out
+  return flattenTree(
+    items as unknown as Record<string, any>[],
+    parentCode,
+    { idKey: 'code', parentKey: 'parentCode' },
+  ) as unknown as CbsNode[]
 }
 
 // Rebuild a tree from flat rows (which may have parentCode set).
 // If rows already have children arrays, returns them as-is.
 // Falls back to the CBS constant if rows is empty or yields no roots.
+//
+// Delegates to the shared `rebuildTreeFromRows` helper, configured for the
+// CbsNode shape: id field is `code`, parent field is `parentCode`.
 export function rebuildTreeFromRows(rows: CbsNode[]): CbsNode[] {
   if (!rows || rows.length === 0) return JSON.parse(JSON.stringify(CBS))
   const hasChildren = rows.some((r) => Array.isArray(r.children) && r.children!.length > 0)
   if (hasChildren) return rows
-  const map = new Map<string, CbsNode>()
-  const roots: CbsNode[] = []
-  for (const row of rows as unknown as Record<string, unknown>[]) {
-    const node: CbsNode = {
-      code: row.code as string,
-      name: row.name as string,
-      budget: Number(row.budget) || 0,
-      committed: Number(row.committed) || 0,
-      actual: Number(row.actual) || 0,
-      forecast: Number(row.forecast) || 0,
-      marginPct: Number(row.marginPct ?? row.margin_pct) || 0,
-      level: Number(row.level) || 0,
-    }
-    map.set(node.code, node)
-  }
-  for (const row of rows as unknown as Record<string, unknown>[]) {
-    const node = map.get(row.code as string)!
-    const parentCode = (row.parentCode || row.parent_code) as string | null
-    if (parentCode && map.has(parentCode)) {
-      const parent = map.get(parentCode)!
-      if (!parent.children) parent.children = []
-      parent.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  }
-  return roots.length > 0 ? roots : JSON.parse(JSON.stringify(CBS))
+  const normalized = (rows as unknown as Record<string, unknown>[]).map(normalizeCbsRow) as unknown as Record<string, any>[]
+  const tree = rebuildTree(normalized, 'code', 'parentCode')
+  return tree.length > 0 ? (tree as unknown as CbsNode[]) : JSON.parse(JSON.stringify(CBS))
 }
 
 // Factory: wraps setCbsRows so any updater receives a rebuilt tree and the

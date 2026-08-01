@@ -2,7 +2,6 @@
 
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CollaboratorCursors } from '@/components/collaborator-cursors'
 import { TOTAL_WEEKS, WEEK_WIDTH, type Task, type DragState } from './types'
 
 export interface GanttCanvasProps {
@@ -49,14 +48,12 @@ export function GanttCanvas({
             <div className="flex" style={{ width: TOTAL_WEEKS * WEEK_WIDTH }}>
               {Array.from({ length: TOTAL_WEEKS }).map((_, i) => {
                 const isMonthStart = i % 4 === 0
-                const isWeekend = false
                 return (
                   <div
                     key={i}
                     className={cn(
                       'flex-shrink-0 text-center text-[10px] border-r border-[var(--pane-divider)] flex items-center justify-center',
                       isMonthStart ? 'font-semibold text-foreground' : 'text-muted-foreground',
-                      isWeekend && 'gantt-weekend'
                     )}
                     style={{ width: WEEK_WIDTH }}
                   >
@@ -184,9 +181,6 @@ export function GanttCanvas({
             >
               <div className="absolute -top-0 -translate-x-1/2 px-1 py-0.5 bg-red-500 text-white text-[9px] rounded-b font-semibold">TODAY</div>
             </div>
-
-            {/* Live collaborator cursors (simulated WebSocket presence) */}
-            <CollaboratorCursors />
           </div>
 
           {/* Resource usage panel (toggle) */}
@@ -205,7 +199,6 @@ export function GanttCanvas({
                       const mason = 30 + 25 * Math.sin(i / 3)
                       const maz = 50 + 30 * Math.cos(i / 4)
                       const mx = 10 + 5 * Math.sin(i / 2)
-                      const overAlloc = mason > 50 || maz > 80
                       return (
                         <div key={i} className="absolute bottom-0 group flex flex-col justify-end items-center" style={{ left: i * WEEK_WIDTH, width: WEEK_WIDTH }}>
                           <div className="w-full bg-blue-500/70 group-hover:bg-blue-500" style={{ height: `${mason}px` }} />
