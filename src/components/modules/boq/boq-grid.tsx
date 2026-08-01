@@ -85,28 +85,37 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
       }}
       className={cn(
         'flex items-center h-9 border-b border-[var(--pane-divider)] text-xs cursor-pointer row-hover transition-colors',
-        isSelected && 'bg-accent'
+        isSelected && 'bg-accent',
+        // Heading rows get a subtle background tint so they stand out
+        // without needing indentation.
+        isHeading && !isSelected && 'bg-secondary/20',
       )}
-      style={{ paddingLeft: `${depth * 18 + 8}px` }}
     >
-      {!isHeading && (
-        <div className="w-6 flex-shrink-0">
+      {/* Checkbox column — same position for all rows */}
+      <div className="w-6 flex-shrink-0 flex items-center justify-center">
+        {!isHeading && (
           <Checkbox
             checked={selected.has(item.id)}
             onCheckedChange={(v) => onToggleSelect(item.id, !!v)}
             onClick={e => e.stopPropagation()}
           />
-        </div>
-      )}
-      <div className="w-7 flex-shrink-0">
+        )}
+      </div>
+      {/* Expand/collapse — same position for all rows */}
+      <div className="w-7 flex-shrink-0 flex items-center justify-center">
         {hasChildren && (
           <button onClick={(e) => { e.stopPropagation(); onToggleExpand(item.id) }} className="p-0.5 hover:bg-accent-foreground/10 rounded">
             {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
         )}
       </div>
-      <div className="w-16 flex-shrink-0 font-mono text-muted-foreground">{item.code}</div>
-      <div className={cn('flex-1 min-w-0 truncate', isHeading && 'font-semibold')}>
+      {/* Code — same position for all rows; hierarchy shown by numbering (1, 1.1, 1.1.1) */}
+      <div className={cn('w-16 flex-shrink-0 px-2 font-mono', isHeading ? 'text-foreground font-semibold' : 'text-muted-foreground')}>{item.code}</div>
+      {/* Description — only the TEXT indents based on depth; the cell boundary stays aligned. */}
+      <div
+        className={cn('flex-1 min-w-0 truncate px-2', isHeading && 'font-semibold')}
+        style={{ paddingLeft: `${depth * 14 + 8}px` }}
+      >
         {item.desc}
       </div>
       {/* Qty cell — inline editable for non-heading items */}

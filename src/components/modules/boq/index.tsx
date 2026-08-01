@@ -22,7 +22,6 @@ import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 
 import { type BoqItem, BOQ_DATA, flatten } from './types'
 import { BoqGrid, ContextMenuItem, type BoqEditingState } from './boq-grid'
-import { BoqOutlineTree } from './boq-outline'
 import { RaInspector, NonPricedInspector } from './ra-inspector'
 import { exportToCsv } from '@/lib/csv-export'
 
@@ -473,34 +472,14 @@ export function BoqModule() {
   return (
     <>
     <Workspace3Pane
-      leftPane={
-        <>
-          <PaneHeader title="BOQ Outline">
-            <Button variant="ghost" size="sm" className="h-7"><Plus className="w-3.5 h-3.5" /></Button>
-          </PaneHeader>
-          <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Filter BOQ items…" className="h-8 pl-7 text-xs" />
-            </div>
-          </div>
-          <PaneBody className="py-2">
-            <BoqOutlineTree items={boqData} selectedId={selectedId} onSelect={setSelectedId} expanded={expanded} onToggle={toggleExpand} />
-          </PaneBody>
-          <div className="border-t border-[var(--pane-divider)] p-3 space-y-2">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Contract Summary</div>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between"><span className="text-muted-foreground">Total Contract Value</span><span className="font-mono font-semibold tabular-nums">NPR {(contractTotal / 1_000_000).toFixed(1)}M</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Priced items</span><span className="font-mono">82</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Provisional Sums</span><span className="font-mono">7</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Daywork items</span><span className="font-mono">3</span></div>
-            </div>
-          </div>
-        </>
-      }
       centerPane={
         <>
-          <PaneHeader title={`BOQ Grid · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}>
+          <PaneHeader title={`BOQ · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}>
+            {/* Search — moved from the old left outline pane */}
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input placeholder="Filter BOQ items…" className="h-7 w-44 pl-7 text-xs" />
+            </div>
             <span className="hidden lg:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Edit Qty/Rate · drag rows to headings to reparent
@@ -595,11 +574,18 @@ export function BoqModule() {
               </DragOverlay>
             </DndContext>
           </PaneBody>
-          <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs text-muted-foreground bg-secondary/30">
+          {/* Footer — contract summary moved from the old left outline pane */}
+          <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs text-muted-foreground bg-secondary/30 gap-4">
             <span className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               {allFlat.filter(i => i.type !== 'Heading').length} line items · live totals
             </span>
+            <span className="text-muted-foreground/50">·</span>
+            <span>{allFlat.filter(i => i.type === 'Priced').length} priced</span>
+            <span className="text-muted-foreground/50">·</span>
+            <span>{allFlat.filter(i => i.type === 'Provisional Sum').length} PS</span>
+            <span className="text-muted-foreground/50">·</span>
+            <span>{allFlat.filter(i => i.type === 'Daywork').length} daywork</span>
             <div className="flex-1" />
             <span>Contract Total: <span className="font-mono font-bold text-foreground tabular-nums">NPR {contractTotal.toLocaleString()}</span></span>
           </div>
@@ -615,7 +601,6 @@ export function BoqModule() {
           <NonPricedInspector key={selectedLeaf.id} item={selectedLeaf} />
         )
       }
-      leftPaneWidth="280px"
       rightPaneWidth="380px"
     />
 
