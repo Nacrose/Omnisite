@@ -1,4 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import type { NextRequest, NextResponse } from 'next/server'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -112,4 +115,66 @@ export const isServerSupabaseConfigured = (): boolean => {
  */
 export const isServiceClientConfigured = (): boolean => {
   return supabaseUrl !== '' && supabaseServiceKey !== ''
+}
+
+// ─── @supabase/ssr cookie-based clients ────────────────────────────────────
+
+/**
+ * Create a Supabase client for Server Components and Route Handlers that
+ * reads the session from cookies (set by the browser client via
+ * @supabase/ssr). This is the SSR equivalent of the browser client —
+ * same auth state, but accessible server-side.
+ *
+ * Must be called inside a request scope (Server Component, Route Handler,
+ * or Server Action) — it uses next/headers cookies() which requires that
+ * context.
+ */
+export async function createServerSupabaseClient(): Promise<SupabaseClient> {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+    )
+  }
+  const cookieStore = await cookies()
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+        } catch {
+          // The `setAll` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing sessions.
+          // The proxy.ts edge function handles cookie refresh.
+        }
+      },
+    },
+  })
+}
+
+/**
+ * Create a Supabase client for the edge proxy (middleware) that reads the
+ * session from the incoming request's cookies and writes refreshed cookies
+ * to the outgoing response.
+ *
+ * This is the key piece that enables server-side auth gating: the proxy
+ * can call supabase.auth.getUser() to verify the session before the page
+ * even renders, and redirect to /login if there's no session.
+ */
+export function createProxySupabaseClient(req: NextRequest, res: NextResponse): SupabaseClient {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase not configured')
+  }
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return req.cookies.getAll()
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
+      },
+    },
+  })
 }

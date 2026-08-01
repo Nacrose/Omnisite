@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase, isServerSupabaseConfigured } from '@/lib/supabase-server'
+import {
+  supabase,
+  isServerSupabaseConfigured,
+  createServerSupabaseClient,
+} from '@/lib/supabase-server'
 import type { Role } from '@/lib/permissions'
 
 export interface AuthenticatedUser {
@@ -33,8 +37,17 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
 
 /**
  * Verify that the incoming API request has a valid Supabase session.
- * No demo bypass. No backdoors. If Supabase is configured, a valid
- * Bearer token is required.
+ *
+ * Two paths:
+ * 1. Cookie-based (preferred): uses @supabase/ssr's createServerSupabaseClient
+ *    to read the session from cookies. This is the SSR-native path that
+ *    works with the proxy's auth gating.
+ * 2. Bearer token (fallback): if the request has an Authorization header,
+ *    verifies the token directly. Useful for API clients / programmatic
+ *    access that don't carry cookies.
+ *
+ * No demo bypass. If Supabase is configured, one of the two paths must
+ * succeed. Demo mode (no Supabase) returns a demo user.
  */
 export async function requireAuth(req: NextRequest): Promise<{
   user: AuthenticatedUser | null
@@ -50,40 +63,63 @@ export async function requireAuth(req: NextRequest): Promise<{
   }
 
   try {
+    // Path 1: Cookie-based session (preferred — works with @supabase/ssr)
+    // createServerSupabaseClient reads cookies via next/headers.
+    const serverClient = await createServerSupabaseClient()
+    const { data: cookieData, error: cookieError } = await serverClient.auth.getUser()
+
+    if (!cookieError && cookieData.user) {
+      const u = cookieData.user
+      const meta = (u.user_metadata || {}) as Record<string, unknown>
+      const role = (meta.role as Role) || 'FOREMAN'
+      // Get the access token from the session for RLS-scoped queries
+      const { data: sessionData } = await serverClient.auth.getSession()
+      return {
+        user: {
+          id: u.id,
+          email: u.email || '',
+          role,
+          accessToken: sessionData.session?.access_token || '',
+        },
+        error: null,
+      }
+    }
+
+    // Path 2: Bearer token fallback (for API clients without cookies)
     const authHeader = req.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data, error } = await supabase.auth.getUser(token)
+      if (error || !data.user) {
+        return {
+          user: null,
+          error: NextResponse.json(
+            { error: 'Unauthorized — invalid or expired session' },
+            { status: 401 }
+          ),
+        }
+      }
+      const u = data.user
+      const meta = (u.user_metadata || {}) as Record<string, unknown>
+      const role = (meta.role as Role) || 'FOREMAN'
       return {
-        user: null,
-        error: NextResponse.json(
-          { error: 'Unauthorized — no Bearer token provided' },
-          { status: 401 }
-        ),
+        user: {
+          id: u.id,
+          email: u.email || '',
+          role,
+          accessToken: token,
+        },
+        error: null,
       }
     }
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data, error } = await supabase.auth.getUser(token)
-    if (error || !data.user) {
-      return {
-        user: null,
-        error: NextResponse.json(
-          { error: 'Unauthorized — invalid or expired session' },
-          { status: 401 }
-        ),
-      }
-    }
-
-    const u = data.user
-    const meta = (u.user_metadata || {}) as Record<string, unknown>
-    const role = (meta.role as Role) || 'FOREMAN'
+    // Neither cookie nor Bearer token — unauthorized
     return {
-      user: {
-        id: u.id,
-        email: u.email || '',
-        role,
-        accessToken: token,
-      },
-      error: null,
+      user: null,
+      error: NextResponse.json(
+        { error: 'Unauthorized — no session cookie or Bearer token provided' },
+        { status: 401 }
+      ),
     }
   } catch {
     return {

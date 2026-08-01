@@ -13,6 +13,7 @@
         "@radix-ui/react-tabs": "^1.1.12",
         "@radix-ui/react-toast": "^1.2.14",
         "@sentry/nextjs": "^10.69.0",
+        "@supabase/ssr": "^0.12.4",
         "@supabase/supabase-js": "^2.111.0",
         "@tanstack/react-virtual": "^3.14.9",
         "@upstash/ratelimit": "^2.0.8",
@@ -483,6 +484,8 @@
 
     "@supabase/realtime-js": ["@supabase/realtime-js@2.111.0", "", { "dependencies": { "@supabase/phoenix": "0.4.5", "tslib": "2.8.1" } }, "sha512-6oRf/vZyRwg8f8GbFSJkrD2w4HAu/yTvyMViHXHS+H5hNJzdXCrUR7cP5oW7daT3YlRnzRPY9LcGSJKZAmfMSg=="],
 
+    "@supabase/ssr": ["@supabase/ssr@0.12.4", "", { "dependencies": { "cookie": "^1.0.2" }, "peerDependencies": { "@supabase/supabase-js": "^2.111.0" } }, "sha512-xHzcgI8cC1TpBKSwJcR5Yd8CCwfIq0SBc5yb4yz/YFw5tbCrEQ0QT3a+2jymCxHgQWLfzwN93HZ6eRbcoMkOlA=="],
+
     "@supabase/storage-js": ["@supabase/storage-js@2.111.0", "", { "dependencies": { "iceberg-js": "^0.8.1", "tslib": "2.8.1" } }, "sha512-UEViNmTzVOxE8dqUA81wls+n9xgmlvSFfhfwo6QxrO4kQOytCYyw3ciYFoi4XoD4Jl95NJ3jnndHN5iIudWzqw=="],
 
     "@supabase/supabase-js": ["@supabase/supabase-js@2.111.0", "", { "dependencies": { "@supabase/auth-js": "2.111.0", "@supabase/functions-js": "2.111.0", "@supabase/postgrest-js": "2.111.0", "@supabase/realtime-js": "2.111.0", "@supabase/storage-js": "2.111.0" } }, "sha512-9q0/AULthQnWeiDh1vGyjoJZbSY04bu6qHcWit70pqEYn5Kv/dkCPY62Ja1123jEnJbB9Vd2pjY7Kvk/lK3peA=="],
@@ -774,6 +777,8 @@
     "concat-map": ["concat-map@0.0.1", "https://registry.npmjs.com/concat-map/-/concat-map-0.0.1.tgz", {}, "sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg=="],
 
     "convert-source-map": ["convert-source-map@2.0.0", "https://registry.npmjs.com/convert-source-map/-/convert-source-map-2.0.0.tgz", {}, "sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg=="],
+
+    "cookie": ["cookie@1.1.1", "", {}, "sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ=="],
 
     "cross-spawn": ["cross-spawn@7.0.6", "https://registry.npmjs.com/cross-spawn/-/cross-spawn-7.0.6.tgz", { "dependencies": { "path-key": "^3.1.0", "shebang-command": "^2.0.0", "which": "^2.0.1" } }, "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA=="],
 
