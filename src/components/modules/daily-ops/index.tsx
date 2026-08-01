@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,7 @@ import { DSR_ENTRIES, StatusDot } from './types'
 import { WorkProgressView } from './work-progress'
 import { DailySiteLogView } from './daily-site-log'
 import { DsrInspector } from './dsr-inspector'
-import { RfiTab, RFIS } from './rfi-tab'
+import { RfiTab, subscribeRfis, getRfis } from './rfi-tab'
 
 type TopView = 'dsr' | 'rfi'
 
@@ -28,9 +28,18 @@ export function DailyOpsModule() {
   const [topView, setTopView] = useState<TopView>('dsr')
   const [view, setView] = useState<'progress' | 'log'>('progress')
   const [selectedId, setSelectedId] = useState('D-087')
-  const selected = DSR_ENTRIES.find((d) => d.id === selectedId) ?? DSR_ENTRIES[0]
+  // Date for the DSR — defaults to the date of the first seed entry (today in
+  // demo data). Users can navigate to previous/next days. Entries are filtered
+  // to the selected date so you can actually pull up historical reports.
+  const [selectedDate, setSelectedDate] = useState(
+    DSR_ENTRIES[0]?.date || new Date().toISOString().slice(0, 10)
+  )
+  const dayEntries = DSR_ENTRIES.filter((d) => d.date === selectedDate)
+  const selected = dayEntries.find((d) => d.id === selectedId) ?? dayEntries[0] ?? DSR_ENTRIES[0]
 
-  const openRfis = RFIS.filter((r) => r.status === 'Open').length
+  // Live RFI count from the shared store — updates when DSR Inspector adds one.
+  const rfis = useSyncExternalStore(subscribeRfis, getRfis, getRfis)
+  const openRfis = rfis.filter((r) => r.status === 'Open').length
 
   // Shared header strip with the DSR/RFI toggle — always visible at the top.
   const headerStrip = (
@@ -114,50 +123,66 @@ export function DailyOpsModule() {
               <PaneBody className="py-2">
                 <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-[10px] font-semibold tracking-wider uppercase">
                   <Calendar className="h-3 w-3" />
-                  Today · 30 Jul
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value)
+                      // Reset selection to first entry of the new day (if any)
+                      const first = DSR_ENTRIES.find((d) => d.date === e.target.value)
+                      if (first) setSelectedId(first.id)
+                    }}
+                    className="bg-transparent text-[10px] font-semibold tracking-wider uppercase outline-none"
+                  />
+                  <span className="ml-auto text-[9px] font-normal normal-case">
+                    {dayEntries.length} {dayEntries.length === 1 ? 'entry' : 'entries'}
+                  </span>
                 </div>
-                <div className="text-muted-foreground mb-2 px-3 text-[10px]">
-                  Auto-generated from Schedule + Backlog · 6 entries
-                </div>
-                {DSR_ENTRIES.map((d) => (
-                  <button
-                    key={d.id}
-                    onClick={() => setSelectedId(d.id)}
-                    className={cn(
-                      'hover:bg-accent/50 w-full border-l-2 px-3 py-2 text-left transition-colors',
-                      selectedId === d.id ? 'bg-accent border-l-primary' : 'border-l-transparent'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground font-mono text-[10px]">{d.id}</span>
-                      <Badge variant="outline" className="h-4 px-1 text-[9px]">
-                        {d.source}
-                      </Badge>
-                      {d.hasRfi && <Mail className="h-3 w-3 text-sky-500" />}
-                      {d.hasPhotos && <Camera className="h-3 w-3 text-violet-500" />}
-                      <span className="ml-auto">
-                        <StatusDot status={d.status} />
-                      </span>
-                    </div>
-                    <div className="mt-0.5 truncate text-xs font-medium">{d.task}</div>
-                    <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[10px]">
-                      <MapPin className="h-2.5 w-2.5" />
-                      <span>{d.chainage}</span>
-                    </div>
-                  </button>
-                ))}
+                {dayEntries.length === 0 ? (
+                  <div className="text-muted-foreground px-3 py-8 text-center text-[10px]">
+                    No DSR entries for {selectedDate}. Switch to the Work Progress tab to add one.
+                  </div>
+                ) : (
+                  dayEntries.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => setSelectedId(d.id)}
+                      className={cn(
+                        'hover:bg-accent/50 w-full border-l-2 px-3 py-2 text-left transition-colors',
+                        selectedId === d.id ? 'bg-accent border-l-primary' : 'border-l-transparent'
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-mono text-[10px]">{d.id}</span>
+                        <Badge variant="outline" className="h-4 px-1 text-[9px]">
+                          {d.source}
+                        </Badge>
+                        {d.hasRfi && <Mail className="h-3 w-3 text-sky-500" />}
+                        {d.hasPhotos && <Camera className="h-3 w-3 text-violet-500" />}
+                        <span className="ml-auto">
+                          <StatusDot status={d.status} />
+                        </span>
+                      </div>
+                      <div className="mt-0.5 truncate text-xs font-medium">{d.task}</div>
+                      <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[10px]">
+                        <MapPin className="h-2.5 w-2.5" />
+                        <span>{d.chainage}</span>
+                      </div>
+                    </button>
+                  ))
+                )}
               </PaneBody>
             </>
           }
           centerPane={
             view === 'progress' ? (
               <WorkProgressView
-                entries={DSR_ENTRIES}
+                entries={dayEntries.length > 0 ? dayEntries : DSR_ENTRIES}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
               />
             ) : (
-              <DailySiteLogView />
+              <DailySiteLogView date={selectedDate} />
             )
           }
           rightPane={<DsrInspector entry={selected} />}

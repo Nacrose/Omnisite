@@ -35,6 +35,12 @@ interface Worker {
   geoFence?: boolean
   todayHours?: number
   allocated: { task: string; hours: number }[]
+  /** Hourly wage rate in NPR. Used to compute labor cost for Financials. */
+  wageRate?: number
+  /** Overtime multiplier (e.g. 1.5 = time-and-a-half for hours > 8). */
+  otMultiplier?: number
+  /** Standard hours per day before OT kicks in. Defaults to 8. */
+  standardHours?: number
 }
 
 const WORKERS: Worker[] = [
@@ -298,12 +304,21 @@ export function TimeAttendanceModule() {
 }
 
 function WorkerInspector({ worker }: { worker: Worker }) {
-  const ratePerHour = worker.trade.includes('Mason')
-    ? 1450 / 8
-    : worker.trade.includes('Operator')
-      ? 1200 / 8
-      : 950 / 8
-  const todayCost = (worker.todayHours || 0) * ratePerHour
+  // Wage rate: use worker.wageRate if set, otherwise derive from trade.
+  // These are NPR per hour, based on DoR Norm 2075 daily rates / 8 hours.
+  const ratePerHour =
+    worker.wageRate ??
+    (worker.trade.includes('Mason')
+      ? 1450 / 8
+      : worker.trade.includes('Operator')
+        ? 1200 / 8
+        : 950 / 8)
+  const otMultiplier = worker.otMultiplier ?? 1.5
+  const standardHours = worker.standardHours ?? 8
+  const hours = worker.todayHours || 0
+  const regHours = Math.min(hours, standardHours)
+  const otHours = Math.max(0, hours - standardHours)
+  const todayCost = regHours * ratePerHour + otHours * ratePerHour * otMultiplier
 
   return (
     <>
@@ -419,13 +434,29 @@ function WorkerInspector({ worker }: { worker: Worker }) {
             </div>
             <div className="space-y-1.5 rounded-md border border-[var(--pane-divider)] p-2.5">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Trade RA Rate</span>
+                <span className="text-muted-foreground">Wage rate</span>
                 <span className="font-mono">NPR {ratePerHour.toFixed(0)}/hr</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Today&apos;s hours</span>
-                <span className="font-mono">{worker.todayHours}h</span>
+                <span className="text-muted-foreground">OT multiplier</span>
+                <span className="font-mono">
+                  {otMultiplier}× after {standardHours}h
+                </span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Regular hours</span>
+                <span className="font-mono">
+                  {regHours.toFixed(1)}h × NPR {ratePerHour.toFixed(0)}
+                </span>
+              </div>
+              {otHours > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Overtime</span>
+                  <span className="font-mono text-amber-600">
+                    {otHours.toFixed(1)}h × NPR {(ratePerHour * otMultiplier).toFixed(0)}
+                  </span>
+                </div>
+              )}
               <Separator />
               <div className="flex justify-between font-bold">
                 <span>Today&apos;s labour cost</span>

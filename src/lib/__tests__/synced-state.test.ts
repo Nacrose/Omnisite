@@ -194,38 +194,41 @@ describe('Auth demo-mode behavior', () => {
     expect(DEMO_USER.isDemo).toBe(true)
   })
 
-  it('mapSupabaseUser extracts role from user_metadata', () => {
-    // Replicate the mapping logic (matches auth.tsx)
+  it('mapSupabaseUser does NOT read role from user_metadata (security)', () => {
+    // SECURITY: role must NOT come from user_metadata — that's client-set
+    // and vulnerable to self-escalation. mapSupabaseUser should always
+    // return 'FOREMAN' (least-privilege) as the initial role; the real
+    // role is resolved async from the user_projects table by fetchUserRole.
     function mapSupabaseUser(u: {
       id: string
       email?: string
       user_metadata?: Record<string, unknown>
     }) {
       const meta = u.user_metadata || {}
-      const role = (meta.role as string) || 'FOREMAN'
       const name = (meta.name as string) || (meta.full_name as string) || 'Unknown'
-      return { id: u.id, email: u.email || '', name, role, isDemo: false }
+      return { id: u.id, email: u.email || '', name, role: 'FOREMAN' as const, isDemo: false }
     }
 
+    // Even if user_metadata.role is 'PM', the mapped user must NOT get it.
     const result = mapSupabaseUser({
       id: 'uuid-123',
       email: 'test@test.com',
-      user_metadata: { role: 'SITE_ENGINEER', name: 'Test User' },
+      user_metadata: { role: 'PM', name: 'Test User' }, // attacker sets PM
     })
-    expect(result.role).toBe('SITE_ENGINEER')
-    expect(result.name).toBe('Test User')
+    expect(result.role).toBe('FOREMAN') // not PM — role comes from DB, not metadata
+    expect(result.name).toBe('Test User') // name is display-only, safe to read from metadata
     expect(result.isDemo).toBe(false)
   })
 
-  it('mapSupabaseUser falls back to FOREMAN role when metadata missing', () => {
+  it('mapSupabaseUser defaults to FOREMAN when user_metadata is empty', () => {
     function mapSupabaseUser(u: {
       id: string
       email?: string
       user_metadata?: Record<string, unknown>
     }) {
       const meta = u.user_metadata || {}
-      const role = (meta.role as string) || 'FOREMAN'
-      return { id: u.id, email: u.email || '', role, isDemo: false }
+      const name = (meta.name as string) || (meta.full_name as string) || 'Unknown'
+      return { id: u.id, email: u.email || '', name, role: 'FOREMAN' as const, isDemo: false }
     }
 
     const result = mapSupabaseUser({ id: 'uuid-456', email: 'new@test.com' })

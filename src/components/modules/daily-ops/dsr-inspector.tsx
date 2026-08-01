@@ -12,6 +12,7 @@ import { Mail, Camera, X, AlertTriangle, CheckCircle2, MapPin, Loader2, Trash2 }
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { DsrEntry } from './types'
+import { addRfi } from './rfi-tab'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
 
@@ -22,13 +23,21 @@ interface StoredPhoto {
 }
 
 export function DsrInspector({ entry }: { entry: DsrEntry }) {
+  // Material variance reconciliation only applies to concrete-pouring
+  // activities. Cement/sand/aggregate coefficients (4.5 bags/cum, 0.45
+  // cum/cum, 0.9 cum/cum) are meaningful for PCC/RCC/concrete work but
+  // produce nonsense for excavation, dewatering, shuttering, etc.
+  // Gate the entire panel on whether the task name matches a concrete
+  // activity pattern.
+  const CONCRETE_PATTERNS = ['pcc', 'rcc', 'concrete', 'cement']
+  const isConcreteActivity = CONCRETE_PATTERNS.some((p) => entry.task.toLowerCase().includes(p))
+
   // Theoretical cement consumption = 4.5 bags per cum of concrete.
-  // Guard against divide-by-zero when entry.actual is 0 (e.g. a planned-
-  // but-not-started task) — otherwise variance would be Infinity.
-  const theoretical = entry.actual * 4.5 // bags per cum (cement)
+  // Only computed when this is a concrete activity (see isConcreteActivity).
+  const theoretical = isConcreteActivity ? entry.actual * 4.5 : 0
   const issued = 132
   const variance = theoretical > 0 ? ((issued - theoretical) / theoretical) * 100 : 0
-  const overVariance = Math.abs(variance) > 5
+  const overVariance = isConcreteActivity && Math.abs(variance) > 5
   // RFI draft modal state
   const [rfiModalOpen, setRfiModalOpen] = useState(false)
   const [rfiDraft, setRfiDraft] = useState({
@@ -143,10 +152,34 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
     if (!rfiDraft.question.trim() || !rfiDraft.impact.trim()) {
       return // validation handled in UI
     }
+    // Actually add the RFI to the shared store so it appears in the RFI
+    // Register tab. Previously this just set local state + showed a toast,
+    // and the drafted RFI was never visible in the register.
+    addRfi({
+      id: `r-dsr-${Date.now().toString(36)}`,
+      number: `RFI-${rfiId}`,
+      date: new Date().toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+      subject: rfiDraft.subject || `RFI re: ${entry.task}`,
+      question: rfiDraft.question,
+      background: rfiDraft.background,
+      impact: rfiDraft.impact,
+      status: 'Open',
+      replyBy: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+      linkedDsr: entry.id,
+      severity: 'medium',
+    })
     setRfiSaved(true)
     setTimeout(() => setRfiModalOpen(false), 1200)
-    toast.success('RFI draft saved', {
-      description: `${entry.id} → switch to the RFI Register tab (top of this module) to review and submit to consultant.`,
+    toast.success('RFI saved to register', {
+      description: `${entry.id} → RFI-${rfiId} added to the RFI Register. Switch to the RFI tab to review.`,
     })
   }
 
@@ -245,44 +278,54 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
           </TabsContent>
 
           <TabsContent value="material" className="mt-0 space-y-3 px-4 py-3 text-xs">
-            <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
-              Theoretical vs Issued
-            </div>
-            <div className="space-y-2">
-              <MaterialRow
-                mat="Cement OPC 53 (Bag)"
-                theoretical={theoretical}
-                issued={issued}
-                uom="bag"
-              />
-              <MaterialRow
-                mat="River Sand (cum)"
-                theoretical={entry.actual * 0.45}
-                issued={12.8}
-                uom="cum"
-              />
-              <MaterialRow
-                mat="Coarse Agg. 20mm (cum)"
-                theoretical={entry.actual * 0.9}
-                issued={25.4}
-                uom="cum"
-              />
-            </div>
-            {overVariance && (
-              <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[11px]">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-red-500" />
-                <div>
-                  <div className="font-medium">
-                    Material variance &gt; 5% — cannot mark Completed
-                  </div>
-                  <div className="text-muted-foreground">
-                    Cement consumption {variance.toFixed(1)}% above theoretical. Mandatory remark
-                    required to override.
-                  </div>
-                  <Button size="sm" variant="outline" className="mt-1.5 h-6 text-[10px]">
-                    Add override remark
-                  </Button>
+            {isConcreteActivity ? (
+              <>
+                <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Theoretical vs Issued
                 </div>
+                <div className="space-y-2">
+                  <MaterialRow
+                    mat="Cement OPC 53 (Bag)"
+                    theoretical={theoretical}
+                    issued={issued}
+                    uom="bag"
+                  />
+                  <MaterialRow
+                    mat="River Sand (cum)"
+                    theoretical={entry.actual * 0.45}
+                    issued={12.8}
+                    uom="cum"
+                  />
+                  <MaterialRow
+                    mat="Coarse Agg. 20mm (cum)"
+                    theoretical={entry.actual * 0.9}
+                    issued={25.4}
+                    uom="cum"
+                  />
+                </div>
+                {overVariance && (
+                  <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[11px]">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-red-500" />
+                    <div>
+                      <div className="font-medium">
+                        Material variance &gt; 5% — cannot mark Completed
+                      </div>
+                      <div className="text-muted-foreground">
+                        Cement consumption {variance.toFixed(1)}% above theoretical. Mandatory
+                        remark required to override.
+                      </div>
+                      <Button size="sm" variant="outline" className="mt-1.5 h-6 text-[10px]">
+                        Add override remark
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-4 text-center text-[11px]">
+                Material variance reconciliation applies only to concrete activities (PCC, RCC,
+                concrete pouring). This task (&ldquo;{entry.task}&rdquo;) does not consume cement,
+                sand, or aggregate, so no theoretical-vs-issued comparison is shown.
               </div>
             )}
           </TabsContent>

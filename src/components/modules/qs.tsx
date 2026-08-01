@@ -459,6 +459,30 @@ function QsInspector({
                 {item.severity}
               </Badge>
             )}
+            {/* Overdue badge: dueDate is in the past and item isn't closed.
+                dueDate format is "DD Mon YYYY" (e.g. "05 Aug 2026"). */}
+            {item.dueDate &&
+              item.status !== 'Closed' &&
+              (() => {
+                const due = new Date(item.dueDate!)
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                if (due < today) {
+                  const daysOverdue = Math.floor(
+                    (today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24)
+                  )
+                  return (
+                    <Badge
+                      variant="outline"
+                      className="border-red-500/50 bg-red-500/10 text-[10px] text-red-700 dark:text-red-300"
+                    >
+                      <Clock className="mr-1 h-2.5 w-2.5" />
+                      {daysOverdue}d overdue
+                    </Badge>
+                  )
+                }
+                return null
+              })()}
           </div>
           <div className="text-sm leading-snug font-semibold">{item.title}</div>
           <div className="text-muted-foreground mt-1 text-xs">{item.date}</div>

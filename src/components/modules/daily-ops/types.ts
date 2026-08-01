@@ -15,6 +15,10 @@ export interface DsrEntry {
   hasRfi?: boolean
   hasPhotos?: boolean
   remarks?: string
+  /** ISO date string (YYYY-MM-DD) for the day this DSR entry covers.
+   *  Required — every DSR entry must belong to a specific day so users
+   *  can navigate between historical reports. */
+  date: string
 }
 
 export const DSR_ENTRIES: DsrEntry[] = [
@@ -29,6 +33,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     status: 'in-progress',
     hasPhotos: true,
     remarks: 'Concrete pump breakdown 2 hrs, recovered',
+    date: '2026-07-30',
   },
   {
     id: 'D-088',
@@ -40,6 +45,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     uom: 'MT',
     status: 'in-progress',
     hasPhotos: true,
+    date: '2026-07-30',
   },
   {
     id: 'D-089',
@@ -52,6 +58,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     status: 'completed',
     hasPhotos: true,
     remarks: 'Hard rock encountered, used breaker',
+    date: '2026-07-30',
   },
   {
     id: 'D-090',
@@ -63,6 +70,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     uom: 'sqm',
     status: 'completed',
     hasPhotos: true,
+    date: '2026-07-30',
   },
   {
     id: 'D-091',
@@ -74,6 +82,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     uom: 'hr',
     status: 'in-progress',
     remarks: 'Water table higher than expected',
+    date: '2026-07-30',
   },
   {
     id: 'D-092',
@@ -87,6 +96,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     hasRfi: true,
     hasPhotos: true,
     remarks: 'Rock class III encountered, installed steel ribs',
+    date: '2026-07-30',
   },
 ]
 

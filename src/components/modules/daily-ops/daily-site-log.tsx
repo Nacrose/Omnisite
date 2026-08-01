@@ -23,10 +23,18 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-export function DailySiteLogView() {
+export function DailySiteLogView({ date }: { date: string }) {
+  // Format the ISO date as "30 July 2026" for the header.
+  const formatted = date
+    ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : '—'
   return (
     <>
-      <PaneHeader title="Daily Site Log · 30 July 2026">
+      <PaneHeader title={`Daily Site Log · ${formatted}`}>
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
           <Copy className="h-3.5 w-3.5" />
           Copy Yesterday

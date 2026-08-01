@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,7 +43,11 @@ export interface Rfi {
 // Fixed "today" reference to avoid hydration mismatch from new Date() during render.
 const TODAY = new Date('2026-07-30T10:00:00')
 
-export const RFIS: Rfi[] = [
+// ─── Shared RFI store ──────────────────────────────────────────────────────
+// RFIs need to be mutable so the DSR Inspector can add new drafts that
+// appear in the RFI Register. Using a module-level array + useSyncExternalStore
+// so both components see the same state without prop drilling.
+const INITIAL_RFIS: Rfi[] = [
   {
     id: 'r1',
     number: 'RFI-067',
@@ -124,14 +128,46 @@ export const RFIS: Rfi[] = [
   },
 ]
 
+// ─── Shared RFI store (module-level + useSyncExternalStore) ─────────────────
+let _rfis: Rfi[] = [...INITIAL_RFIS]
+const _listeners = new Set<() => void>()
+
+function emitChange() {
+  _listeners.forEach((l) => l())
+}
+
+/** Subscribe to RFI store changes (for useSyncExternalStore). */
+export function subscribeRfis(listener: () => void): () => void {
+  _listeners.add(listener)
+  return () => _listeners.delete(listener)
+}
+
+/** Get the current RFI snapshot. */
+export function getRfis(): Rfi[] {
+  return _rfis
+}
+
+/** Add a new RFI to the store. Used by the DSR Inspector's saveRfi(). */
+export function addRfi(rfi: Rfi): void {
+  _rfis = [rfi, ..._rfis]
+  emitChange()
+}
+
+// Re-export RFIS for backward compat (components that read the initial array
+// directly). This is a snapshot — for live updates, use useSyncExternalStore.
+export const RFIS: Rfi[] = INITIAL_RFIS
+
 // ─── RFI Tab (list + inspector) ─────────────────────────────────────────────
 
 export function RfiTab() {
+  // useSyncExternalStore so the RFI list re-renders when addRfi() is called
+  // from the DSR Inspector.
+  const rfis = useSyncExternalStore(subscribeRfis, getRfis, getRfis)
   const [selectedId, setSelectedId] = useState('r1')
   const [filter, setFilter] = useState<'All' | 'Open' | 'Replied' | 'Closed'>('All')
-  const selected = RFIS.find((r) => r.id === selectedId) ?? RFIS[0]
-  const filtered = filter === 'All' ? RFIS : RFIS.filter((r) => r.status === filter)
-  const overdueCount = RFIS.filter((r) => r.status === 'Open' && new Date(r.replyBy) < TODAY).length
+  const selected = rfis.find((r) => r.id === selectedId) ?? rfis[0]
+  const filtered = filter === 'All' ? rfis : rfis.filter((r) => r.status === filter)
+  const overdueCount = rfis.filter((r) => r.status === 'Open' && new Date(r.replyBy) < TODAY).length
 
   return (
     <Workspace2Pane
@@ -146,7 +182,7 @@ export function RfiTab() {
             {/* Status filter */}
             <div className="flex gap-1">
               {(['All', 'Open', 'Replied', 'Closed'] as const).map((f) => {
-                const count = f === 'All' ? RFIS.length : RFIS.filter((r) => r.status === f).length
+                const count = f === 'All' ? rfis.length : rfis.filter((r) => r.status === f).length
                 return (
                   <Button
                     key={f}
