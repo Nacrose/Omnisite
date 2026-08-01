@@ -13,6 +13,7 @@ import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
+import { undoableToast } from '@/components/ui/confirm-dialog'
 import {
   TASKS, TOTAL_WEEKS, WEEK_WIDTH, flattenTasks,
   type Task, type DragState,
@@ -291,7 +292,30 @@ export function SchedulerModule() {
           }
         }
       }
+      // Offer an undo for the drag. Compare the post-drag value with the
+      // snapshot captured when the drag started (dragging.originalStart /
+      // originalDuration) — only show the toast if the value actually
+      // changed (avoids noise on click-without-drag).
+      const dragInfo = dragging
       setDragging(null)
+      if (!dragInfo || !updated) return
+      if (dragInfo.mode === 'move' && updated.start !== dragInfo.originalStart) {
+        const restoreId = dragInfo.id
+        const restoreStart = dragInfo.originalStart
+        undoableToast(
+          'Task moved',
+          `${updated.id} start changed (wk ${dragInfo.originalStart} → ${updated.start}). Click Undo to restore.`,
+          () => updateTaskStart(restoreId, restoreStart),
+        )
+      } else if (dragInfo.mode === 'resize' && updated.duration !== dragInfo.originalDuration) {
+        const restoreId = dragInfo.id
+        const restoreDuration = dragInfo.originalDuration
+        undoableToast(
+          'Task resized',
+          `${updated.id} duration changed (${dragInfo.originalDuration}w → ${updated.duration}w). Click Undo to restore.`,
+          () => updateTaskDuration(restoreId, restoreDuration),
+        )
+      }
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)

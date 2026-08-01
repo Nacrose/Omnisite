@@ -19,6 +19,7 @@ import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { exportToCsv } from '@/lib/csv-export'
 import { toast } from 'sonner'
+import { undoableToast } from '@/components/ui/confirm-dialog'
 import { Download } from 'lucide-react'
 
 interface CbsNode {
@@ -215,6 +216,10 @@ export function FinancialsModule() {
   // totals so the parent's actual/committed/forecast/marginPct reflect
   // the sum of its children.
   const updateNode = (code: string, field: 'committed' | 'actual' | 'forecast', value: number) => {
+    // Capture the previous value so we can offer an undo. Walk the current
+    // tree (before the setState commit) to find the leaf being edited.
+    const prevNode = flat.find(c => c.code === code)
+    const oldValue = prevNode ? prevNode[field] : 0
     setCbsData(prev => {
       const updated = JSON.parse(JSON.stringify(prev)) as CbsNode[]
       // walk() returns true if the target was found in this subtree, so the
@@ -242,6 +247,11 @@ export function FinancialsModule() {
       walk(updated)
       return updated
     })
+    undoableToast(
+      `${field[0].toUpperCase()}${field.slice(1)} updated`,
+      `${code}: ${oldValue} → ${Math.max(0, value)}. Click Undo to revert.`,
+      () => updateNode(code, field, oldValue),
+    )
   }
 
   const toggleExpand = (code: string) => {

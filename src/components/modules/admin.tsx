@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { confirm } from '@/components/ui/confirm-dialog'
 import {
   useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef,
 } from '@/components/ui/table-utils'
@@ -394,7 +395,16 @@ function MaterialInspector({ material: m }: { material: Material }) {
           <div className="space-y-1.5">
             <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Copy className="w-3.5 h-3.5" />Duplicate</Button>
             <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start gap-2" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Edit3 className="w-3.5 h-3.5" />Edit</Button>
-            <Button variant="ghost" size="sm" className="w-full h-8 text-xs justify-start gap-2 text-amber-600" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Trash2 className="w-3.5 h-3.5" />Soft Archive (no delete)</Button>
+            <Button variant="ghost" size="sm" className="w-full h-8 text-xs justify-start gap-2 text-amber-600" onClick={async () => {
+              const ok = await confirm(
+                `Archive ${m.code}?`,
+                `Soft-archiving hides "${m.name}" from new entries but keeps it on existing records. Existing references are not affected.`,
+                'Soft Archive',
+                true,
+              )
+              if (!ok) return
+              toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })
+            }}><Trash2 className="w-3.5 h-3.5" />Soft Archive (no delete)</Button>
           </div>
         </div>
       </PaneBody>

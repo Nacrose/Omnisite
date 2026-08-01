@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { undoableToast } from '@/components/ui/confirm-dialog'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -210,6 +211,14 @@ export function BoqModule() {
     toast.success('Redo', { description: `${redoStack.length - 1} actions left` })
   }
 
+  // Keep a ref to the latest `undo` so async callbacks (e.g. undoableToast
+  // undo buttons, which fire seconds later) always invoke the version that
+  // closes over the current state — not the stale one from the render that
+  // created the toast. Without this, the toast's Undo would read a stale
+  // undoStack and fail to restore the just-deleted item.
+  const undoRef = useRef(undo)
+  useEffect(() => { undoRef.current = undo }, [undo])
+
   // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -303,6 +312,7 @@ export function BoqModule() {
   }
 
   const deleteItem = (id: string) => {
+    const item = allFlat.find(i => i.id === id)
     commitBoqData(prev => {
       const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
       const walk = (items: BoqItem[]): BoqItem[] => {
@@ -314,7 +324,7 @@ export function BoqModule() {
       }
       return walk(updated)
     })
-    toast.success('Item deleted', { description: `${id} removed from BOQ` })
+    undoableToast('Item deleted', `${item?.code || id} removed from BOQ. Click Undo to restore.`, () => undoRef.current())
   }
 
   const addChildItem = (parentId: string) => {

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { confirm } from '@/components/ui/confirm-dialog'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
@@ -74,27 +75,35 @@ export function QsModule() {
   // Guarded: only NCR-type items can be advanced. Punch / Incident /
   // Near-Miss items have their own (simpler) lifecycle and must NOT be
   // pushed into NCR-only statuses like 'CAP Submitted'.
-  const advanceNcr = (id: string) => {
+  const advanceNcr = async (id: string) => {
+    // Look up the target item to determine the next workflow status before
+    // applying any state changes. This lets us gate the financially risky
+    // "Close" transition (which releases the billing hold) behind a confirm.
+    const target = items.find(i => i.id === id)
+    if (!target || target.type !== 'NCR') return
+    const next = NCR_WORKFLOW[target.status]
+    if (!next) return
+    if (next === 'Closed') {
+      const ok = await confirm(
+        `Close ${target.id}?`,
+        'Closing this NCR will release the billing hold on the linked BOQ item. This has financial implications.',
+        'Close NCR',
+        true,
+      )
+      if (!ok) return
+    }
     setItems(prev => prev.map(it => {
       if (it.id !== id) return it
       if (it.type !== 'NCR') return it
-      const next = NCR_WORKFLOW[it.status]
-      if (!next) return it
+      const n = NCR_WORKFLOW[it.status]
+      if (!n) return it
       // When closing, release the billing hold
-      const newBillingHold = next === 'Closed' ? false : it.billingHold
-      return { ...it, status: next as QsItem['status'], billingHold: newBillingHold }
+      const newBillingHold = n === 'Closed' ? false : it.billingHold
+      return { ...it, status: n as QsItem['status'], billingHold: newBillingHold }
     }))
-    // Toast uses the latest `items` state (closure value). For a more accurate
-    // message we look up the item being advanced.
-    const target = items.find(i => i.id === id)
-    if (target && target.type === 'NCR') {
-      const next = NCR_WORKFLOW[target.status]
-      if (next) {
-        toast.success('NCR advanced', {
-          description: `${target.id} → ${next}${next === 'Closed' ? ' · billing hold released' : ''}`,
-        })
-      }
-    }
+    toast.success('NCR advanced', {
+      description: `${target.id} → ${next}${next === 'Closed' ? ' · billing hold released' : ''}`,
+    })
   }
 
   // Save CAP (corrective action plan) on an NCR
