@@ -52,7 +52,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query.order('name', { ascending: true })
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[API] subcontractors error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
   return NextResponse.json(data)
 }
@@ -74,21 +75,29 @@ export async function POST(req: NextRequest) {
 
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
+
+  // Fetch old values for audit (before the upsert overwrites them).
+  const { data: oldData } = body.id
+    ? await userClient.from('subcontractors').select('*').eq('id', body.id).single()
+    : { data: null }
+
   const { data, error } = await userClient
     .from('subcontractors')
     .upsert(body)
     .select()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[API] subcontractors error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
   // Audit log the mutation (fire-and-forget, uses service-role client).
   logAudit({
     table_name: 'subcontractors',
     record_id: body.id || data?.[0]?.id || 'unknown',
-    action: 'UPDATE',
-    changed_by: user.email,
+    action: oldData ? 'UPDATE' : 'INSERT',
+    changed_by: user.id,
+    changed_fields: oldData ? { old: oldData, new: body } : undefined,
   }).catch(() => {})
 
   return NextResponse.json(data)
@@ -117,7 +126,8 @@ export async function DELETE(req: NextRequest) {
     .eq('id', id)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[API] subcontractors error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
   // Audit log the deletion.
@@ -125,7 +135,7 @@ export async function DELETE(req: NextRequest) {
     table_name: 'subcontractors',
     record_id: id,
     action: 'DELETE',
-    changed_by: user.email,
+    changed_by: user.id,
   }).catch(() => {})
 
   return NextResponse.json({ success: true })

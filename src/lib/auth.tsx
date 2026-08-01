@@ -60,11 +60,12 @@ const DEMO_USER: OmniUser = {
 /**
  * Map a Supabase user to our OmniUser shape.
  * Role is read from user_metadata.role (set during invite / admin creation);
- * falls back to 'PM' so a freshly-created account can still see everything.
+ * falls back to 'FOREMAN' (least-privilege) so a freshly-created account
+ * cannot read or write anything until an admin assigns it a role.
  */
 function mapSupabaseUser(u: SupabaseUser): OmniUser {
   const meta = (u.user_metadata || {}) as Record<string, unknown>
-  const role = (meta.role as Role) || 'PM'
+  const role = (meta.role as Role) || 'FOREMAN'
   const name =
     (meta.name as string) ||
     (meta.full_name as string) ||

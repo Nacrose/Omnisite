@@ -85,7 +85,7 @@ BEGIN
     AND (project_id = project_uuid OR role = 'PM')
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
 
 -- ─── 3. Drop the "Allow all for development" policies ──────────────────────
 DROP POLICY IF EXISTS "Allow all for development" ON projects;

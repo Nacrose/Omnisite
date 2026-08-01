@@ -85,7 +85,7 @@ BEGIN
     AND (project_id = project_uuid OR role = 'PM')
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
 
 -- ─── 3. Drop the "Allow all for development" policies ──────────────────────
 DROP POLICY IF EXISTS "Allow all for development" ON projects;
@@ -378,3 +378,8 @@ CREATE POLICY "audit_select_assigned" ON audit_log
 --   INSERT INTO user_projects (user_id, project_id, role)
 --   VALUES ('<auth.users.id>', '<projects.id>', 'PM');
 -- ============================================================
+
+-- Add CHECK constraint on user_projects.role
+ALTER TABLE user_projects DROP CONSTRAINT IF EXISTS valid_role;
+ALTER TABLE user_projects ADD CONSTRAINT valid_role
+  CHECK (role IN ('PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'));

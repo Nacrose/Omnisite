@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
-import { fetchAll, upsertOne } from '@/lib/api-client'
+import { fetchAll, upsertOne, buildApiUrl, getAuthHeaders } from '@/lib/api-client'
 import { useApp } from '@/lib/app-store'
 
 /**
@@ -150,27 +150,38 @@ export function useSyncedState<T>(
 
     const load = async () => {
       try {
-        // Fetch with cursor-based pagination: load first 200 rows, then
-        // auto-load more if the server returns a nextCursor.
-        const query: Record<string, string> = {}
-        if (activeProjectDbId) query.project_id = activeProjectDbId
-        query.limit = '200'
+        // Fetch all data for this table+project. For large tables (BOQ with
+        // 1000+ items), we fetch in pages of 200 using cursor pagination.
+        const baseQuery: Record<string, string> = {}
+        if (activeProjectDbId) baseQuery.project_id = activeProjectDbId
+        baseQuery.limit = '200'
 
         let allRows: Record<string, unknown>[] = []
         let cursor: string | null = null
         let page = 0
         const MAX_PAGES = 10 // safety cap — 2000 rows max
 
-        do {
+        while (page < MAX_PAGES) {
+          const query = { ...baseQuery }
           if (cursor) query.cursor = cursor
-          const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, query)
+          // Fetch directly (not via fetchAll) so we can read nextCursor
+          const url = buildApiUrl(apiEndpoint, query)
+          const authHeaders = await getAuthHeaders()
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: { Accept: 'application/json', ...authHeaders },
+            cache: 'no-store',
+          })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const json = await res.json()
+          // Server returns { data, nextCursor } when paginated, or a plain array
+          const rows: Record<string, unknown>[] = Array.isArray(json) ? json : (json.data || [])
           allRows = allRows.concat(rows)
           page++
-          // The API returns { data, nextCursor } when paginated; fetchAll
-          // unwraps to the data array. We can't get nextCursor from fetchAll
-          // so we stop when a page returns < 200 rows (no more data).
-          if (rows.length < 200) break
-        } while (page < MAX_PAGES)
+          // Advance cursor from the paginated response
+          cursor = (json.nextCursor as string | null) ?? null
+          if (!cursor || rows.length < 200) break
+        }
 
         if (!mounted) return
         if (allRows.length > 0) {

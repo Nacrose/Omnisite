@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { upsertOne } from '@/lib/api-client'
+import { useAuth } from '@/lib/auth'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { toast } from 'sonner'
 
@@ -29,13 +31,6 @@ interface ChatMessage {
   media_url?: string
   reply_to?: string
   created_at: string
-}
-
-const CURRENT_USER = {
-  id: 'u-arjun',
-  name: 'Arjun Sharma',
-  initials: 'AS',
-  color: '#f97316',
 }
 
 const CHANNELS = [
@@ -61,6 +56,21 @@ export function ChatModule() {
   const [showMembers, setShowMembers] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { user } = useAuth()
+
+  // Derive sender info from the authenticated user (falls back to a neutral
+  // demo identity when there is no session yet — e.g. demo mode before sign-in).
+  const currentUser = {
+    id: user?.id ?? 'demo-user',
+    name: user?.name ?? user?.email ?? 'Anonymous',
+    initials: (user?.name || user?.email || 'A')
+      .split(/\s|@|\./)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(s => s.charAt(0).toUpperCase())
+      .join('') || 'A',
+    color: '#f97316',
+  }
 
   // Load messages from Supabase
   useEffect(() => {
@@ -139,26 +149,38 @@ export function ChatModule() {
   const sendMessage = async () => {
     if (!input.trim()) return
 
+    // Payload shape matches the chat-messages POST schema (id/created_at are
+    // generated server-side). The server returns the full ChatMessage row.
     const newMsg = {
-      sender_id: CURRENT_USER.id,
-      sender_name: CURRENT_USER.name,
-      sender_initials: CURRENT_USER.initials,
-      sender_color: CURRENT_USER.color,
+      sender_id: currentUser.id,
+      sender_name: currentUser.name,
+      sender_initials: currentUser.initials,
+      sender_color: currentUser.color,
       channel_id: activeChannel,
       content: input.trim(),
-      message_type: 'text',
+      message_type: 'text' as const,
     }
 
     setInput('')
 
     if (isSupabaseConfigured()) {
-      const { data, error } = await supabase!.from('chat_messages').insert(newMsg).select()
-      if (!error && data) {
-        // Real-time will handle the update, but add locally too for instant feedback
-        setMessages(prev => [...prev, data[0] as unknown as ChatMessage])
+      try {
+        // The server returns the full row including id/created_at — cast to
+        // the local ChatMessage type for state insertion.
+        const saved = (await upsertOne('chat-messages', newMsg)) as unknown as ChatMessage | undefined
+        if (saved) {
+          // Real-time will also fire, but add locally too for instant feedback.
+          setMessages(prev =>
+            prev.some(m => m.id === saved.id) ? prev : [...prev, saved],
+          )
+        }
+      } catch (err) {
+        toast.error('Failed to send message', {
+          description: err instanceof Error ? err.message : String(err),
+        })
       }
     } else {
-      // Fallback: add locally with a fake ID
+      // Fallback (no Supabase): add locally with a fake ID using the auth user's info
       const localMsg: ChatMessage = {
         id: `local-${Date.now()}`,
         ...newMsg,
@@ -309,7 +331,7 @@ export function ChatModule() {
                     </div>
                     {/* Messages */}
                     {group.messages.map((msg, mi) => {
-                      const isOwn = msg.sender_id === CURRENT_USER.id
+                      const isOwn = msg.sender_id === currentUser.id
                       const prevMsg = mi > 0 ? group.messages[mi - 1] : null
                       const showAvatar = !prevMsg || prevMsg.sender_id !== msg.sender_id
 

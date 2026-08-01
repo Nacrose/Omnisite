@@ -1,36 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Redis } from '@upstash/redis'
+import { Ratelimit } from '@upstash/ratelimit'
 
 // ─── Rate limiter ───────────────────────────────────────────────────────────
-// Uses Upstash Redis when configured (distributed, works across serverless
-// instances). Falls back to in-memory when UPSTASH_REDIS_REST_URL is not set.
+// Uses Upstash Redis with a sliding-window algorithm via @upstash/ratelimit.
+//
+// Redis is REQUIRED — there is no in-memory fallback. Rate limiting cannot be
+// enforced correctly in serverless / multi-instance environments without
+// shared state, so a missing Redis configuration is treated as a hard error
+// (getRatelimit throws) rather than silently allowing all traffic through.
 
-interface Bucket {
-  tokens: number
-  lastRefill: number
-}
+const RATE_LIMIT = 60 // requests per 1 minute
 
-const RATE_LIMIT = 60 // requests per minute
-const RATE_WINDOW = 60_000 // 1 minute in ms
-
-// In-memory fallback
-const buckets = new Map<string, Bucket>()
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, bucket] of buckets) {
-    if (now - bucket.lastRefill > RATE_WINDOW * 5) buckets.delete(key)
-  }
-}, 300_000)
-
-// Lazy-init Redis client (only when env vars are present)
 let redis: Redis | null = null
-function getRedis(): Redis | null {
-  if (redis) return redis
+let ratelimit: Ratelimit | null = null
+
+/**
+ * Lazily build (and cache) the Ratelimit instance. Throws if Redis env vars
+ * are missing — callers (the API routes) will surface the 500.
+ */
+function getRatelimit(): Ratelimit {
+  if (ratelimit) return ratelimit
   const url = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
-  if (!url || !token) return null
+  if (!url || !token) {
+    throw new Error(
+      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set — rate limiting requires Redis.',
+    )
+  }
   redis = new Redis({ url, token })
-  return redis
+  ratelimit = new Ratelimit({
+    redis,
+    // Sliding window: 60 requests per 1 minute per identifier.
+    limiter: Ratelimit.slidingWindow(RATE_LIMIT, '1 m'),
+    prefix: 'omnisite:ratelimit',
+    analytics: false,
+  })
+  return ratelimit
+}
+
+/**
+ * Resolve the client identifier for rate-limiting purposes.
+ *
+ * Prefers the authenticated user's id; otherwise falls back to IP. The
+ * `x-forwarded-for` header is only trusted when `TRUST_PROXY=true` is set
+ * (e.g. behind Caddy/Nginx). Without that flag we deliberately ignore it
+ * to prevent trivial spoofing.
+ */
+function resolveIdentifier(req: NextRequest, userId?: string): string {
+  if (userId) return userId
+
+  if (process.env.TRUST_PROXY === 'true') {
+    const xff = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    if (xff) return xff
+  }
+  // No reliable client identifier available — bucket together so the limiter
+  // still applies a global cap rather than allowing unbounded traffic.
+  return 'anonymous'
 }
 
 /**
@@ -38,65 +64,28 @@ function getRedis(): Redis | null {
  * falls back to IP address. Returns null if allowed, or a 429 response.
  */
 export async function checkRateLimit(req: NextRequest, userId?: string): Promise<NextResponse | null> {
-  // Key on user.id if available, otherwise IP
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    'unknown'
-  const key = userId ? `ratelimit:${userId}` : `ratelimit:${ip}`
+  const identifier = resolveIdentifier(req, userId)
+  const limiter = getRatelimit()
 
-  const r = getRedis()
-  if (r) {
-    // ─── Redis path (distributed) ────────────────────────────────────────
-    const now = Date.now()
-    const bucketKey = `bucket:${key}`
-    const data = await r.get<{ tokens: number; lastRefill: number }>(bucketKey)
+  const { success, limit, remaining, reset } = await limiter.limit(identifier)
 
-    let bucket: Bucket
-    if (data) {
-      bucket = data
-      const elapsed = now - bucket.lastRefill
-      const refill = Math.floor((elapsed / RATE_WINDOW) * RATE_LIMIT)
-      if (refill > 0) {
-        bucket.tokens = Math.min(RATE_LIMIT, bucket.tokens + refill)
-        bucket.lastRefill = now
-      }
-    } else {
-      bucket = { tokens: RATE_LIMIT, lastRefill: now }
-    }
-
-    if (bucket.tokens <= 0) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Too many requests. Please try again in a minute.' },
-        { status: 429, headers: { 'Retry-After': '60', 'X-RateLimit-Limit': String(RATE_LIMIT), 'X-RateLimit-Remaining': '0' } },
-      )
-    }
-
-    bucket.tokens--
-    // Set with 2-minute TTL so stale keys auto-expire
-    await r.set(bucketKey, bucket, { ex: 120 })
-    return null
-  }
-
-  // ─── In-memory fallback (single server) ──────────────────────────────────
-  const now = Date.now()
-  let bucket = buckets.get(key)
-  if (!bucket) {
-    bucket = { tokens: RATE_LIMIT, lastRefill: now }
-    buckets.set(key, bucket)
-  }
-  const elapsed = now - bucket.lastRefill
-  const refill = Math.floor((elapsed / RATE_WINDOW) * RATE_LIMIT)
-  if (refill > 0) {
-    bucket.tokens = Math.min(RATE_LIMIT, bucket.tokens + refill)
-    bucket.lastRefill = now
-  }
-  if (bucket.tokens <= 0) {
+  if (!success) {
+    // `reset` is a unix timestamp (ms) for the sliding window; derive a
+    // sensible Retry-After value in seconds, capped to the window length.
+    const retryAfter = Math.max(1, Math.min(60, Math.ceil((reset - Date.now()) / 1000)))
     return NextResponse.json(
       { error: 'Rate limit exceeded. Too many requests. Please try again in a minute.' },
-      { status: 429, headers: { 'Retry-After': '60', 'X-RateLimit-Limit': String(RATE_LIMIT), 'X-RateLimit-Remaining': '0' } },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(retryAfter),
+          'X-RateLimit-Limit': String(limit),
+          'X-RateLimit-Remaining': String(remaining),
+          'X-RateLimit-Reset': String(reset),
+        },
+      },
     )
   }
-  bucket.tokens--
+
   return null
 }

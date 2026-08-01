@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query.order('code', { ascending: true })
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[API] boq_items error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
   // If pagination requested, return { data, nextCursor }
@@ -72,15 +73,16 @@ export async function POST(req: NextRequest) {
     .select()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[API] boq_items error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
   // Audit log the mutation (fire-and-forget, uses service-role client).
   logAudit({
     table_name: 'boq_items',
     record_id: body.id || data?.[0]?.id || 'unknown',
-    action: 'UPDATE',
-    changed_by: user.email,
+    action: oldData ? 'UPDATE' : 'INSERT',
+    changed_by: user.id,
     changed_fields: oldData ? { old: oldData, new: body } : undefined,
   }).catch(() => {})
 
@@ -110,7 +112,8 @@ export async function DELETE(req: NextRequest) {
     .eq('id', id)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[API] boq_items error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
   // Audit log the deletion.
@@ -118,7 +121,7 @@ export async function DELETE(req: NextRequest) {
     table_name: 'boq_items',
     record_id: id,
     action: 'DELETE',
-    changed_by: user.email,
+    changed_by: user.id,
   }).catch(() => {})
 
   return NextResponse.json({ success: true })

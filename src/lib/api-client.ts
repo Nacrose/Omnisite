@@ -41,7 +41,7 @@ export class ApiClientError extends Error {
  * Get the Authorization header for the current session.
  * Returns an empty object if Supabase is not configured (demo mode).
  */
-async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   if (!isSupabaseConfigured() || !supabase) return {}
   try {
     const { data } = await supabase.auth.getSession()
@@ -68,7 +68,7 @@ async function readError(res: Response, endpoint: string): Promise<string> {
 }
 
 /** Build a relative `/api/{endpoint}` URL with optional query params. */
-function buildUrl(endpoint: string, query?: Record<string, string>): string {
+export function buildApiUrl(endpoint: string, query?: Record<string, string>): string {
   // Allow callers to pass either `boq` or `/api/boq` — both work.
   const base = endpoint.startsWith('/api/') ? endpoint : `/api/${endpoint}`
   if (!query) return base
@@ -88,7 +88,7 @@ function buildUrl(endpoint: string, query?: Record<string, string>): string {
  *   const page = await fetchAll<BoqItem>('boq', { project_id: '...', limit: '200', cursor: '...' })
  */
 export async function fetchAll<T>(endpoint: string, query?: Record<string, string>): Promise<T[]> {
-  const url = buildUrl(endpoint, query)
+  const url = buildApiUrl(endpoint, query)
   const authHeaders = await getAuthHeaders()
   let res: Response
   try {
@@ -125,7 +125,7 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
  *          server returned an empty array.
  */
 export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undefined> {
-  const url = buildUrl(endpoint)
+  const url = buildApiUrl(endpoint)
   const authHeaders = await getAuthHeaders()
   let res: Response
   try {
@@ -161,7 +161,7 @@ export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undef
  *   await deleteOne('boq', 'B-001')
  */
 export async function deleteOne(endpoint: string, id: string): Promise<void> {
-  const url = buildUrl(endpoint, { id })
+  const url = buildApiUrl(endpoint, { id })
   const authHeaders = await getAuthHeaders()
   let res: Response
   try {

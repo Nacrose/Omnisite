@@ -40,8 +40,9 @@ export async function requireAuth(req: NextRequest): Promise<{
   user: AuthenticatedUser | null
   error: NextResponse | null
 }> {
-  // True demo mode — no Supabase configured at all. Safe to allow.
-  if (!isServerSupabaseConfigured()) {
+  // True demo mode — no Supabase configured at all, or demo mode explicitly
+  // enabled via OMNISITE_DEMO_MODE=true. Safe to allow.
+  if (!isServerSupabaseConfigured() || process.env.OMNISITE_DEMO_MODE === 'true') {
     return {
       user: { id: 'demo-user', email: 'demo@omnisite', role: 'PM', accessToken: '' },
       error: null,
@@ -113,8 +114,9 @@ export function requireRole(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Demo mode — PM has full access
-  if (user.id === 'demo-user') return null
+  // Skip role enforcement only in true demo mode (no Supabase configured),
+  // where there is no database to enforce RLS against.
+  if (!isServerSupabaseConfigured()) return null
 
   const allowedRoles = TABLE_WRITE_ROLES[table]
   if (!allowedRoles) {
