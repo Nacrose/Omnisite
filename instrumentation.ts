@@ -9,8 +9,11 @@ export async function register() {
       )
     }
 
-    // ─── Env-var validation in production ─────────────────────────────────
-    if (process.env.NODE_ENV === 'production') {
+    // ─── Env-var validation on Vercel ─────────────────────────────────────
+    // Only enforce on Vercel deployments (VERCEL=1). CI runs (GitHub Actions,
+    // local e2e tests) deliberately run in demo mode without real credentials
+    // and should not be blocked by this check.
+    if (process.env.NODE_ENV === 'production' && process.env.VERCEL === '1') {
       const required = [
         'NEXT_PUBLIC_SUPABASE_URL',
         'NEXT_PUBLIC_SUPABASE_ANON_KEY',

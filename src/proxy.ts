@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createProxySupabaseClient } from '@/lib/supabase-server'
+import { createProxySupabaseClient } from '@/lib/supabase-proxy'
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Frame-Options': 'DENY',
@@ -62,20 +62,28 @@ export async function proxy(req: NextRequest) {
   }
 
   // Create a proxy-scoped Supabase client that reads + writes cookies.
-  const supabase = createProxySupabaseClient(req, res)
+  // Wrapped in try/catch so that a Supabase outage or network error doesn't
+  // 500 every request — falls back to client-side auth gating.
+  try {
+    const supabase = createProxySupabaseClient(req, res)
 
-  // Refresh the session cookie (important: getUser() triggers a token
-  // refresh if the current access_token is expired, and setAll writes
-  // the refreshed tokens back to the response cookies).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    // Refresh the session cookie (important: getUser() triggers a token
+    // refresh if the current access_token is expired, and setAll writes
+    // the refreshed tokens back to the response cookies).
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  // No session → redirect to /login with the original path for post-login redirect.
-  if (!user) {
-    const loginUrl = new URL('/login', req.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
+    // No session → redirect to /login with the original path for post-login redirect.
+    if (!user) {
+      const loginUrl = new URL('/login', req.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+  } catch {
+    // Supabase call failed (network error, misconfigured env, etc.).
+    // Let the request through — client-side auth will handle the redirect.
+    // This prevents a hard outage if Supabase is temporarily unreachable.
   }
 
   return res

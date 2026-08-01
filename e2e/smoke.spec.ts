@@ -19,8 +19,9 @@ test.describe('OmniSite smoke tests', () => {
   test('can navigate to BOQ module', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    const boqBtn = page.locator('[title="BOQ & Rate Analysis"]')
-    // Wait for the dock button to be visible & stable before clicking.
+    // The dock renders both a desktop and mobile version of each button.
+    // Use .first() to pick the desktop one (visible on md+ screens).
+    const boqBtn = page.locator('[title="BOQ & Rate Analysis"]').first()
     await expect(boqBtn).toBeVisible()
     await boqBtn.click()
     // Wait for the BOQ grid header to render — proves the module mounted.
@@ -33,7 +34,7 @@ test.describe('OmniSite smoke tests', () => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
     // Wait for the dock to render — proves the app shell is interactive.
-    const dockBtn = page.locator('[title="BOQ & Rate Analysis"]')
+    const dockBtn = page.locator('[title="BOQ & Rate Analysis"]').first()
     await expect(dockBtn).toBeVisible()
 
     await page.keyboard.press('Control+k')
