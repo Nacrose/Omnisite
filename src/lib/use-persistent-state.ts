@@ -84,10 +84,10 @@ export function clearAllPersistentState() {
     'omnisite-chat-channel',
     'omnisite-locale',
     'omnisite-calendar',
-    'omnisite-demo-bypass',
     'omnisite-notifications-dispatched',
     'omnisite-audit-queue',
     'omnisite-app-store', // Zustand persisted store
+    // NOTE: 'omnisite-demo-bypass' was removed — the demo backdoor is gone.
   ]
   keys.forEach(k => {
     try { window.localStorage.removeItem(k) } catch (e) { /* ignore */ }

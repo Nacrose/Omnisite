@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase-server'
+import { createUserClient } from '@/lib/supabase-server'
 import { requireAuth } from '@/lib/api-auth'
+import { logAudit } from '@/lib/audit'
 
 // GET /api/boq — fetch BOQ items, optionally filtered by project_id
 export async function GET(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('project_id')
 
-  let query = supabase.from('boq_items').select('*')
+  // Use a user-scoped client so RLS policies are enforced.
+  const userClient = createUserClient(user.accessToken)
+  let query = userClient.from('boq_items').select('*')
   if (projectId) query = query.eq('project_id', projectId)
   const { data, error } = await query.order('code', { ascending: true })
 
@@ -24,9 +28,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { data, error } = await supabase
+
+  // Use a user-scoped client so RLS policies are enforced.
+  const userClient = createUserClient(user.accessToken)
+  const { data, error } = await userClient
     .from('boq_items')
     .upsert(body)
     .select()
@@ -34,6 +42,15 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Audit log the mutation (fire-and-forget, uses service-role client).
+  logAudit({
+    table_name: 'boq_items',
+    record_id: body.id || data?.[0]?.id || 'unknown',
+    action: 'UPDATE',
+    changed_by: user.email,
+  }).catch(() => {})
+
   return NextResponse.json(data)
 }
 
@@ -41,12 +58,15 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  const { error } = await supabase
+  // Use a user-scoped client so RLS policies are enforced.
+  const userClient = createUserClient(user.accessToken)
+  const { error } = await userClient
     .from('boq_items')
     .delete()
     .eq('id', id)
@@ -54,5 +74,14 @@ export async function DELETE(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Audit log the deletion.
+  logAudit({
+    table_name: 'boq_items',
+    record_id: id,
+    action: 'DELETE',
+    changed_by: user.email,
+  }).catch(() => {})
+
   return NextResponse.json({ success: true })
 }

@@ -11,7 +11,7 @@ import { isSupabaseConfigured } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { user, loading, signIn, signInAsDemo, isDemo } = useAuth()
+  const { user, loading, signIn, isDemo } = useAuth()
   const configured = isSupabaseConfigured()
 
   const [email, setEmail] = useState('')
@@ -140,25 +140,17 @@ export default function LoginPage() {
             </div>
           )}
 
-          {configured && isDemo === false && (
+          {configured && (
             <>
-              <Button
-                variant="outline"
-                className="w-full mt-3"
-                onClick={() => {
-                  // Use the auth provider's signInAsDemo so the in-memory user
-                  // is set immediately — relying on a fresh page load to pick
-                  // up the localStorage flag would leave the user stuck on
-                  // /login because AuthProvider only checks the flag on mount.
-                  signInAsDemo()
-                  router.push('/')
-                }}
-              >
-                Continue as Demo User (Arjun Sharma, PM)
-              </Button>
               <p className="mt-4 text-[10px] text-center text-muted-foreground">
                 Forgot your password? Contact your project administrator.
               </p>
+              <div className="mt-3 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 dark:text-amber-300">
+                <strong>Demo access disabled.</strong> Sign in with your Supabase
+                credentials. To explore without auth, run the app without
+                <code className="mx-1 px-1 py-0.5 rounded bg-amber-500/20 font-mono">NEXT_PUBLIC_SUPABASE_URL</code>
+                configured.
+              </div>
             </>
           )}
         </CardContent>

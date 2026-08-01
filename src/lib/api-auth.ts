@@ -5,80 +5,74 @@ export interface AuthenticatedUser {
   id: string
   email: string
   role: string
+  /** The user's Supabase access token — pass to createUserClient() for RLS-scoped queries. */
+  accessToken: string
 }
 
 /**
  * Verify that the incoming API request has a valid Supabase session.
  *
- * Checks the `Authorization: Bearer <access_token>` header (set by the
- * browser Supabase client) OR falls back to reading the session cookie.
+ * SECURITY MODEL:
+ * - If Supabase is NOT configured (true demo mode — no env vars at all),
+ *   requests pass through with a demo user. This is safe because there's
+ *   no database to expose.
+ * - If Supabase IS configured, the request MUST have a valid Bearer token.
+ *   No exceptions, no bypass flags, no demo backdoors. An unauthenticated
+ *   request gets a 401.
  *
- * If Supabase is NOT configured (demo mode), the request is allowed through
- * with a demo user — the UI gate (login page) handles access control in
- * that case.
- *
- * @returns `{ user, error }` — if `error` is non-null, return it directly
- *          from your route handler to deny the request.
+ * The returned `accessToken` should be passed to `createUserClient()` to
+ * create a per-request Supabase client that impersonates the user — all
+ * queries are then scoped by RLS policies.
  */
 export async function requireAuth(req: NextRequest): Promise<{
   user: AuthenticatedUser | null
   error: NextResponse | null
 }> {
-  // Demo mode — no Supabase configured, allow all requests.
+  // True demo mode — no Supabase configured at all. Safe to allow.
   if (!isServerSupabaseConfigured()) {
     return {
-      user: { id: 'demo-user', email: 'demo@omnisite', role: 'PM' },
+      user: { id: 'demo-user', email: 'demo@omnisite', role: 'PM', accessToken: '' },
       error: null,
     }
   }
 
   try {
-    // Try to get the session from the request.
-    // The browser Supabase client sends the access token as a Bearer header
-    // OR as a cookie (depending on auth configuration).
+    // Extract the Bearer token from the Authorization header.
     const authHeader = req.headers.get('authorization')
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '')
-      const { data, error } = await supabase.auth.getUser(token)
-      if (error || !data.user) {
-        return {
-          user: null,
-          error: NextResponse.json(
-            { error: 'Unauthorized — invalid or expired session' },
-            { status: 401 }
-          ),
-        }
-      }
-      const u = data.user
-      const meta = (u.user_metadata || {}) as Record<string, unknown>
-      return {
-        user: {
-          id: u.id,
-          email: u.email || '',
-          role: (meta.role as string) || 'PM',
-        },
-        error: null,
-      }
-    }
-
-    // No Bearer header — try cookie-based session.
-    const { data: { session }, error } = await supabase.auth.getSession()
-    if (error || !session?.user) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return {
         user: null,
         error: NextResponse.json(
-          { error: 'Unauthorized — no active session' },
+          { error: 'Unauthorized — no Bearer token provided' },
           { status: 401 }
         ),
       }
     }
-    const u = session.user
+
+    const token = authHeader.replace('Bearer ', '')
+
+    // Verify the token with Supabase. This checks that the token is valid
+    // and not expired. The user's RLS policies will apply when this token
+    // is used to create a user-scoped client.
+    const { data, error } = await supabase.auth.getUser(token)
+    if (error || !data.user) {
+      return {
+        user: null,
+        error: NextResponse.json(
+          { error: 'Unauthorized — invalid or expired session' },
+          { status: 401 }
+        ),
+      }
+    }
+
+    const u = data.user
     const meta = (u.user_metadata || {}) as Record<string, unknown>
     return {
       user: {
         id: u.id,
         email: u.email || '',
         role: (meta.role as string) || 'PM',
+        accessToken: token,
       },
       error: null,
     }
@@ -86,30 +80,9 @@ export async function requireAuth(req: NextRequest): Promise<{
     return {
       user: null,
       error: NextResponse.json(
-        { error: 'Unauthorized — session check failed' },
+        { error: 'Unauthorized — session verification failed' },
         { status: 401 }
       ),
     }
   }
-}
-
-/**
- * Check if the authenticated user has permission for a module action.
- * Returns true if allowed, false if denied.
- *
- * In demo mode, all actions are allowed.
- */
-export function canPerformAction(
-  user: AuthenticatedUser | null,
-  _module: string,
-  _action: 'read' | 'write' | 'delete'
-): boolean {
-  if (!user) return false
-  // PM has full access; other roles are checked on the client side via
-  // lib/permissions.ts. Server-side enforcement is a secondary gate.
-  if (user.role === 'PM') return true
-  // For now, allow all authenticated users to read; writes require PM.
-  // This can be extended with the full permission matrix from permissions.ts.
-  if (_action === 'read') return true
-  return user.role === 'PM'
 }

@@ -5,7 +5,7 @@
  * talking to Supabase directly from the browser. The corresponding
  * `/api/{endpoint}` route handler performs the actual database write
  * server-side, where it can run server-side validation, audit logging, and
- * RLS-safe queries using the service-role key.
+ * RLS-safe queries using the user's session token.
  *
  * Design constraints:
  *   - Pure HTTP — does NOT import or depend on the Supabase browser client.
@@ -14,7 +14,11 @@
  *   - Typed: each method is generic so callers get back the shape they expect.
  *   - Throws `ApiClientError` on any non-2xx response, with the server-provided
  *     error message when available.
+ *   - Automatically includes the Supabase access token as a Bearer header
+ *     so the server can verify the session and enforce RLS.
  */
+
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 /** Error thrown by the API client when a request fails. */
 export class ApiClientError extends Error {
@@ -31,6 +35,23 @@ export class ApiClientError extends Error {
     // Restore the prototype chain (Error subclassing quirk under ES5 targets)
     Object.setPrototypeOf(this, ApiClientError.prototype)
   }
+}
+
+/**
+ * Get the Authorization header for the current session.
+ * Returns an empty object if Supabase is not configured (demo mode).
+ */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (!isSupabaseConfigured() || !supabase) return {}
+  try {
+    const { data } = await supabase.auth.getSession()
+    if (data.session?.access_token) {
+      return { Authorization: `Bearer ${data.session.access_token}` }
+    }
+  } catch {
+    // Session lookup failed — proceed without auth header (server will 401).
+  }
+  return {}
 }
 
 /** Extract a human-readable error message from a failed Response. */
@@ -66,15 +87,15 @@ function buildUrl(endpoint: string, query?: Record<string, string>): string {
  */
 export async function fetchAll<T>(endpoint: string, query?: Record<string, string>): Promise<T[]> {
   const url = buildUrl(endpoint, query)
+  const authHeaders = await getAuthHeaders()
   let res: Response
   try {
     res = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', ...authHeaders },
       cache: 'no-store',
     })
   } catch (e) {
-    // Network error — DNS failure, offline, CORS, etc.
     throw new ApiClientError(
       `Network error fetching ${endpoint}: ${e instanceof Error ? e.message : String(e)}`,
       0,
@@ -93,10 +114,6 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
 /**
  * Upsert a single row via `POST /api/{endpoint}`.
  *
- * The route handler runs `supabase.from(table).upsert(body).select()` and
- * returns the resulting row(s) as a JSON array. This helper unwraps the
- * array and returns the first row, which corresponds to the upserted item.
- *
  * @example
  *   const saved = await upsertOne<BoqItem>('boq', boqRow)
  *
@@ -105,6 +122,7 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
  */
 export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undefined> {
   const url = buildUrl(endpoint)
+  const authHeaders = await getAuthHeaders()
   let res: Response
   try {
     res = await fetch(url, {
@@ -112,6 +130,7 @@ export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undef
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(item),
     })
@@ -136,16 +155,15 @@ export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undef
  *
  * @example
  *   await deleteOne('boq', 'B-001')
- *
- * Resolves with `undefined` on success; throws `ApiClientError` on failure.
  */
 export async function deleteOne(endpoint: string, id: string): Promise<void> {
   const url = buildUrl(endpoint, { id })
+  const authHeaders = await getAuthHeaders()
   let res: Response
   try {
     res = await fetch(url, {
       method: 'DELETE',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', ...authHeaders },
     })
   } catch (e) {
     throw new ApiClientError(
@@ -158,7 +176,6 @@ export async function deleteOne(endpoint: string, id: string): Promise<void> {
     const message = await readError(res, endpoint)
     throw new ApiClientError(message, res.status, endpoint)
   }
-  // Drain the body so the underlying connection can be reused.
   try {
     await res.json()
   } catch {

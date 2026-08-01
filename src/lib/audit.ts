@@ -1,4 +1,4 @@
-import { supabase, isServerSupabaseConfigured } from '@/lib/supabase-server'
+import { getServiceClient, isServiceClientConfigured } from '@/lib/supabase-server'
 
 export interface AuditEntry {
   table_name: string
@@ -13,18 +13,23 @@ export interface AuditEntry {
  * Server-side audit trail logger.
  * Records who changed what, when — critical for FIDIC contract compliance.
  *
- * In production, this would be called from API route handlers
- * before/after each mutation.
+ * Uses the service-role client (bypasses RLS) so audit entries are always
+ * written regardless of the user's permissions. This is the ONLY legitimate
+ * use of the service-role key in the app — all user-facing data queries
+ * use the user-scoped client (createUserClient) which is RLS-enforced.
+ *
+ * Called from API route handlers after each mutation (POST/DELETE).
  */
 export async function logAudit(entry: Omit<AuditEntry, 'timestamp'>): Promise<void> {
-  if (!isServerSupabaseConfigured()) {
-    // If no DB, log to console (development mode)
+  if (!isServiceClientConfigured()) {
+    // If no service key, log to console (development mode)
     console.log('[AUDIT]', { ...entry, timestamp: new Date().toISOString() })
     return
   }
 
   try {
-    await supabase.from('audit_log').insert({
+    const serviceClient = getServiceClient()
+    await serviceClient.from('audit_log').insert({
       ...entry,
       timestamp: new Date().toISOString(),
     })
