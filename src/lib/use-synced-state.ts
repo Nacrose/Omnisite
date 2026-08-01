@@ -165,20 +165,63 @@ export function useSyncedState<T>(
 
     load()
 
-    // Real-time subscription — re-fetch through the API client on change.
+    // Real-time subscription — diff-based patching instead of full re-fetch.
+    // On INSERT: append the new row. On UPDATE: patch the matching row.
+    // On DELETE: remove the matching row. Falls back to full re-fetch on
+    // any error or unexpected payload shape.
     const channel = supabase
       .channel(`${supabaseTable}-rt`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: supabaseTable },
-        async () => {
+        (payload) => {
+          if (!mounted) return
           try {
-            const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectDbId ? { project_id: activeProjectDbId } : undefined)
-            if (rows && mounted) {
-              const transformed = rows.map(row => fromDb(row))
-              setSupabaseState(transformed as unknown as T)
-            }
+            const eventType = payload.eventType
+            const newRow = payload.new as Record<string, unknown> | null
+            const oldRow = payload.old as Record<string, unknown> | null
+
+            setSupabaseState(prev => {
+              if (!Array.isArray(prev)) return prev
+              const arr = prev as unknown as Record<string, unknown>[]
+
+              if (eventType === 'INSERT' && newRow) {
+                // Check for duplicates (optimistic local insert may have already added it)
+                const itemId = newRow[pk]
+                if (arr.some(it => it[pk] === itemId)) return prev
+                const transformed = fromDb(newRow)
+                return [...arr, transformed] as unknown as T
+              }
+
+              if (eventType === 'UPDATE' && newRow) {
+                const itemId = newRow[pk]
+                const transformed = fromDb(newRow)
+                const updated = arr.map(it =>
+                  it[pk] === itemId ? { ...it, ...transformed } : it
+                )
+                return updated as unknown as T
+              }
+
+              if (eventType === 'DELETE' && oldRow) {
+                const itemId = oldRow[pk]
+                const filtered = arr.filter(it => it[pk] !== itemId)
+                return filtered as unknown as T
+              }
+
+              // Unknown event type — fall back to no-op (don't full-refetch
+              // on every event; the initial load already has the full set).
+              return prev
+            })
           } catch (e) {
-            console.warn(`[useSyncedState] Realtime refetch failed for ${supabaseTable}:`, e)
+            console.warn(`[useSyncedState] Realtime patch failed for ${supabaseTable}, falling back to full re-fetch:`, e)
+            // Fallback: full re-fetch
+            fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectDbId ? { project_id: activeProjectDbId } : undefined)
+              .then(rows => {
+                if (rows && mounted) {
+                  const transformed = rows.map(row => fromDb(row))
+                  setSupabaseState(transformed as unknown as T)
+                }
+              })
+              .catch(() => {})
           }
         }
       )

@@ -79,11 +79,13 @@ function buildUrl(endpoint: string, query?: Record<string, string>): string {
 /**
  * Fetch all rows from `GET /api/{endpoint}`.
  *
+ * Supports optional pagination via `query.limit` and `query.cursor`.
+ * The server returns `{ data: [...], nextCursor: string | null }` when
+ * pagination params are present, or a plain array when they're not.
+ *
  * @example
  *   const items = await fetchAll<BoqItem>('boq')
- *
- * @returns The parsed array. Returns `[]` if the server returned `null` /
- *          `undefined` (e.g. an empty table). Never returns `null`.
+ *   const page = await fetchAll<BoqItem>('boq', { project_id: '...', limit: '200', cursor: '...' })
  */
 export async function fetchAll<T>(endpoint: string, query?: Record<string, string>): Promise<T[]> {
   const url = buildUrl(endpoint, query)
@@ -107,8 +109,10 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
     throw new ApiClientError(message, res.status, endpoint)
   }
   const data = await res.json()
-  // Supabase returns `null` for empty selects; normalize to `[]`.
-  return Array.isArray(data) ? (data as T[]) : (data ? [data as T] : [])
+  // Support both plain array (no pagination) and { data, nextCursor } (paginated)
+  if (Array.isArray(data)) return data as T[]
+  if (data && Array.isArray(data.data)) return data.data as T[]
+  return data ? [data as T] : []
 }
 
 /**
