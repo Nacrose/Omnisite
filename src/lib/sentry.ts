@@ -14,10 +14,7 @@ if (SENTRY_DSN && !Sentry.isInitialized()) {
     tracesSampleRate: 0.1, // 10% of transactions traced
     environment: process.env.NODE_ENV,
     // Filter out noisy errors
-    ignoreErrors: [
-      'ResizeObserver loop limit exceeded',
-      'Network request failed',
-    ],
+    ignoreErrors: ['ResizeObserver loop limit exceeded', 'Network request failed'],
   })
 }
 

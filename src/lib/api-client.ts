@@ -107,7 +107,7 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
     throw new ApiClientError(
       `Network error fetching ${endpoint}: ${e instanceof Error ? e.message : String(e)}`,
       0,
-      endpoint,
+      endpoint
     )
   }
   if (!res.ok) {
@@ -145,7 +145,7 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
  */
 export async function fetchPaginated<T>(
   endpoint: string,
-  query?: Record<string, string>,
+  query?: Record<string, string>
 ): Promise<{ data: T[]; nextCursor: string | null }> {
   const url = buildApiUrl(endpoint, query)
   const authHeaders = await getAuthHeaders()
@@ -157,7 +157,8 @@ export async function fetchPaginated<T>(
   if (!res.ok) throw new ApiClientError(await readError(res, endpoint), res.status, endpoint)
   const json = await res.json()
   if (Array.isArray(json)) return { data: json as T[], nextCursor: null }
-  if (json && Array.isArray(json.data)) return { data: json.data as T[], nextCursor: json.nextCursor ?? null }
+  if (json && Array.isArray(json.data))
+    return { data: json.data as T[], nextCursor: json.nextCursor ?? null }
   return { data: json ? [json as T] : [], nextCursor: null }
 }
 
@@ -188,7 +189,7 @@ export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undef
     throw new ApiClientError(
       `Network error upserting ${endpoint}: ${e instanceof Error ? e.message : String(e)}`,
       0,
-      endpoint,
+      endpoint
     )
   }
   if (!res.ok) {
@@ -219,7 +220,7 @@ export async function deleteOne(endpoint: string, id: string): Promise<void> {
     throw new ApiClientError(
       `Network error deleting ${endpoint}:${id}: ${e instanceof Error ? e.message : String(e)}`,
       0,
-      endpoint,
+      endpoint
     )
   }
   if (!res.ok) {

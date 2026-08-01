@@ -97,51 +97,57 @@ export function useSyncedState<T>(
   // Reverse-map: for each {appField: dbCol} in fmap, copy row[dbCol] → obj[appField].
   // For unmapped fields, convert snake_case → camelCase automatically so
   // e.g. `has_ra`, `parent_id`, `created_at` become `hasRa`, `parentId`, `createdAt`.
-  const fromDb = useCallback((row: Record<string, unknown>): Record<string, unknown> => {
-    const obj: Record<string, unknown> = {}
-    const mappedDbCols = new Set(Object.values(fmap))
+  const fromDb = useCallback(
+    (row: Record<string, unknown>): Record<string, unknown> => {
+      const obj: Record<string, unknown> = {}
+      const mappedDbCols = new Set(Object.values(fmap))
 
-    // First pass: apply explicit fieldMap (appField ← row[dbCol])
-    for (const [appField, dbCol] of Object.entries(fmap)) {
-      if (row[dbCol] !== undefined) {
-        obj[appField] = row[dbCol]
+      // First pass: apply explicit fieldMap (appField ← row[dbCol])
+      for (const [appField, dbCol] of Object.entries(fmap)) {
+        if (row[dbCol] !== undefined) {
+          obj[appField] = row[dbCol]
+        }
       }
-    }
 
-    // Second pass: copy unmapped fields, converting snake_case → camelCase
-    for (const key of Object.keys(row)) {
-      if (mappedDbCols.has(key)) continue // already handled by fieldMap
-      // Skip DB metadata columns that don't belong in app objects
-      if (key === 'created_at' || key === 'updated_at') continue
-      const appKey = snakeToCamel(key)
-      // Don't overwrite an explicit fieldMap entry
-      if (!(appKey in obj)) {
-        obj[appKey] = row[key]
+      // Second pass: copy unmapped fields, converting snake_case → camelCase
+      for (const key of Object.keys(row)) {
+        if (mappedDbCols.has(key)) continue // already handled by fieldMap
+        // Skip DB metadata columns that don't belong in app objects
+        if (key === 'created_at' || key === 'updated_at') continue
+        const appKey = snakeToCamel(key)
+        // Don't overwrite an explicit fieldMap entry
+        if (!(appKey in obj)) {
+          obj[appKey] = row[key]
+        }
       }
-    }
 
-    return obj
-  }, [fmap])
+      return obj
+    },
+    [fmap]
+  )
 
   // ─── Transform: app object → DB row ───────────────────────────────────────
   // Forward-map: for each app field, look up the DB column via fieldMap.
   // If not in fieldMap, convert camelCase → snake_case automatically.
-  const toDb = useCallback((item: Record<string, unknown>): Record<string, unknown> => {
-    const row: Record<string, unknown> = {}
-    for (const key of Object.keys(item)) {
-      // Explicit fieldMap takes precedence
-      const dbCol = fmap[key] || camelToSnake(key)
+  const toDb = useCallback(
+    (item: Record<string, unknown>): Record<string, unknown> => {
+      const row: Record<string, unknown> = {}
+      for (const key of Object.keys(item)) {
+        // Explicit fieldMap takes precedence
+        const dbCol = fmap[key] || camelToSnake(key)
 
-      // Complex fields that don't exist as DB columns — serialize as JSON
-      if (key === 'children' || key === 'baseline') {
-        row[dbCol] = JSON.stringify(item[key])
-        continue
+        // Complex fields that don't exist as DB columns — serialize as JSON
+        if (key === 'children' || key === 'baseline') {
+          row[dbCol] = JSON.stringify(item[key])
+          continue
+        }
+
+        row[dbCol] = item[key]
       }
-
-      row[dbCol] = item[key]
-    }
-    return row
-  }, [fmap])
+      return row
+    },
+    [fmap]
+  )
 
   useEffect(() => {
     if (!useSupabase || !supabase) return
@@ -168,7 +174,7 @@ export function useSyncedState<T>(
           // (fetchAll would silently discard nextCursor).
           const { data: rows, nextCursor } = await fetchPaginated<Record<string, unknown>>(
             apiEndpoint,
-            query,
+            query
           )
           allRows = allRows.concat(rows)
           page++
@@ -178,7 +184,7 @@ export function useSyncedState<T>(
 
         if (!mounted) return
         if (allRows.length > 0) {
-          const transformed = allRows.map(row => fromDb(row))
+          const transformed = allRows.map((row) => fromDb(row))
           setSupabaseState(transformed as unknown as T)
         } else {
           const initialData = typeof initial === 'function' ? (initial as () => T)() : initial
@@ -205,13 +211,13 @@ export function useSyncedState<T>(
         const newRow = payload.new as Record<string, unknown> | null
         const oldRow = payload.old as Record<string, unknown> | null
 
-        setSupabaseState(prev => {
+        setSupabaseState((prev) => {
           if (!Array.isArray(prev)) return prev
           const arr = prev as unknown as Record<string, unknown>[]
 
           if (eventType === 'INSERT' && newRow) {
             const itemId = newRow[pk]
-            if (arr.some(it => it[pk] === itemId)) return prev
+            if (arr.some((it) => it[pk] === itemId)) return prev
             const transformed = fromDb(newRow)
             return [...arr, transformed] as unknown as T
           }
@@ -219,15 +225,13 @@ export function useSyncedState<T>(
           if (eventType === 'UPDATE' && newRow) {
             const itemId = newRow[pk]
             const transformed = fromDb(newRow)
-            const updated = arr.map(it =>
-              it[pk] === itemId ? { ...it, ...transformed } : it
-            )
+            const updated = arr.map((it) => (it[pk] === itemId ? { ...it, ...transformed } : it))
             return updated as unknown as T
           }
 
           if (eventType === 'DELETE' && oldRow) {
             const itemId = oldRow[pk]
-            const filtered = arr.filter(it => it[pk] !== itemId)
+            const filtered = arr.filter((it) => it[pk] !== itemId)
             return filtered as unknown as T
           }
 
@@ -243,16 +247,19 @@ export function useSyncedState<T>(
     if (!entry) {
       const channel = supabase
         .channel(`${supabaseTable}-rt`)
-        .on('postgres_changes',
+        .on(
+          'postgres_changes',
           { event: '*', schema: 'public', table: supabaseTable },
           (payload) => {
             const e = channelCache.get(supabaseTable)
             if (e) {
-              e.callbacks.forEach(cb => cb({
-                eventType: payload.eventType,
-                new: payload.new,
-                old: payload.old,
-              }))
+              e.callbacks.forEach((cb) =>
+                cb({
+                  eventType: payload.eventType,
+                  new: payload.new,
+                  old: payload.old,
+                })
+              )
             }
           }
         )
@@ -282,7 +289,9 @@ export function useSyncedState<T>(
   // fire in the same React batch. The diff + upsert logic also runs inside
   // the functional update so it sees the true `prev`, not a stale closure.
   const stateRef = useRef(supabaseState)
-  useEffect(() => { stateRef.current = supabaseState }, [supabaseState])
+  useEffect(() => {
+    stateRef.current = supabaseState
+  }, [supabaseState])
 
   const setState = (value: T | ((prev: T) => T)) => {
     if (!useSupabase) {
@@ -291,10 +300,13 @@ export function useSyncedState<T>(
     }
 
     // Use functional update so we always read the latest state.
-    setSupabaseState(prev => {
-      const newValue = typeof value === 'function'
-        ? (value as (prev: T) => T)(prev ?? (typeof initial === 'function' ? (initial as () => T)() : initial))
-        : value
+    setSupabaseState((prev) => {
+      const newValue =
+        typeof value === 'function'
+          ? (value as (prev: T) => T)(
+              prev ?? (typeof initial === 'function' ? (initial as () => T)() : initial)
+            )
+          : value
 
       // Diff + upsert inside the updater so we use the true `prev`.
       if (Array.isArray(newValue)) {
@@ -312,7 +324,7 @@ export function useSyncedState<T>(
           if (prevItem !== undefined && JSON.stringify(prevItem) === JSON.stringify(item)) {
             continue
           }
-          upsertOne(apiEndpoint, { ...row, id, project_id: activeProjectDbId }).catch(e => {
+          upsertOne(apiEndpoint, { ...row, id, project_id: activeProjectDbId }).catch((e) => {
             console.warn(`[useSyncedState] upsert failed for ${supabaseTable}:${id}`, e)
           })
         }
@@ -326,7 +338,11 @@ export function useSyncedState<T>(
   }
 
   const currentState = useSupabase
-    ? (supabaseState !== null ? supabaseState : (typeof initial === 'function' ? (initial as () => T)() : initial))
+    ? supabaseState !== null
+      ? supabaseState
+      : typeof initial === 'function'
+        ? (initial as () => T)()
+        : initial
     : localState
 
   return [currentState, setState, loading]

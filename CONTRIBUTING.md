@@ -38,6 +38,7 @@ Each of the 14 modules lives in `src/components/modules/`. Complex modules (BOQ,
 ### API Routes
 
 All data writes go through `/api/{table}` routes with:
+
 1. `requireAuth()` — session verification
 2. `checkRateLimit()` — per-IP throttling
 3. `validateBody()` — zod schema validation

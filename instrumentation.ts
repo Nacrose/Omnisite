@@ -4,8 +4,8 @@ export async function register() {
     if (process.env.NODE_ENV === 'production' && process.env.OMNISITE_DEMO_MODE === 'true') {
       throw new Error(
         'FATAL: OMNISITE_DEMO_MODE=true is forbidden in production. ' +
-        'This would bypass authentication and expose all data. ' +
-        'Remove this env var or set it to false before deploying.'
+          'This would bypass authentication and expose all data. ' +
+          'Remove this env var or set it to false before deploying.'
       )
     }
 
@@ -18,11 +18,11 @@ export async function register() {
         'UPSTASH_REDIS_REST_URL',
         'UPSTASH_REDIS_REST_TOKEN',
       ]
-      const missing = required.filter(k => !process.env[k])
+      const missing = required.filter((k) => !process.env[k])
       if (missing.length > 0) {
         throw new Error(
           `FATAL: Missing required environment variables in production: ${missing.join(', ')}.\n` +
-          'Set these in your Vercel project settings before deploying.'
+            'Set these in your Vercel project settings before deploying.'
         )
       }
     }

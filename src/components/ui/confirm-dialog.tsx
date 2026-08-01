@@ -31,7 +31,7 @@ export function confirm(
   title: string,
   description: string,
   confirmLabel = 'Confirm',
-  danger = false,
+  danger = false
 ): Promise<boolean> {
   return new Promise((resolve) => {
     if (!confirmSetState) {
@@ -63,10 +63,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     confirmSetState = setState
-    return () => { confirmSetState = null }
+    return () => {
+      confirmSetState = null
+    }
   }, [])
 
-  const close = () => setState(s => ({ ...s, open: false }))
+  const close = () => setState((s) => ({ ...s, open: false }))
 
   return (
     <>
@@ -78,7 +80,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
             onClick={close}
           >
             <motion.div
@@ -86,22 +88,24 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              className="w-full max-w-sm pane border border-[var(--pane-divider)] rounded-xl shadow-2xl overflow-hidden"
+              className="pane w-full max-w-sm overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-5">
                 <div className="flex items-start gap-3">
                   {state.danger && (
-                    <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-red-500/15">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
                     </div>
                   )}
                   <div className="flex-1">
                     <h3 className="text-sm font-semibold">{state.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{state.description}</p>
+                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                      {state.description}
+                    </p>
                   </div>
                 </div>
-                <div className="flex items-center justify-end gap-2 mt-4">
+                <div className="mt-4 flex items-center justify-end gap-2">
                   <Button variant="outline" size="sm" className="h-8 text-xs" onClick={close}>
                     Cancel
                   </Button>
@@ -140,7 +144,7 @@ export function undoableToast(
   message: string,
   description: string,
   onUndo: () => void,
-  duration = 5000,
+  duration = 5000
 ) {
   toast.success(message, {
     description,

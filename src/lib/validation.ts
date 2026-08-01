@@ -125,14 +125,9 @@ export const chatMessageSchema = z.object({
 
 import { NextResponse } from 'next/server'
 
-export type ValidationResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: NextResponse }
+export type ValidationResult<T> = { data: T; error: null } | { data: null; error: NextResponse }
 
-export function validateBody<T>(
-  schema: z.ZodSchema<T>,
-  body: unknown,
-): ValidationResult<T> {
+export function validateBody<T>(schema: z.ZodSchema<T>, body: unknown): ValidationResult<T> {
   const result = schema.safeParse(body)
   if (!result.success) {
     const firstError = result.error.issues[0]
@@ -142,7 +137,7 @@ export function validateBody<T>(
         {
           error: `Validation error: ${firstError.path.join('.')} — ${firstError.message}`,
         },
-        { status: 400 },
+        { status: 400 }
       ),
     }
   }

@@ -10,18 +10,20 @@ import { Button } from '@/components/ui/button'
 export function useColumnVisibility(
   allKeys: string[],
   hiddenByDefault: string[] = [],
-  storageKey?: string,
+  storageKey?: string
 ) {
   const loadVisible = (): Set<string> => {
-    const defaults = new Set(allKeys.filter(k => !hiddenByDefault.includes(k)))
+    const defaults = new Set(allKeys.filter((k) => !hiddenByDefault.includes(k)))
     if (!storageKey || typeof window === 'undefined') return defaults
     try {
       const stored = window.localStorage.getItem(`dt-cols-${storageKey}`)
       if (stored) {
         const hidden = JSON.parse(stored) as string[]
-        return new Set(allKeys.filter(k => !hidden.includes(k)))
+        return new Set(allKeys.filter((k) => !hidden.includes(k)))
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return defaults
   }
 
@@ -30,13 +32,15 @@ export function useColumnVisibility(
   useEffect(() => {
     if (!storageKey || typeof window === 'undefined') return
     try {
-      const hidden = allKeys.filter(k => !visible.has(k))
+      const hidden = allKeys.filter((k) => !visible.has(k))
       window.localStorage.setItem(`dt-cols-${storageKey}`, JSON.stringify(hidden))
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [visible, storageKey, allKeys])
 
   const toggle = (key: string) => {
-    setVisible(prev => {
+    setVisible((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -54,16 +58,15 @@ export function useColumnVisibility(
  * Manages drag-to-resize column widths. Persists to localStorage.
  * Returns a width map { columnKey: pixels } and a drag handler factory.
  */
-export function useColumnWidths(
-  storageKey: string,
-  defaultWidths: Record<string, number> = {},
-) {
+export function useColumnWidths(storageKey: string, defaultWidths: Record<string, number> = {}) {
   const loadWidths = (): Record<string, number> => {
     if (typeof window === 'undefined') return defaultWidths
     try {
       const stored = window.localStorage.getItem(`dt-widths-${storageKey}`)
       if (stored) return { ...defaultWidths, ...JSON.parse(stored) }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return defaultWidths
   }
 
@@ -74,7 +77,9 @@ export function useColumnWidths(
     if (typeof window === 'undefined') return
     try {
       window.localStorage.setItem(`dt-widths-${storageKey}`, JSON.stringify(widths))
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [widths, storageKey])
 
   const startDrag = useCallback((key: string, e: React.MouseEvent, currentWidth: number) => {
@@ -86,7 +91,7 @@ export function useColumnWidths(
       if (!dragRef.current) return
       const delta = ev.clientX - dragRef.current.startX
       const newWidth = Math.max(40, dragRef.current.startWidth + delta) // min 40px
-      setWidths(prev => ({ ...prev, [dragRef.current!.key]: newWidth }))
+      setWidths((prev) => ({ ...prev, [dragRef.current!.key]: newWidth }))
     }
 
     const onUp = () => {
@@ -131,7 +136,9 @@ export function ColumnToggle({
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
     document.addEventListener('keydown', onKey)
     return () => {
@@ -140,7 +147,7 @@ export function ColumnToggle({
     }
   }, [open])
 
-  const hideable = columns.filter(c => c.hideable !== false)
+  const hideable = columns.filter((c) => c.hideable !== false)
   if (hideable.length === 0) return null
 
   return (
@@ -148,34 +155,36 @@ export function ColumnToggle({
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 text-[10px] gap-1"
-        onClick={() => setOpen(o => !o)}
+        className="h-6 gap-1 text-[10px]"
+        onClick={() => setOpen((o) => !o)}
         title="Toggle column visibility"
       >
-        <Columns3 className="w-3 h-3" />
-        <ChevronDown className="w-2.5 h-2.5" />
+        <Columns3 className="h-3 w-3" />
+        <ChevronDown className="h-2.5 w-2.5" />
       </Button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-44 pane border border-[var(--pane-divider)] rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-[var(--pane-divider)]">
+        <div className="pane animate-in fade-in zoom-in-95 absolute top-full right-0 z-50 mt-1 w-44 rounded-lg border border-[var(--pane-divider)] py-1 shadow-2xl duration-100">
+          <div className="text-muted-foreground border-b border-[var(--pane-divider)] px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
             Toggle columns
           </div>
           <div className="max-h-60 overflow-y-auto">
-            {hideable.map(col => {
+            {hideable.map((col) => {
               const isVisible = visible.has(col.key)
               return (
                 <button
                   key={col.key}
                   onClick={() => onToggle(col.key)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent text-left"
+                  className="hover:bg-accent flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs"
                 >
-                  <div className={cn(
-                    'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0',
-                    isVisible
-                      ? 'bg-primary border-primary text-primary-foreground'
-                      : 'border-[var(--pane-divider)]'
-                  )}>
-                    {isVisible && <Check className="w-3 h-3" />}
+                  <div
+                    className={cn(
+                      'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border',
+                      isVisible
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : 'border-[var(--pane-divider)]'
+                    )}
+                  >
+                    {isVisible && <Check className="h-3 w-3" />}
                   </div>
                   <span className="truncate">{col.label}</span>
                 </button>
@@ -201,11 +210,11 @@ export function ColumnResizeHandle({
 }) {
   return (
     <div
-      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize group/resizer hover:bg-primary/40 transition-colors z-20"
+      className="group/resizer hover:bg-primary/40 absolute top-0 right-0 bottom-0 z-20 w-1 cursor-col-resize transition-colors"
       onMouseDown={(e) => onDragStart(columnKey, e, currentWidth)}
       title="Drag to resize"
     >
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-4 bg-[var(--pane-divider)] group-hover/resizer:bg-primary/60" />
+      <div className="group-hover/resizer:bg-primary/60 absolute top-1/2 right-0 h-4 w-px -translate-y-1/2 bg-[var(--pane-divider)]" />
     </div>
   )
 }
@@ -222,10 +231,8 @@ export function StickyTableShell({
   className?: string
 }) {
   return (
-    <div className={cn('flex-1 min-h-0 overflow-auto omnisite-table', className)}>
-      <div style={minWidth ? { minWidth: `${minWidth}px` } : undefined}>
-        {children}
-      </div>
+    <div className={cn('omnisite-table min-h-0 flex-1 overflow-auto', className)}>
+      <div style={minWidth ? { minWidth: `${minWidth}px` } : undefined}>{children}</div>
     </div>
   )
 }
@@ -242,10 +249,12 @@ export function StickyTableHeader({
   className?: string
 }) {
   return (
-    <div className={cn(
-      'flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30 sticky top-0 z-10 omnisite-table-header',
-      className,
-    )}>
+    <div
+      className={cn(
+        'text-muted-foreground bg-secondary/30 omnisite-table-header sticky top-0 z-10 flex h-8 items-center border-b border-[var(--pane-divider)] text-[10px] font-semibold tracking-wider uppercase',
+        className
+      )}
+    >
       {children}
     </div>
   )

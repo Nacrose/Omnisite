@@ -35,7 +35,7 @@ export interface TreeKeys {
 export function flattenTree<T extends Record<string, any>>(
   items: T[],
   parentId: string | null = null,
-  keys: TreeKeys = {},
+  keys: TreeKeys = {}
 ): T[] {
   const idKey = keys.idKey ?? 'id'
   const parentKey = keys.parentKey ?? 'parentId'
@@ -62,10 +62,12 @@ export function rebuildTreeFromRows<T extends Record<string, any>>(
   rows: T[] | null | undefined,
   idKey: string,
   parentKey: string,
-  childrenKey: string = 'children',
+  childrenKey: string = 'children'
 ): T[] {
   if (!rows || rows.length === 0) return []
-  const hasChildren = rows.some((r) => Array.isArray(r[childrenKey]) && (r[childrenKey] as T[]).length > 0)
+  const hasChildren = rows.some(
+    (r) => Array.isArray(r[childrenKey]) && (r[childrenKey] as T[]).length > 0
+  )
   if (hasChildren) return rows
   const map = new Map<string, T>()
   const roots: T[] = []
@@ -99,7 +101,7 @@ export function findItemAndParent<T extends Record<string, any>>(
   idKey: string = 'id',
   childrenKey: string = 'children',
   parent: T | null = null,
-  depth = 0,
+  depth = 0
 ): { item: T; parent: T | null; depth: number } | null {
   for (const it of items) {
     if (String(it[idKey]) === id) return { item: it, parent, depth }
@@ -121,12 +123,12 @@ export function updateLevels<T extends Record<string, any>>(
   item: T,
   newLevel: number,
   childrenKey: string = 'children',
-  levelKey: string = 'level',
+  levelKey: string = 'level'
 ): T {
   const children = item[childrenKey] as T[] | undefined
   return {
     ...item,
     [levelKey]: newLevel,
-    [childrenKey]: children?.map(c => updateLevels(c, newLevel + 1, childrenKey, levelKey)),
+    [childrenKey]: children?.map((c) => updateLevels(c, newLevel + 1, childrenKey, levelKey)),
   }
 }

@@ -14,7 +14,7 @@ export interface AuditEntry {
  */
 export function computeDiff(
   old: Record<string, unknown>,
-  new_: Record<string, unknown>,
+  new_: Record<string, unknown>
 ): Record<string, { old: unknown; new: unknown }> {
   const diff: Record<string, { old: unknown; new: unknown }> = {}
   for (const key of Object.keys(new_)) {

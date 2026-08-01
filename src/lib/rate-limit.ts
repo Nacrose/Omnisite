@@ -25,7 +25,7 @@ function getRatelimit(): Ratelimit {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
   if (!url || !token) {
     throw new Error(
-      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set — rate limiting requires Redis.',
+      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set — rate limiting requires Redis.'
     )
   }
   redis = new Redis({ url, token })
@@ -63,7 +63,10 @@ function resolveIdentifier(req: NextRequest, userId?: string): string {
  * Check rate limit for a request. Keys on user.id (from auth) when available,
  * falls back to IP address. Returns null if allowed, or a 429 response.
  */
-export async function checkRateLimit(req: NextRequest, userId?: string): Promise<NextResponse | null> {
+export async function checkRateLimit(
+  req: NextRequest,
+  userId?: string
+): Promise<NextResponse | null> {
   const identifier = resolveIdentifier(req, userId)
   const limiter = getRatelimit()
 
@@ -83,7 +86,7 @@ export async function checkRateLimit(req: NextRequest, userId?: string): Promise
           'X-RateLimit-Remaining': String(remaining),
           'X-RateLimit-Reset': String(reset),
         },
-      },
+      }
     )
   }
 

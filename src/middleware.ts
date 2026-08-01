@@ -42,7 +42,7 @@ export function middleware(req: NextRequest) {
   }
 
   // Check for Supabase session cookie
-  const hasSession = req.cookies.getAll().some(c => c.name.startsWith('sb-'))
+  const hasSession = req.cookies.getAll().some((c) => c.name.startsWith('sb-'))
   const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL
 
   if (supabaseConfigured && !hasSession) {

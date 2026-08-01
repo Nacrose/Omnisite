@@ -8,13 +8,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // directly, since they're defined inside the hook but are pure functions.
 
 describe('useSyncedState transform logic', () => {
-
   // Replicate the snakeToCamel / camelToSnake functions for testing
-  const snakeToCamel = (s: string): string =>
-    s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+  const snakeToCamel = (s: string): string => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
 
-  const camelToSnake = (s: string): string =>
-    s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
+  const camelToSnake = (s: string): string => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
 
   describe('snakeToCamel', () => {
     it('converts simple snake_case', () => {
@@ -70,14 +67,30 @@ describe('useSyncedState transform logic', () => {
 
   describe('round-trip conversion', () => {
     it('snake → camel → snake preserves original', () => {
-      const cases = ['has_ra', 'parent_id', 'project_id', 'created_at', 'baseline_finish', 'code', 'name']
+      const cases = [
+        'has_ra',
+        'parent_id',
+        'project_id',
+        'created_at',
+        'baseline_finish',
+        'code',
+        'name',
+      ]
       for (const s of cases) {
         expect(camelToSnake(snakeToCamel(s))).toBe(s)
       }
     })
 
     it('camel → snake → camel preserves original', () => {
-      const cases = ['hasRa', 'parentId', 'projectId', 'createdAt', 'baselineFinish', 'code', 'name']
+      const cases = [
+        'hasRa',
+        'parentId',
+        'projectId',
+        'createdAt',
+        'baselineFinish',
+        'code',
+        'name',
+      ]
       for (const s of cases) {
         expect(snakeToCamel(camelToSnake(s))).toBe(s)
       }
@@ -130,11 +143,11 @@ describe('useSyncedState race-condition fix', () => {
 
     // Edit 1: update 'a' to 10
     const edit1 = (prev: Item[]): Item[] =>
-      prev.map(it => it.id === 'a' ? { ...it, value: 10 } : it)
+      prev.map((it) => (it.id === 'a' ? { ...it, value: 10 } : it))
 
     // Edit 2: update 'b' to 20 (fires before re-render)
     const edit2 = (prev: Item[]): Item[] =>
-      prev.map(it => it.id === 'b' ? { ...it, value: 20 } : it)
+      prev.map((it) => (it.id === 'b' ? { ...it, value: 20 } : it))
 
     // Apply both functionally — both see the correct prev
     items = edit1(items)
@@ -148,8 +161,14 @@ describe('useSyncedState race-condition fix', () => {
     // The diff logic in setState skips rows that haven't changed
     // (JSON.stringify comparison). Verify the comparison works.
     type Item = { id: string; qty: number }
-    const prev: Item[] = [{ id: 'a', qty: 5 }, { id: 'b', qty: 10 }]
-    const next: Item[] = [{ id: 'a', qty: 5 }, { id: 'b', qty: 15 }]
+    const prev: Item[] = [
+      { id: 'a', qty: 5 },
+      { id: 'b', qty: 10 },
+    ]
+    const next: Item[] = [
+      { id: 'a', qty: 5 },
+      { id: 'b', qty: 15 },
+    ]
 
     // 'a' unchanged → should be skipped
     expect(JSON.stringify(prev[0]) === JSON.stringify(next[0])).toBe(true)
@@ -177,7 +196,11 @@ describe('Auth demo-mode behavior', () => {
 
   it('mapSupabaseUser extracts role from user_metadata', () => {
     // Replicate the mapping logic (matches auth.tsx)
-    function mapSupabaseUser(u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) {
+    function mapSupabaseUser(u: {
+      id: string
+      email?: string
+      user_metadata?: Record<string, unknown>
+    }) {
       const meta = u.user_metadata || {}
       const role = (meta.role as string) || 'FOREMAN'
       const name = (meta.name as string) || (meta.full_name as string) || 'Unknown'
@@ -195,7 +218,11 @@ describe('Auth demo-mode behavior', () => {
   })
 
   it('mapSupabaseUser falls back to FOREMAN role when metadata missing', () => {
-    function mapSupabaseUser(u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) {
+    function mapSupabaseUser(u: {
+      id: string
+      email?: string
+      user_metadata?: Record<string, unknown>
+    }) {
       const meta = u.user_metadata || {}
       const role = (meta.role as string) || 'FOREMAN'
       return { id: u.id, email: u.email || '', role, isDemo: false }

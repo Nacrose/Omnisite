@@ -53,10 +53,7 @@ export async function POST(req: NextRequest) {
     ? await userClient.from('cbs_nodes').select('*').eq('code', body.code).single()
     : { data: null }
 
-  const { data, error } = await userClient
-    .from('cbs_nodes')
-    .upsert(body)
-    .select()
+  const { data, error } = await userClient.from('cbs_nodes').upsert(body).select()
 
   if (error) {
     console.error('[API] cbs_nodes error:', error)
@@ -69,7 +66,9 @@ export async function POST(req: NextRequest) {
     record_id: body.code || data?.[0]?.id || 'unknown',
     action: oldData ? 'UPDATE' : 'INSERT',
     changed_by: user.id,
-    changed_fields: oldData ? computeDiff(oldData as Record<string, unknown>, body as Record<string, unknown>) : undefined,
+    changed_fields: oldData
+      ? computeDiff(oldData as Record<string, unknown>, body as Record<string, unknown>)
+      : undefined,
   }).catch(() => {})
 
   return NextResponse.json(data)
@@ -92,10 +91,7 @@ export async function DELETE(req: NextRequest) {
 
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
-  const { error } = await userClient
-    .from('cbs_nodes')
-    .delete()
-    .eq('id', id)
+  const { error } = await userClient.from('cbs_nodes').delete().eq('id', id)
 
   if (error) {
     console.error('[API] cbs_nodes error:', error)

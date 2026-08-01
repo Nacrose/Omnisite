@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { adToBsYear, bsToAdYear, formatDate, formatFiscalYear, getCurrentBsYear } from '@/lib/calendar'
+import {
+  adToBsYear,
+  bsToAdYear,
+  formatDate,
+  formatFiscalYear,
+  getCurrentBsYear,
+} from '@/lib/calendar'
 
 describe('Bikram Sambat Calendar', () => {
   it('should convert AD 2025 July to BS 2082', () => {

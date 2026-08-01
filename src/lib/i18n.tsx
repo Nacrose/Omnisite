@@ -54,7 +54,8 @@ const translations: Record<Locale, Record<string, string>> = {
     'module.chat': 'Messages',
     // Dashboard
     'dashboard.title': 'Project Command Center',
-    'dashboard.subtitle': 'Kathmandu Ring Road Expansion · Package 3 · FIDIC Red Book · DoR Norms 2075',
+    'dashboard.subtitle':
+      'Kathmandu Ring Road Expansion · Package 3 · FIDIC Red Book · DoR Norms 2075',
     'dashboard.kpi.spi': 'Schedule Performance',
     'dashboard.kpi.cpi': 'Cost Performance',
     'dashboard.kpi.eac': 'Estimate at Completion',

@@ -31,19 +31,17 @@ export interface BoqDnd {
 
 export function useBoqDnd(
   allFlat: BoqItem[],
-  onReparent: (draggedId: string, targetHeadingId: string) => void,
+  onReparent: (draggedId: string, targetHeadingId: string) => void
 ): BoqDnd {
   const [draggedItem, setDraggedItem] = useState<BoqItem | null>(null)
   const [dragOverHeading, setDragOverHeading] = useState<string | null>(null)
 
   // DnD sensors — require 5px movement to start drag (prevents accidental
   // drags on click).
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  )
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const handleDragStart = (e: DragStartEvent) => {
-    const item = allFlat.find(i => i.id === e.active.id)
+    const item = allFlat.find((i) => i.id === e.active.id)
     setDraggedItem(item || null)
   }
 

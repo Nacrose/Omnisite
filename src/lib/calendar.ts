@@ -24,18 +24,49 @@ export const BS_MONTHS = [
 ]
 
 export const BS_MONTHS_SHORT = [
-  'Bai', 'Jes', 'Ash', 'Shr', 'Bha', 'Ash', 'Kar', 'Man', 'Pou', 'Mag', 'Fal', 'Cha'
+  'Bai',
+  'Jes',
+  'Ash',
+  'Shr',
+  'Bha',
+  'Ash',
+  'Kar',
+  'Man',
+  'Pou',
+  'Mag',
+  'Fal',
+  'Cha',
 ]
 
 // AD month names
 export const AD_MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ]
 
 export const AD_MONTHS_SHORT = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ]
 
 export type CalendarSystem = 'BS' | 'AD'
@@ -59,9 +90,9 @@ export interface FormattedDate {
 export function adToBsYear(adYear: number, adMonth: number): number {
   // Month is 1-indexed (1=January, 4=April, 7=July)
   if (adMonth >= 4) {
-    return adYear + 57  // After April → new BS year
+    return adYear + 57 // After April → new BS year
   }
-  return adYear + 56    // Before April → still previous BS year
+  return adYear + 56 // Before April → still previous BS year
 }
 
 /**
@@ -142,10 +173,7 @@ export function formatDate(
  * Nepal's fiscal year runs from Shrawan 1 (mid-July) to Ashad end (mid-July next year).
  * e.g., FY 2082/83 BS = July 2025 to July 2026 AD
  */
-export function formatFiscalYear(
-  date: Date,
-  calendar: CalendarSystem = 'BS'
-): string {
+export function formatFiscalYear(date: Date, calendar: CalendarSystem = 'BS'): string {
   const adYear = date.getFullYear()
   const adMonth = date.getMonth() // 0-indexed
 

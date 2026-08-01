@@ -32,11 +32,10 @@ function normalizeCbsRow(row: Record<string, unknown>): CbsNode {
 // Delegates to the shared `flattenTree` helper, configured for the CbsNode
 // shape: id field is `code`, parent field is `parentCode`.
 export function flattenForSave(items: CbsNode[], parentCode: string | null = null): CbsNode[] {
-  return flattenTree(
-    items as unknown as Record<string, any>[],
-    parentCode,
-    { idKey: 'code', parentKey: 'parentCode' },
-  ) as unknown as CbsNode[]
+  return flattenTree(items as unknown as Record<string, any>[], parentCode, {
+    idKey: 'code',
+    parentKey: 'parentCode',
+  }) as unknown as CbsNode[]
 }
 
 // Rebuild a tree from flat rows (which may have parentCode set).
@@ -49,7 +48,9 @@ export function rebuildTreeFromRows(rows: CbsNode[]): CbsNode[] {
   if (!rows || rows.length === 0) return deepClone(CBS)
   const hasChildren = rows.some((r) => Array.isArray(r.children) && r.children!.length > 0)
   if (hasChildren) return rows
-  const normalized = (rows as unknown as Record<string, unknown>[]).map(normalizeCbsRow) as unknown as Record<string, any>[]
+  const normalized = (rows as unknown as Record<string, unknown>[]).map(
+    normalizeCbsRow
+  ) as unknown as Record<string, any>[]
   const tree = rebuildTree(normalized, 'code', 'parentCode')
   return tree.length > 0 ? (tree as unknown as CbsNode[]) : deepClone(CBS)
 }
@@ -63,7 +64,7 @@ export function createSetCbsData(
   setCbsRows: (updater: (prev: CbsNode[]) => CbsNode[]) => void
 ): (updater: (prev: CbsNode[]) => CbsNode[]) => void {
   return (updater) => {
-    setCbsRows(prevRows => {
+    setCbsRows((prevRows) => {
       const prevTree = rebuildTreeFromRows(prevRows)
       const next = updater(prevTree)
       return flattenForSave(next) as unknown as CbsNode[]
@@ -81,15 +82,15 @@ export function createSetCbsData(
 // state is reflected — mirroring the original inline definition.
 export function createUpdateNode(
   flat: CbsNode[],
-  setCbsData: (updater: (prev: CbsNode[]) => CbsNode[]) => void,
+  setCbsData: (updater: (prev: CbsNode[]) => CbsNode[]) => void
 ) {
   const updateNode = (code: string, field: 'committed' | 'actual' | 'forecast', value: number) => {
     // Capture the previous value so we can offer an undo. Walk the current
     // tree (before the setState commit) to find the leaf being edited.
-    const prevNode = flat.find(c => c.code === code)
+    const prevNode = flat.find((c) => c.code === code)
     const oldValue = prevNode ? prevNode[field] : 0
-    setCbsData(prev => {
-      return produce(prev, draft => {
+    setCbsData((prev) => {
+      return produce(prev, (draft) => {
         const walk = (items: CbsNode[]): boolean => {
           for (const n of items) {
             if (n.code === code) {
@@ -114,7 +115,7 @@ export function createUpdateNode(
     undoableToast(
       `${field[0].toUpperCase()}${field.slice(1)} updated`,
       `${code}: ${oldValue} → ${Math.max(0, value)}. Click Undo to revert.`,
-      () => updateNode(code, field, oldValue),
+      () => updateNode(code, field, oldValue)
     )
   }
   return updateNode

@@ -69,7 +69,11 @@ function mapSupabaseUser(u: SupabaseUser): OmniUser {
   const name =
     (meta.name as string) ||
     (meta.full_name as string) ||
-    u.email?.split('@')[0]?.split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') ||
+    u.email
+      ?.split('@')[0]
+      ?.split('.')
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(' ') ||
     'Unknown User'
   return {
     id: u.id,
@@ -108,18 +112,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // NO demo bypass. If there's no session, the user must sign in.
     let subscription: Subscription | null = null
 
-    supabase!.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
-      if (!active) return
-      const s = data.session
-      if (s?.user) {
-        setUser(mapSupabaseUser(s.user))
-      }
-      // No session → user stays null → login page shows.
-      setLoading(false)
-    }).catch(() => {
-      if (!active) return
-      setLoading(false)
-    })
+    supabase!.auth
+      .getSession()
+      .then(({ data }: { data: { session: Session | null } }) => {
+        if (!active) return
+        const s = data.session
+        if (s?.user) {
+          setUser(mapSupabaseUser(s.user))
+        }
+        // No session → user stays null → login page shows.
+        setLoading(false)
+      })
+      .catch(() => {
+        if (!active) return
+        setLoading(false)
+      })
 
     subscription = supabase!.auth.onAuthStateChange((_event, session) => {
       if (!active) return
@@ -157,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, loading, isDemo: configured ? false : true, signIn, signOut }),
-    [user, loading, configured],
+    [user, loading, configured]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

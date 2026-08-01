@@ -7,7 +7,12 @@ import { cn } from '@/lib/utils'
 
 const THEMES: { id: OmniSiteTheme; name: string; icon: typeof Sun; desc: string }[] = [
   { id: 'classic', name: 'OmniSite Classic', icon: Sun, desc: 'macOS-native, soft & spacious' },
-  { id: 'procore', name: 'Procore High-Contrast', icon: Contrast, desc: 'Industrial bright, sharper' },
+  {
+    id: 'procore',
+    name: 'Procore High-Contrast',
+    icon: Contrast,
+    desc: 'Industrial bright, sharper',
+  },
   { id: 'darkfield', name: 'Dark Field Mode', icon: Moon, desc: 'Engineering-grade dark' },
 ]
 
@@ -24,43 +29,53 @@ export function ThemeSwitcher() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const current = THEMES.find(t => t.id === theme)!
+  const current = THEMES.find((t) => t.id === theme)!
   const CurrentIcon = current.icon
 
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(o => !o)}
-        className="p-2 rounded-md hover:bg-accent text-muted-foreground"
+        onClick={() => setOpen((o) => !o)}
+        className="hover:bg-accent text-muted-foreground rounded-md p-2"
         title={`Theme: ${current.name}`}
       >
-        <CurrentIcon className="w-4 h-4" />
+        <CurrentIcon className="h-4 w-4" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-64 pane border border-[var(--pane-divider)] rounded-lg shadow-xl z-50 overflow-hidden">
-          <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Theme Engine</div>
+        <div className="pane absolute top-full right-0 z-50 mt-1 w-64 overflow-hidden rounded-lg border border-[var(--pane-divider)] shadow-xl">
+          <div className="border-b border-[var(--pane-divider)] px-3 py-2">
+            <div className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+              Theme Engine
+            </div>
           </div>
           <div className="py-1">
-            {THEMES.map(t => {
+            {THEMES.map((t) => {
               const Icon = t.icon
               return (
                 <button
                   key={t.id}
-                  onClick={() => { setTheme(t.id); setOpen(false) }}
+                  onClick={() => {
+                    setTheme(t.id)
+                    setOpen(false)
+                  }}
                   className={cn(
-                    'w-full flex items-start gap-3 px-3 py-2 hover:bg-accent text-left transition-colors',
+                    'hover:bg-accent flex w-full items-start gap-3 px-3 py-2 text-left transition-colors',
                     theme === t.id && 'bg-accent/50'
                   )}
                 >
-                  <Icon className={cn('w-4 h-4 mt-0.5', theme === t.id ? 'text-primary' : 'text-muted-foreground')} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium flex items-center gap-2">
+                  <Icon
+                    className={cn(
+                      'mt-0.5 h-4 w-4',
+                      theme === t.id ? 'text-primary' : 'text-muted-foreground'
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-sm font-medium">
                       {t.name}
-                      {theme === t.id && <Check className="w-3 h-3 text-primary" />}
+                      {theme === t.id && <Check className="text-primary h-3 w-3" />}
                     </div>
-                    <div className="text-xs text-muted-foreground">{t.desc}</div>
+                    <div className="text-muted-foreground text-xs">{t.desc}</div>
                   </div>
                 </button>
               )

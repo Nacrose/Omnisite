@@ -32,10 +32,35 @@ describe('CBS rollup aggregation', () => {
 
   it('parent totals = sum of children after leaf edit', () => {
     const tree: CbsNode = {
-      code: '1', name: 'Bridge', budget: 0, committed: 0, actual: 0, forecast: 0, marginPct: 0, level: 0,
+      code: '1',
+      name: 'Bridge',
+      budget: 0,
+      committed: 0,
+      actual: 0,
+      forecast: 0,
+      marginPct: 0,
+      level: 0,
       children: [
-        { code: '1.1', name: 'Foundation', budget: 84, committed: 82, actual: 48, forecast: 80, marginPct: 4.8, level: 1 },
-        { code: '1.2', name: 'Substructure', budget: 112, committed: 108, actual: 64, forecast: 110, marginPct: 1.8, level: 1 },
+        {
+          code: '1.1',
+          name: 'Foundation',
+          budget: 84,
+          committed: 82,
+          actual: 48,
+          forecast: 80,
+          marginPct: 4.8,
+          level: 1,
+        },
+        {
+          code: '1.2',
+          name: 'Substructure',
+          budget: 112,
+          committed: 108,
+          actual: 64,
+          forecast: 110,
+          marginPct: 1.8,
+          level: 1,
+        },
       ],
     }
     // Edit leaf 1.1's actual from 48 to 50
@@ -49,9 +74,25 @@ describe('CBS rollup aggregation', () => {
 
   it('parent marginPct recalculated after leaf edit', () => {
     const tree: CbsNode = {
-      code: '1', name: 'Bridge', budget: 0, committed: 0, actual: 0, forecast: 0, marginPct: 0, level: 0,
+      code: '1',
+      name: 'Bridge',
+      budget: 0,
+      committed: 0,
+      actual: 0,
+      forecast: 0,
+      marginPct: 0,
+      level: 0,
       children: [
-        { code: '1.1', name: 'Foundation', budget: 100, committed: 90, actual: 50, forecast: 95, marginPct: 5, level: 1 },
+        {
+          code: '1.1',
+          name: 'Foundation',
+          budget: 100,
+          committed: 90,
+          actual: 50,
+          forecast: 95,
+          marginPct: 5,
+          level: 1,
+        },
       ],
     }
     // Edit leaf 1.1's forecast from 95 to 110 (over budget)
@@ -64,9 +105,25 @@ describe('CBS rollup aggregation', () => {
 
   it('handles zero budget (no div-by-zero)', () => {
     const tree: CbsNode = {
-      code: '1', name: 'Empty', budget: 0, committed: 0, actual: 0, forecast: 0, marginPct: 0, level: 0,
+      code: '1',
+      name: 'Empty',
+      budget: 0,
+      committed: 0,
+      actual: 0,
+      forecast: 0,
+      marginPct: 0,
+      level: 0,
       children: [
-        { code: '1.1', name: 'Leaf', budget: 0, committed: 0, actual: 0, forecast: 0, marginPct: 0, level: 1 },
+        {
+          code: '1.1',
+          name: 'Leaf',
+          budget: 0,
+          committed: 0,
+          actual: 0,
+          forecast: 0,
+          marginPct: 0,
+          level: 1,
+        },
       ],
     }
     recomputeParent(tree)
@@ -78,7 +135,11 @@ describe('CBS rollup aggregation', () => {
 // Tests that data is filtered by project_id when the project switcher changes.
 
 describe('Project scoping filter', () => {
-  interface Row { id: string; project_id: string; name: string }
+  interface Row {
+    id: string
+    project_id: string
+    name: string
+  }
 
   const ROWS: Row[] = [
     { id: 'r1', project_id: '00000000-0000-0000-0000-000000000001', name: 'P1 item' },
@@ -87,13 +148,13 @@ describe('Project scoping filter', () => {
   ]
 
   it('filters rows by project_id', () => {
-    const p1 = ROWS.filter(r => r.project_id === '00000000-0000-0000-0000-000000000001')
+    const p1 = ROWS.filter((r) => r.project_id === '00000000-0000-0000-0000-000000000001')
     expect(p1).toHaveLength(2)
-    expect(p1.every(r => r.project_id === '00000000-0000-0000-0000-000000000001')).toBe(true)
+    expect(p1.every((r) => r.project_id === '00000000-0000-0000-0000-000000000001')).toBe(true)
   })
 
   it('returns empty for unknown project', () => {
-    const p99 = ROWS.filter(r => r.project_id === 'unknown')
+    const p99 = ROWS.filter((r) => r.project_id === 'unknown')
     expect(p99).toHaveLength(0)
   })
 

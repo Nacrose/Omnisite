@@ -16,11 +16,7 @@
  */
 
 export type NotificationType =
-  | 'rfi_overdue'
-  | 'ncr_hold'
-  | 'po_approval'
-  | 'dsr_review'
-  | 'variation_threshold'
+  'rfi_overdue' | 'ncr_hold' | 'po_approval' | 'dsr_review' | 'variation_threshold'
 
 export interface NotificationMeta {
   type: NotificationType
@@ -51,7 +47,7 @@ export async function sendNotification(
   message: string,
   recipient: string,
   subject?: string,
-  context?: Record<string, unknown>,
+  context?: Record<string, unknown>
 ): Promise<{ console: boolean; email: boolean; sms: boolean }> {
   const meta: NotificationMeta = { type, message, recipient, subject, context }
   const severity = TYPE_SEVERITY[type]
@@ -59,10 +55,11 @@ export async function sendNotification(
   const result = { console: false, email: false, sms: false }
 
   // 1. Console — always
-  console.log(
-    `[NOTIFY:${severity.toUpperCase()}] ${label} → ${recipient}`,
-    { message, subject: subject ?? label, context: context ?? {} },
-  )
+  console.log(`[NOTIFY:${severity.toUpperCase()}] ${label} → ${recipient}`, {
+    message,
+    subject: subject ?? label,
+    context: context ?? {},
+  })
   result.console = true
 
   // 2. Email via Resend (when RESEND_API_KEY is configured)
@@ -73,7 +70,7 @@ export async function sendNotification(
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${resendKey}`,
+          Authorization: `Bearer ${resendKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -104,7 +101,7 @@ export async function sendNotification(
         {
           method: 'POST',
           headers: {
-            'Authorization': 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
+            Authorization: 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: new URLSearchParams({
@@ -112,7 +109,7 @@ export async function sendNotification(
             To: recipient,
             Body: `${label}: ${message}`,
           }),
-        },
+        }
       )
       if (res.ok) {
         result.sms = true
@@ -137,7 +134,7 @@ export const notifyRfiOverdue = (recipient: string, rfiId: string, daysLate: num
     `RFI ${rfiId} is ${daysLate} day(s) overdue — consultant reply still pending.`,
     recipient,
     `Overdue: ${rfiId}`,
-    { rfiId, daysLate },
+    { rfiId, daysLate }
   )
 
 export const notifyNcrHold = (recipient: string, ncrId: string, boqItem: string) =>
@@ -146,7 +143,7 @@ export const notifyNcrHold = (recipient: string, ncrId: string, boqItem: string)
     `NCR ${ncrId} placed a billing hold on BOQ ${boqItem} — Max Billable Qty set to 0 until closed.`,
     recipient,
     `Billing hold: ${ncrId}`,
-    { ncrId, boqItem },
+    { ncrId, boqItem }
   )
 
 export const notifyPoApproval = (recipient: string, poId: string, amount: string) =>
@@ -155,7 +152,7 @@ export const notifyPoApproval = (recipient: string, poId: string, amount: string
     `Purchase Order ${poId} (NPR ${amount}) is awaiting your approval.`,
     recipient,
     `Approval required: ${poId}`,
-    { poId, amount },
+    { poId, amount }
   )
 
 export const notifyDsrReview = (recipient: string, dsrId: string, submittedBy: string) =>
@@ -164,7 +161,7 @@ export const notifyDsrReview = (recipient: string, dsrId: string, submittedBy: s
     `DSR ${dsrId} submitted by ${submittedBy} is awaiting your review.`,
     recipient,
     `Review needed: ${dsrId}`,
-    { dsrId, submittedBy },
+    { dsrId, submittedBy }
   )
 
 export const notifyVariationThreshold = (recipient: string, boqItem: string, pct: number) =>
@@ -173,5 +170,5 @@ export const notifyVariationThreshold = (recipient: string, boqItem: string, pct
     `Variation on BOQ ${boqItem} crossed ${pct}% threshold — PM approval required.`,
     recipient,
     `Variation > ${pct}%: ${boqItem}`,
-    { boqItem, pct },
+    { boqItem, pct }
   )

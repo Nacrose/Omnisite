@@ -65,8 +65,8 @@ describe('CPM Algorithm', () => {
   it('should correctly calculate float for non-critical tasks', () => {
     const tasks: CpmTask[] = [
       { id: 'A', duration: 5, predecessors: [] },
-      { id: 'B', duration: 2, predecessors: ['A'] },  // short task, lots of float
-      { id: 'C', duration: 8, predecessors: ['A'] },  // long task, critical
+      { id: 'B', duration: 2, predecessors: ['A'] }, // short task, lots of float
+      { id: 'C', duration: 8, predecessors: ['A'] }, // long task, critical
       { id: 'D', duration: 1, predecessors: ['B', 'C'] },
     ]
 

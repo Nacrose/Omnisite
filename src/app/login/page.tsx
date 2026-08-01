@@ -40,15 +40,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-background theme-transition">
+    <div className="bg-background theme-transition flex min-h-screen flex-col items-center justify-center px-4">
       {/* Brand */}
-      <div className="flex items-center gap-2 mb-6">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent-foreground)] flex items-center justify-center shadow-sm">
-          <Building2 className="w-5 h-5 text-white" strokeWidth={2.2} />
+      <div className="mb-6 flex items-center gap-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent-foreground)] shadow-sm">
+          <Building2 className="h-5 w-5 text-white" strokeWidth={2.2} />
         </div>
         <div className="flex flex-col leading-tight">
           <span className="text-base font-bold tracking-tight">OmniSite</span>
-          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+          <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
             Construction Cloud
           </span>
         </div>
@@ -57,14 +57,12 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-lg">Sign in</CardTitle>
-          <CardDescription>
-            Enter your credentials to access the project workspace.
-          </CardDescription>
+          <CardDescription>Enter your credentials to access the project workspace.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="space-y-1.5">
-              <label htmlFor="email" className="text-xs font-medium text-muted-foreground">
+              <label htmlFor="email" className="text-muted-foreground text-xs font-medium">
                 Email
               </label>
               <Input
@@ -79,7 +77,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
+              <label htmlFor="password" className="text-muted-foreground text-xs font-medium">
                 Password
               </label>
               <Input
@@ -97,27 +95,23 @@ export default function LoginPage() {
             {error && (
               <div
                 role="alert"
-                className="flex items-start gap-2 p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-xs text-red-700 dark:text-red-300"
+                className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-700 dark:text-red-300"
               >
-                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={submitting || loading}
-            >
+            <Button type="submit" className="w-full" disabled={submitting || loading}>
               {submitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Signing in…
                 </>
               ) : (
                 <>
                   Sign in
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </Button>
@@ -127,14 +121,14 @@ export default function LoginPage() {
           {!configured && (
             <div
               role="status"
-              className="mt-4 flex items-start gap-2 p-2.5 rounded-md bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-700 dark:text-sky-300"
+              className="mt-4 flex items-start gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 p-2.5 text-[11px] text-sky-700 dark:text-sky-300"
             >
-              <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
               <div>
                 <div className="font-semibold">Demo mode — Supabase not configured</div>
                 <div className="mt-0.5 text-sky-700/80 dark:text-sky-300/80">
-                  Enter any email and password to sign in as the demo user
-                  (Arjun Sharma, PM role). All data stays in your browser.
+                  Enter any email and password to sign in as the demo user (Arjun Sharma, PM role).
+                  All data stays in your browser.
                 </div>
               </div>
             </div>
@@ -142,13 +136,15 @@ export default function LoginPage() {
 
           {configured && (
             <>
-              <p className="mt-4 text-[10px] text-center text-muted-foreground">
+              <p className="text-muted-foreground mt-4 text-center text-[10px]">
                 Forgot your password? Contact your project administrator.
               </p>
-              <div className="mt-3 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 dark:text-amber-300">
-                <strong>Demo access disabled.</strong> Sign in with your Supabase
-                credentials. To explore without auth, run the app without
-                <code className="mx-1 px-1 py-0.5 rounded bg-amber-500/20 font-mono">NEXT_PUBLIC_SUPABASE_URL</code>
+              <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] text-amber-700 dark:text-amber-300">
+                <strong>Demo access disabled.</strong> Sign in with your Supabase credentials. To
+                explore without auth, run the app without
+                <code className="mx-1 rounded bg-amber-500/20 px-1 py-0.5 font-mono">
+                  NEXT_PUBLIC_SUPABASE_URL
+                </code>
                 configured.
               </div>
             </>
@@ -156,7 +152,7 @@ export default function LoginPage() {
         </CardContent>
       </Card>
 
-      <p className="mt-6 text-[10px] text-muted-foreground text-center max-w-sm">
+      <p className="text-muted-foreground mt-6 max-w-sm text-center text-[10px]">
         OmniSite · Enterprise Construction Management · FIDIC-compliant audit trail
       </p>
     </div>

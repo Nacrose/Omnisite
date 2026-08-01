@@ -13,10 +13,9 @@ export function exportToCsv(filename: string, headers: string[], rows: (string |
     return s
   }
 
-  const csv = [
-    headers.map(escape).join(','),
-    ...rows.map(row => row.map(escape).join(',')),
-  ].join('\n')
+  const csv = [headers.map(escape).join(','), ...rows.map((row) => row.map(escape).join(','))].join(
+    '\n'
+  )
 
   // Add BOM for Excel UTF-8 compatibility
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })

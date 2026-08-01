@@ -92,7 +92,7 @@ export function calculateCpm(tasks: CpmTask[]): CpmOutput {
     const task = taskMap.get(id)!
 
     // Find successors
-    const successors = tasks.filter(t => t.predecessors.includes(id))
+    const successors = tasks.filter((t) => t.predecessors.includes(id))
     let minSuccLS = projectDuration
     for (const succ of successors) {
       minSuccLS = Math.min(minSuccLS, ls.get(succ.id) ?? projectDuration)

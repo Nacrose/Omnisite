@@ -90,11 +90,11 @@ export function usePresence() {
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
         if (key === userIdRef.current) return
-        setUsers(prev => {
+        setUsers((prev) => {
           const additions: PresenceUser[] = []
           for (const p of newPresences) {
             const pu = p as unknown as PresenceUser
-            if (pu?.id && !prev.some(u => u.id === pu.id)) {
+            if (pu?.id && !prev.some((u) => u.id === pu.id)) {
               additions.push(pu)
             }
           }
@@ -105,18 +105,16 @@ export function usePresence() {
         if (key === userIdRef.current) return
         const leavingIds = new Set(
           leftPresences
-            .map(p => (p as unknown as PresenceUser)?.id)
+            .map((p) => (p as unknown as PresenceUser)?.id)
             .filter((id): id is string => typeof id === 'string')
         )
-        setUsers(prev => prev.filter(u => !leavingIds.has(u.id)))
+        setUsers((prev) => prev.filter((u) => !leavingIds.has(u.id)))
       })
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
-          channel
-            .track({ ...CURRENT_USER, module: activeModuleRef.current })
-            .catch(() => {
-              /* track failures are non-fatal; sync will still receive our presence */
-            })
+          channel.track({ ...CURRENT_USER, module: activeModuleRef.current }).catch(() => {
+            /* track failures are non-fatal; sync will still receive our presence */
+          })
           setIsConnected(true)
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           setIsConnected(false)
@@ -144,11 +142,9 @@ export function usePresence() {
   useEffect(() => {
     const channel = channelRef.current
     if (!channel) return
-    channel
-      .track({ ...CURRENT_USER, module: activeModule })
-      .catch(() => {
-        /* ignore — best-effort re-track */
-      })
+    channel.track({ ...CURRENT_USER, module: activeModule }).catch(() => {
+      /* ignore — best-effort re-track */
+    })
   }, [activeModule])
 
   return {

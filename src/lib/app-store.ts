@@ -53,10 +53,11 @@ export const useApp = create<AppState>()(
       setActiveModule: (m) => {
         set({ activeModule: m })
         // Track recent — dedupe and prepend, cap at 5
-        const prev = get().recentModules.filter(x => x !== m)
+        const prev = get().recentModules.filter((x) => x !== m)
         set({ recentModules: [m, ...prev].slice(0, 5) })
       },
-      setActiveProject: (p, id, dbId) => set({ activeProject: p, activeProjectId: id, activeProjectDbId: dbId }),
+      setActiveProject: (p, id, dbId) =>
+        set({ activeProject: p, activeProjectId: id, activeProjectDbId: dbId }),
       leftPaneOpen: true,
       rightPaneOpen: true,
       toggleLeftPane: () => set((s) => ({ leftPaneOpen: !s.leftPaneOpen })),
@@ -67,7 +68,7 @@ export const useApp = create<AppState>()(
       setCommandOpen: (b) => set({ commandOpen: b }),
       recentModules: [],
       pushRecent: (m) => {
-        const prev = get().recentModules.filter(x => x !== m)
+        const prev = get().recentModules.filter((x) => x !== m)
         set({ recentModules: [m, ...prev].slice(0, 5) })
       },
     }),
@@ -88,21 +89,105 @@ export const useApp = create<AppState>()(
   )
 )
 
-export const MODULES: { id: ModuleId; name: string; shortName: string; icon: string; group: string }[] = [
-  { id: 'dashboard', name: 'Global Dashboard', shortName: 'Home', icon: 'LayoutDashboard', group: 'Overview' },
-  { id: 'boq', name: 'BOQ & Rate Analysis', shortName: 'BOQ / RA', icon: 'Calculator', group: 'Pre-Construction' },
-  { id: 'scheduler', name: 'Scheduler', shortName: 'Schedule', icon: 'GanttChart', group: 'Pre-Construction' },
-  { id: 'daily-ops', name: 'Daily Operations', shortName: 'DSR', icon: 'ClipboardList', group: 'Site Execution' },
-  { id: 'equipment', name: 'Equipment & Fleet', shortName: 'Equipment', icon: 'Truck', group: 'Site Execution' },
-  { id: 'procurement', name: 'Procurement & Inventory', shortName: 'Procurement', icon: 'PackageSearch', group: 'Site Execution' },
-  { id: 'financials', name: 'Financials & Commercial', shortName: 'Financials', icon: 'Landmark', group: 'Project Controls' },
-  { id: 'subcontractor', name: 'Subcontractor Mgmt', shortName: 'Subcontractor', icon: 'Users', group: 'Project Controls' },
-  { id: 'drawings', name: 'Drawings & Documents', shortName: 'Drawings', icon: 'FileStack', group: 'Documents' },
-  { id: 'correspondence', name: 'Correspondence', shortName: 'Letters', icon: 'Mail', group: 'Documents' },
+export const MODULES: {
+  id: ModuleId
+  name: string
+  shortName: string
+  icon: string
+  group: string
+}[] = [
+  {
+    id: 'dashboard',
+    name: 'Global Dashboard',
+    shortName: 'Home',
+    icon: 'LayoutDashboard',
+    group: 'Overview',
+  },
+  {
+    id: 'boq',
+    name: 'BOQ & Rate Analysis',
+    shortName: 'BOQ / RA',
+    icon: 'Calculator',
+    group: 'Pre-Construction',
+  },
+  {
+    id: 'scheduler',
+    name: 'Scheduler',
+    shortName: 'Schedule',
+    icon: 'GanttChart',
+    group: 'Pre-Construction',
+  },
+  {
+    id: 'daily-ops',
+    name: 'Daily Operations',
+    shortName: 'DSR',
+    icon: 'ClipboardList',
+    group: 'Site Execution',
+  },
+  {
+    id: 'equipment',
+    name: 'Equipment & Fleet',
+    shortName: 'Equipment',
+    icon: 'Truck',
+    group: 'Site Execution',
+  },
+  {
+    id: 'procurement',
+    name: 'Procurement & Inventory',
+    shortName: 'Procurement',
+    icon: 'PackageSearch',
+    group: 'Site Execution',
+  },
+  {
+    id: 'financials',
+    name: 'Financials & Commercial',
+    shortName: 'Financials',
+    icon: 'Landmark',
+    group: 'Project Controls',
+  },
+  {
+    id: 'subcontractor',
+    name: 'Subcontractor Mgmt',
+    shortName: 'Subcontractor',
+    icon: 'Users',
+    group: 'Project Controls',
+  },
+  {
+    id: 'drawings',
+    name: 'Drawings & Documents',
+    shortName: 'Drawings',
+    icon: 'FileStack',
+    group: 'Documents',
+  },
+  {
+    id: 'correspondence',
+    name: 'Correspondence',
+    shortName: 'Letters',
+    icon: 'Mail',
+    group: 'Documents',
+  },
   { id: 'qs', name: 'Quality & Safety', shortName: 'Q&S', icon: 'ShieldCheck', group: 'Documents' },
-  { id: 'reports', name: 'Report & PDF Designer', shortName: 'Reports', icon: 'FileBarChart', group: 'Documents' },
-  { id: 'time-attendance', name: 'Time & Attendance', shortName: 'Timecards', icon: 'Fingerprint', group: 'Resources' },
-  { id: 'admin', name: 'Admin & Master Data', shortName: 'Admin', icon: 'Settings', group: 'Resources' },
+  {
+    id: 'reports',
+    name: 'Report & PDF Designer',
+    shortName: 'Reports',
+    icon: 'FileBarChart',
+    group: 'Documents',
+  },
+  {
+    id: 'time-attendance',
+    name: 'Time & Attendance',
+    shortName: 'Timecards',
+    icon: 'Fingerprint',
+    group: 'Resources',
+  },
+  {
+    id: 'admin',
+    name: 'Admin & Master Data',
+    shortName: 'Admin',
+    icon: 'Settings',
+    group: 'Resources',
+  },
   { id: 'chat', name: 'Messages', shortName: 'Chat', icon: 'MessageSquare', group: 'Resources' },
 ]
 
