@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 const ACTIONS: { id: string; label: string; icon: typeof ClipboardList; color: string; desc: string; module: ModuleId }[] = [
   { id: 'dsr', label: 'Daily Site Report', icon: ClipboardList, color: 'text-emerald-500', desc: 'Log today\'s progress', module: 'daily-ops' },
-  { id: 'rfi', label: 'RFI', icon: Mail, color: 'text-sky-500', desc: 'Request for Information', module: 'correspondence' },
+  { id: 'rfi', label: 'RFI', icon: Mail, color: 'text-sky-500', desc: 'Request for Information', module: 'daily-ops' },
   { id: 'expense', label: 'Quick Expense', icon: Landmark, color: 'text-amber-500', desc: 'Record indirect cost', module: 'financials' },
   { id: 'equipment', label: 'Equipment Log', icon: Truck, color: 'text-violet-500', desc: 'Update fleet status', module: 'equipment' },
   { id: 'drawing', label: 'Upload Drawing', icon: FileStack, color: 'text-rose-500', desc: 'Add to register', module: 'drawings' },

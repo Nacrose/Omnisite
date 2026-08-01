@@ -59,7 +59,7 @@ const URGENT_ACTIONS: { type: string; desc: string; who: string; due: string; se
   { type: 'DSR Review', desc: 'DSR #087 — Chainage 4+200 to 4+350 PCC', who: 'Bikash R.', due: 'Today', severity: 'high', module: 'daily-ops' },
   { type: 'NCR Hold', desc: 'NCR-034 — Box culvert rebar cover < 40mm', who: 'Engineer', due: 'Open', severity: 'critical', module: 'qs' },
   { type: 'Variation', desc: 'SI-022 — Extra excavation at chainage 2+850', who: 'PM', due: '2 days', severity: 'medium', module: 'correspondence' },
-  { type: 'RFI Reply', desc: 'RFI-067 — Rebar detailing at expansion joint', who: 'Consultant', due: 'Overdue 3d', severity: 'critical', module: 'correspondence' },
+  { type: 'RFI Reply', desc: 'RFI-067 — Rebar detailing at expansion joint', who: 'Consultant', due: 'Overdue 3d', severity: 'critical', module: 'daily-ops' },
 ]
 
 const GANTT_MINI_TASKS = [

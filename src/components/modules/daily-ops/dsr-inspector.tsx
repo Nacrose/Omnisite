@@ -146,7 +146,7 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
     setRfiSaved(true)
     setTimeout(() => setRfiModalOpen(false), 1200)
     toast.success('RFI draft saved', {
-      description: `${entry.id} → open Correspondence → RFI tab to review and submit to consultant.`,
+      description: `${entry.id} → switch to the RFI Register tab (top of this module) to review and submit to consultant.`,
     })
   }
 
