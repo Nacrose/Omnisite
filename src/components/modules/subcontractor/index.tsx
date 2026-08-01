@@ -9,6 +9,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, Search, Mountain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
 import type { Subcontractor } from './types'
 import { INITIAL_SCS } from './types'
@@ -23,7 +25,12 @@ import { PerformanceTab } from './performance-tab'
 
 export function SubcontractorModule() {
   const [selectedId, setSelectedId] = usePersistentState('omnisite-sc-selected', 'SC-01')
-  const [scs, setScs] = usePersistentState<Subcontractor[]>('omnisite-scs', () => JSON.parse(JSON.stringify(INITIAL_SCS)))
+  const [scs, setScs, scsLoading] = useSyncedState<Subcontractor[]>(
+    'omnisite-scs',
+    'subcontractors',
+    () => JSON.parse(JSON.stringify(INITIAL_SCS)),
+    { fieldMap: { advancePaid: 'advance_paid', advancePct: 'advance_pct', retentionPct: 'retention_pct', reworkCost: 'rework_cost', insuranceExpiry: 'insurance_expiry', labourLicenseExpiry: 'labour_license_expiry', isTunneling: 'is_tunneling', materialIssues: 'material_issues', materialReturns: 'material_returns', customDeductibles: 'custom_deductibles', assignedTasks: 'assigned_tasks', ncrCount: 'ncr_count', agreementValue: 'agreement_value' }, primaryKey: 'id' }
+  )
   const [activeTab, setActiveTab] = useState('subboq')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -34,6 +41,10 @@ export function SubcontractorModule() {
         s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.scope.toLowerCase().includes(searchQuery.toLowerCase()))
     : scs
+
+  if (scsLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading subcontractors…" /></div>
+  }
 
   return (
     <>

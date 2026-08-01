@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Po, ReqItem, Tab, STOCK } from './types'
 import { INITIAL_POS, INITIAL_REQS } from './types'
+import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import { ReqCenterView } from './req-view'
 import { PoCenterView, GrnCenterView, StockCenterView, MinCenterView } from './po-grn-views'
 import { ProcurementInspector } from './inspector'
@@ -20,8 +22,16 @@ import { ProcurementInspector } from './inspector'
 export function ProcurementModule() {
   const [tab, setTab] = useState<Tab>('req')
   const [selectedId, setSelectedId] = useState('REQ-0142')
-  const [reqs, setReqs] = useState<ReqItem[]>(() => JSON.parse(JSON.stringify(INITIAL_REQS)))
-  const [pos, setPos] = useState<Po[]>(() => JSON.parse(JSON.stringify(INITIAL_POS)))
+  const [reqs, setReqs, reqsLoading] = useSyncedState<ReqItem[]>(
+    'omnisite-procurement-reqs', 'requisitions',
+    () => JSON.parse(JSON.stringify(INITIAL_REQS)),
+    { fieldMap: { overrideReason: 'override_reason' }, primaryKey: 'id' }
+  )
+  const [pos, setPos, posLoading] = useSyncedState<Po[]>(
+    'omnisite-procurement-pos', 'purchase_orders',
+    () => JSON.parse(JSON.stringify(INITIAL_POS)),
+    { fieldMap: { hasGrn: 'has_grn' }, primaryKey: 'id' }
+  )
   // Override modal state
   const [overrideModal, setOverrideModal] = useState<{ reqId: string; vendorName: string; vendorRate: number; lowestRate: number } | null>(null)
   const [overrideReason, setOverrideReason] = useState('')
@@ -131,6 +141,10 @@ export function ProcurementModule() {
     })
     setOverrideModal(null)
     setOverrideReason('')
+  }
+
+  if (reqsLoading || posLoading) {
+    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading procurement data…" /></div>
   }
 
   return (

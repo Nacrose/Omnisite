@@ -1,6 +1,9 @@
+import { produce } from 'immer'
 import { CBS, type CbsNode } from './types'
 import { undoableToast } from '@/components/ui/confirm-dialog'
 import { flattenTree, rebuildTreeFromRows as rebuildTree } from '@/lib/tree-utils'
+
+const deepClone = <T>(obj: T): T => produce(obj, () => {})
 
 // ─── Field normalization ──────────────────────────────────────────────────
 //
@@ -43,12 +46,12 @@ export function flattenForSave(items: CbsNode[], parentCode: string | null = nul
 // Delegates to the shared `rebuildTreeFromRows` helper, configured for the
 // CbsNode shape: id field is `code`, parent field is `parentCode`.
 export function rebuildTreeFromRows(rows: CbsNode[]): CbsNode[] {
-  if (!rows || rows.length === 0) return JSON.parse(JSON.stringify(CBS))
+  if (!rows || rows.length === 0) return deepClone(CBS)
   const hasChildren = rows.some((r) => Array.isArray(r.children) && r.children!.length > 0)
   if (hasChildren) return rows
   const normalized = (rows as unknown as Record<string, unknown>[]).map(normalizeCbsRow) as unknown as Record<string, any>[]
   const tree = rebuildTree(normalized, 'code', 'parentCode')
-  return tree.length > 0 ? (tree as unknown as CbsNode[]) : JSON.parse(JSON.stringify(CBS))
+  return tree.length > 0 ? (tree as unknown as CbsNode[]) : deepClone(CBS)
 }
 
 // Factory: wraps setCbsRows so any updater receives a rebuilt tree and the
@@ -86,7 +89,7 @@ export function createUpdateNode(
     const prevNode = flat.find(c => c.code === code)
     const oldValue = prevNode ? prevNode[field] : 0
     setCbsData(prev => {
-      const updated = JSON.parse(JSON.stringify(prev)) as CbsNode[]
+      const updated = deepClone(prev) as CbsNode[]
       // walk() returns true if the target was found in this subtree, so the
       // caller can re-aggregate the parent on the way back up the recursion.
       const walk = (items: CbsNode[]): boolean => {

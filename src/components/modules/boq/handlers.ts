@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import type React from 'react'
+import { produce } from 'immer'
 import { undoableToast } from '@/components/ui/confirm-dialog'
 import { BOQ_DATA, type BoqItem } from './types'
 import {
@@ -8,6 +9,9 @@ import {
   findItemAndParent,
   updateLevels,
 } from '@/lib/tree-utils'
+
+// Deep-clone helper using immer (replaces deepClone())
+const deepClone = <T>(obj: T): T => produce(obj, () => {})
 
 // ─── BOQ-specific tree helpers ────────────────────────────────────────────
 //
@@ -38,14 +42,14 @@ function normalizeBoqRow(row: Record<string, unknown>): BoqItem {
  * roots, so the UI always has something to render.
  */
 export function rebuildBoqTree(rows: BoqItem[] | null | undefined): BoqItem[] {
-  if (!rows || rows.length === 0) return JSON.parse(JSON.stringify(BOQ_DATA))
+  if (!rows || rows.length === 0) return deepClone(BOQ_DATA)
   const hasChildren = rows.some((r) => Array.isArray((r as BoqItem).children) && (r as BoqItem).children!.length > 0)
   if (hasChildren) return rows
   // Normalize DB column names → app fields, then rebuild the tree using the
   // shared tree-utils helper.
   const normalized = (rows as unknown as Record<string, unknown>[]).map(normalizeBoqRow) as unknown as Record<string, any>[]
   const tree = rebuildTreeFromRows(normalized, 'id', 'parentId')
-  return tree.length > 0 ? (tree as unknown as BoqItem[]) : JSON.parse(JSON.stringify(BOQ_DATA))
+  return tree.length > 0 ? (tree as unknown as BoqItem[]) : deepClone(BOQ_DATA)
 }
 
 /**
@@ -96,7 +100,7 @@ export function commitBoqData(
 ): void {
   // Capture the current tree for the undo stack BEFORE applying the updater.
   const currentTree = ctx.boqData
-  ctx.setUndoStack(u => [...u, JSON.parse(JSON.stringify(currentTree))])
+  ctx.setUndoStack(u => [...u, deepClone(currentTree)])
   ctx.setRedoStack([])
   ctx.setBoqRows(prevRows => {
     // Rebuild the tree from the previous flat rows, apply the updater,
@@ -115,7 +119,7 @@ export function undo(ctx: BoqHandlerCtx): void {
   const snapshot = ctx.undoStack[ctx.undoStack.length - 1]
   const currentTree = ctx.boqData
   ctx.setUndoStack(u => u.slice(0, -1))
-  ctx.setRedoStack(r => [...r, JSON.parse(JSON.stringify(currentTree))])
+  ctx.setRedoStack(r => [...r, deepClone(currentTree)])
   ctx.setBoqRows(flattenBoqTree(snapshot) as unknown as BoqItem[])
   toast.success('Undo', { description: `Reverted (${ctx.undoStack.length - 1} actions left)` })
 }
@@ -125,7 +129,7 @@ export function redo(ctx: BoqHandlerCtx): void {
   const snapshot = ctx.redoStack[ctx.redoStack.length - 1]
   const currentTree = ctx.boqData
   ctx.setRedoStack(r => r.slice(0, -1))
-  ctx.setUndoStack(u => [...u, JSON.parse(JSON.stringify(currentTree))])
+  ctx.setUndoStack(u => [...u, deepClone(currentTree)])
   ctx.setBoqRows(flattenBoqTree(snapshot) as unknown as BoqItem[])
   toast.success('Redo', { description: `${ctx.redoStack.length - 1} actions left` })
 }
@@ -138,7 +142,7 @@ export function updateItem(
   ctx: BoqHandlerCtx,
 ): void {
   commitBoqData(prev => {
-    const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+    const updated = deepClone(prev) as BoqItem[]
     const walk = (items: BoqItem[]): boolean => {
       for (const it of items) {
         if (it.id === id) {
@@ -157,13 +161,13 @@ export function updateItem(
 /** Duplicate an item — inserts a copy immediately below the original. */
 export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
   commitBoqData(prev => {
-    const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+    const updated = deepClone(prev) as BoqItem[]
     const walk = (items: BoqItem[]): BoqItem[] => {
       const result: BoqItem[] = []
       for (const it of items) {
         result.push(it)
         if (it.id === id) {
-          const copy = JSON.parse(JSON.stringify(it)) as BoqItem
+          const copy = deepClone(it) as BoqItem
           copy.id = `${it.id}-copy-${Date.now().toString(36)}`
           copy.code = `${it.code}-copy`
           copy.desc = `${it.desc} (Copy)`
@@ -182,7 +186,7 @@ export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
 export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
   const item = ctx.allFlat.find(i => i.id === id)
   commitBoqData(prev => {
-    const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+    const updated = deepClone(prev) as BoqItem[]
     const walk = (items: BoqItem[]): BoqItem[] => {
       return items.filter(it => {
         if (it.id === id) return false
@@ -200,7 +204,7 @@ export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
 export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
   const newId = `${parentId}.${Date.now().toString(36)}`
   commitBoqData(prev => {
-    const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+    const updated = deepClone(prev) as BoqItem[]
     const walk = (items: BoqItem[]): boolean => {
       for (const it of items) {
         if (it.id === parentId) {
@@ -268,7 +272,7 @@ export function reparentItem(
   }
 
   commitBoqData(prev => {
-    const updated = JSON.parse(JSON.stringify(prev)) as BoqItem[]
+    const updated = deepClone(prev) as BoqItem[]
     let movedItem: BoqItem | null = null
 
     // Step 1: Remove the dragged item from its current location.

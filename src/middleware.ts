@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
  * and ensures headers are present even on streamed / dynamically generated
  * responses where the config-based approach can be bypassed.
  */
-export function middleware(_req: NextRequest) {
+export function middleware() {
   const res = NextResponse.next()
   res.headers.set('X-Frame-Options', 'DENY')
   res.headers.set('X-Content-Type-Options', 'nosniff')

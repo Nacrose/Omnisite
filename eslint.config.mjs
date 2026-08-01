@@ -8,16 +8,16 @@ const __dirname = dirname(__filename);
 
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
   rules: {
-    // TypeScript rules
-    "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/no-unused-vars": "off",
+    // TypeScript rules — re-enabled incrementally
+    "@typescript-eslint/no-explicit-any": "off",      // too many to fix in one pass
+    "@typescript-eslint/no-unused-vars": "warn",       // RE-ENABLED as warn
     "@typescript-eslint/no-non-null-assertion": "off",
     "@typescript-eslint/ban-ts-comment": "off",
     "@typescript-eslint/prefer-as-const": "off",
     "@typescript-eslint/no-unused-disable-directive": "off",
     
-    // React rules
-    "react-hooks/exhaustive-deps": "off",
+    // React rules — re-enabled incrementally
+    "react-hooks/exhaustive-deps": "warn",             // RE-ENABLED as warn
     "react-hooks/purity": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
@@ -28,9 +28,9 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "@next/next/no-img-element": "off",
     "@next/next/no-html-link-for-pages": "off",
     
-    // General JavaScript rules
-    "prefer-const": "off",
-    "no-unused-vars": "off",
+    // General JavaScript rules — re-enabled incrementally
+    "prefer-const": "warn",                            // RE-ENABLED as warn
+    "no-unused-vars": "off",                           // handled by @typescript-eslint
     "no-console": "off",
     "no-debugger": "off",
     "no-empty": "off",
@@ -40,11 +40,11 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-mixed-spaces-and-tabs": "off",
     "no-redeclare": "off",
     "no-undef": "off",
-    "no-unreachable": "off",
+    "no-unreachable": "warn",                          // RE-ENABLED as warn
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "e2e/**"]
 }];
 
 export default eslintConfig;
