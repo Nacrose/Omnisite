@@ -17,6 +17,15 @@ DECLARE
   parent_code_val TEXT;
   current_code_val TEXT;
 BEGIN
+  -- Re-entrancy guard: the walk-up loop and the self-recompute block below
+  -- both issue UPDATE cbs_nodes, which re-fires THIS trigger. Without this
+  -- guard, any node with children recurses forever (stack depth exceeded).
+  -- pg_trigger_depth() = 1 means this is the original firing; > 1 means we're
+  -- already inside this trigger's execution, so bail out.
+  IF pg_trigger_depth() > 1 THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
   -- After an INSERT/UPDATE on cbs_nodes, recompute the node's parent
   -- (and recursively up to the root) from its children.
   current_code_val := COALESCE(NEW.code, OLD.code);

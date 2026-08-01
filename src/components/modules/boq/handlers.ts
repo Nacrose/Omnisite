@@ -342,6 +342,34 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
           return false
         }
         addToTarget(cleaned)
+
+        // Step 3: Recompute the moved item's code AND all sibling codes under
+        // the new parent. Codes follow the parent.code + '.' + N pattern
+        // (1-indexed), so adding/removing a child renumbers all siblings.
+        // This keeps codes consistent with the tree structure after reparent.
+        const recomputeSiblingCodes = (items: BoqItem[], parentCode: string | null): void => {
+          items.forEach((it, idx) => {
+            const prefix = parentCode ? `${parentCode}.` : ''
+            it.code = `${prefix}${idx + 1}`
+            if (it.children && it.children.length > 0) {
+              recomputeSiblingCodes(it.children, it.code)
+            }
+          })
+        }
+
+        // Recompute codes for the target parent's entire children list
+        // (now including the newly-added movedItem).
+        const recomputeTargetChildren = (items: BoqItem[]): boolean => {
+          for (const it of items) {
+            if (it.id === targetHeadingId) {
+              if (it.children) recomputeSiblingCodes(it.children, it.code)
+              return true
+            }
+            if (it.children && recomputeTargetChildren(it.children)) return true
+          }
+          return false
+        }
+        recomputeTargetChildren(cleaned)
       }
     })
   }, ctx)

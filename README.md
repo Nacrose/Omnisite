@@ -44,9 +44,19 @@ bun install
 cp .env.example .env.local
 # Edit .env.local with your Supabase URL and anon key
 
-# Run database schema (in Supabase SQL Editor)
-# Copy contents of supabase-schema.sql → Run
-# Copy contents of supabase-seed.sql → Run
+# Set up the database (in Supabase Dashboard → SQL Editor):
+# 1. Run supabase-schema.sql (creates all tables + triggers)
+# 2. Run supabase-rls-policies.sql (enables row-level security)
+# 3. Run supabase-seed.sql (inserts demo project + BOQ + tasks + CBS + workers)
+# 4. Run supabase/migrations/00000000000003_task_dependencies.sql (CPM links)
+# 5. Run supabase/migrations/00000000000004_cbs_subtree_trigger.sql (DB rollup)
+#
+# Or run the combined file: download/omnisite-full-setup.sql (all 5 in order)
+
+# Create your first user in Supabase Dashboard → Authentication → Users
+# Then assign them to the project as PM (in SQL Editor):
+# INSERT INTO user_projects (user_id, project_id, role)
+# VALUES ('<auth.users.id>', '00000000-0000-0000-0000-000000000001', 'PM');
 
 # Start dev server
 bun run dev
@@ -56,7 +66,7 @@ Open http://localhost:3000
 
 ### Without Supabase
 
-The app works without any database — it falls back to localStorage. All data persists in the browser but won't sync across devices. Just skip the `.env.local` step.
+The app works without any database — it falls back to localStorage. All data persists in the browser but won't sync across devices. Just skip the `.env.local` step and the database setup steps.
 
 ## Deployment
 
@@ -67,6 +77,9 @@ The app works without any database — it falls back to localStorage. All data p
 3. Add environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (for audit logging)
+   - `UPSTASH_REDIS_REST_URL` (for rate limiting)
+   - `UPSTASH_REDIS_REST_TOKEN`
 4. Deploy
 
 ### Self-hosting

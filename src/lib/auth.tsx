@@ -59,13 +59,17 @@ const DEMO_USER: OmniUser = {
 
 /**
  * Map a Supabase user to our OmniUser shape.
- * Role is read from user_metadata.role (set during invite / admin creation);
- * falls back to 'FOREMAN' (least-privilege) so a freshly-created account
- * cannot read or write anything until an admin assigns it a role.
+ *
+ * SECURITY: Role is NO LONGER read from user_metadata.role (which is
+ * client-set and vulnerable to self-escalation). Instead, the role starts
+ * as 'FOREMAN' (least-privilege) and is resolved async from the
+ * user_projects table via fetchUserRole(). The caller must call
+ * fetchUserRole() after mapping to update the role.
+ *
+ * Name is still read from user_metadata (it's display-only, not security-relevant).
  */
 function mapSupabaseUser(u: SupabaseUser): OmniUser {
   const meta = (u.user_metadata || {}) as Record<string, unknown>
-  const role = (meta.role as Role) || 'FOREMAN'
   const name =
     (meta.name as string) ||
     (meta.full_name as string) ||
@@ -79,8 +83,31 @@ function mapSupabaseUser(u: SupabaseUser): OmniUser {
     id: u.id,
     email: u.email || '',
     name,
-    role,
+    role: 'FOREMAN', // least-privilege default; resolved async via fetchUserRole
     isDemo: false,
+  }
+}
+
+/**
+ * Fetch the user's role from the user_projects table (DB-backed source of
+ * truth). Updates the OmniUser in-place via the setter. Falls back to
+ * 'FOREMAN' if the user has no user_projects rows.
+ */
+async function fetchUserRole(
+  userId: string,
+  setUser: (updater: (prev: OmniUser | null) => OmniUser | null) => void
+): Promise<void> {
+  if (!supabase) return
+  const { data } = await supabase
+    .from('user_projects')
+    .select('role')
+    .eq('user_id', userId)
+    .order('role')
+    .limit(1)
+    .single()
+
+  if (data?.role) {
+    setUser((prev) => (prev && prev.id === userId ? { ...prev, role: data.role as Role } : prev))
   }
 }
 
@@ -119,6 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const s = data.session
         if (s?.user) {
           setUser(mapSupabaseUser(s.user))
+          // Resolve role async from user_projects (DB-backed, not user_metadata)
+          fetchUserRole(s.user.id, setUser)
         }
         // No session → user stays null → login page shows.
         setLoading(false)
@@ -130,7 +159,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     subscription = supabase!.auth.onAuthStateChange((_event, session) => {
       if (!active) return
-      setUser(session?.user ? mapSupabaseUser(session.user) : null)
+      if (session?.user) {
+        setUser(mapSupabaseUser(session.user))
+        fetchUserRole(session.user.id, setUser)
+      } else {
+        setUser(null)
+      }
     }).data.subscription
 
     return () => {

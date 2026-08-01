@@ -36,6 +36,35 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
 }
 
 /**
+ * Resolve the user's role from the `user_projects` table (the DB-backed source
+ * of truth) instead of trusting `user_metadata.role`.
+ *
+ * SECURITY: user_metadata is set client-side during user creation (e.g., in the
+ * Supabase Dashboard or via the admin API), which means anyone who can create
+ * a user can set role: 'PM'. Reading from user_projects closes the
+ * self-escalation gap — the role is only granted via an INSERT into
+ * user_projects, which is itself RLS-gated to PMs only.
+ *
+ * Falls back to 'FOREMAN' (least-privilege) if the user has no user_projects
+ * rows, so a freshly-created account can't read or write anything until an
+ * admin assigns them a role.
+ */
+async function resolveUserRole(userId: string): Promise<Role> {
+  const { data } = await supabase
+    .from('user_projects')
+    .select('role')
+    .eq('user_id', userId)
+    .order('role')
+    .limit(1)
+    .single()
+
+  if (data?.role) {
+    return data.role as Role
+  }
+  return 'FOREMAN'
+}
+
+/**
  * Verify that the incoming API request has a valid Supabase session.
  *
  * Two paths:
@@ -70,8 +99,9 @@ export async function requireAuth(req: NextRequest): Promise<{
 
     if (!cookieError && cookieData.user) {
       const u = cookieData.user
-      const meta = (u.user_metadata || {}) as Record<string, unknown>
-      const role = (meta.role as Role) || 'FOREMAN'
+      // Resolve role from user_projects (DB-backed) — NOT user_metadata.role,
+      // which is client-set and vulnerable to self-escalation.
+      const role = await resolveUserRole(u.id)
       // Get the access token from the session for RLS-scoped queries
       const { data: sessionData } = await serverClient.auth.getSession()
       return {
@@ -100,8 +130,8 @@ export async function requireAuth(req: NextRequest): Promise<{
         }
       }
       const u = data.user
-      const meta = (u.user_metadata || {}) as Record<string, unknown>
-      const role = (meta.role as Role) || 'FOREMAN'
+      // Resolve role from user_projects (DB-backed) — same as cookie path.
+      const role = await resolveUserRole(u.id)
       return {
         user: {
           id: u.id,
