@@ -24,7 +24,7 @@ jobs:
         with:
           bun-version: latest
       - name: Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -52,7 +52,7 @@ jobs:
         with:
           bun-version: latest
       - name: Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -65,7 +65,7 @@ jobs:
         # 1300 KB. See scripts/check-bundle-size.mjs for details.
         run: bun run size-check
       - name: Cache .next
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .next/cache
           key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -80,7 +80,7 @@ jobs:
         with:
           bun-version: latest
       - name: Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
