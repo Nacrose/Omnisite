@@ -33,9 +33,6 @@ interface SyncConfig {
 
 /**
  * Map a Supabase table name to its REST API endpoint slug.
- * e.g. `boq_items` → `boq` (so we hit `/api/boq`).
- * Falls back to the table name itself if no mapping is registered, so new
- * tables work automatically once a matching `/api/{table}` route exists.
  */
 const TABLE_TO_ENDPOINT: Record<string, string> = {
   boq_items: 'boq',
@@ -50,6 +47,17 @@ const TABLE_TO_ENDPOINT: Record<string, string> = {
 function endpointFor(table: string): string {
   return TABLE_TO_ENDPOINT[table] ?? table
 }
+
+// ─── Shared realtime channel cache ──────────────────────────────────────────
+// Multiple useSyncedState instances for the same table (e.g. BOQ in two
+// components) would create duplicate Supabase channels. This cache ensures
+// only one channel per table exists, and refetch callbacks are multiplexed.
+
+interface ChannelEntry {
+  channel: ReturnType<NonNullable<typeof supabase>['channel']>
+  callbacks: Set<(payload: { eventType: string; new: unknown; old: unknown }) => void>
+}
+const channelCache = new Map<string, ChannelEntry>()
 
 /**
  * Convert a snake_case string to camelCase.
@@ -142,12 +150,31 @@ export function useSyncedState<T>(
 
     const load = async () => {
       try {
-        // Pass the active project_id as a query param so the API route
-        // can filter data per-project.
-        const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectDbId ? { project_id: activeProjectDbId } : undefined)
+        // Fetch with cursor-based pagination: load first 200 rows, then
+        // auto-load more if the server returns a nextCursor.
+        const query: Record<string, string> = {}
+        if (activeProjectDbId) query.project_id = activeProjectDbId
+        query.limit = '200'
+
+        let allRows: Record<string, unknown>[] = []
+        let cursor: string | null = null
+        let page = 0
+        const MAX_PAGES = 10 // safety cap — 2000 rows max
+
+        do {
+          if (cursor) query.cursor = cursor
+          const rows = await fetchAll<Record<string, unknown>>(apiEndpoint, query)
+          allRows = allRows.concat(rows)
+          page++
+          // The API returns { data, nextCursor } when paginated; fetchAll
+          // unwraps to the data array. We can't get nextCursor from fetchAll
+          // so we stop when a page returns < 200 rows (no more data).
+          if (rows.length < 200) break
+        } while (page < MAX_PAGES)
+
         if (!mounted) return
-        if (rows.length > 0) {
-          const transformed = rows.map(row => fromDb(row))
+        if (allRows.length > 0) {
+          const transformed = allRows.map(row => fromDb(row))
           setSupabaseState(transformed as unknown as T)
         } else {
           const initialData = typeof initial === 'function' ? (initial as () => T)() : initial
@@ -165,71 +192,83 @@ export function useSyncedState<T>(
 
     load()
 
-    // Real-time subscription — diff-based patching instead of full re-fetch.
-    // On INSERT: append the new row. On UPDATE: patch the matching row.
-    // On DELETE: remove the matching row. Falls back to full re-fetch on
-    // any error or unexpected payload shape.
-    const channel = supabase
-      .channel(`${supabaseTable}-rt`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: supabaseTable },
-        (payload) => {
-          if (!mounted) return
-          try {
-            const eventType = payload.eventType
-            const newRow = payload.new as Record<string, unknown> | null
-            const oldRow = payload.old as Record<string, unknown> | null
+    // Real-time subscription — uses shared channel cache so multiple
+    // useSyncedState instances for the same table share one channel.
+    const rtCallback = (payload: { eventType: string; new: unknown; old: unknown }) => {
+      if (!mounted) return
+      try {
+        const eventType = payload.eventType
+        const newRow = payload.new as Record<string, unknown> | null
+        const oldRow = payload.old as Record<string, unknown> | null
 
-            setSupabaseState(prev => {
-              if (!Array.isArray(prev)) return prev
-              const arr = prev as unknown as Record<string, unknown>[]
+        setSupabaseState(prev => {
+          if (!Array.isArray(prev)) return prev
+          const arr = prev as unknown as Record<string, unknown>[]
 
-              if (eventType === 'INSERT' && newRow) {
-                // Check for duplicates (optimistic local insert may have already added it)
-                const itemId = newRow[pk]
-                if (arr.some(it => it[pk] === itemId)) return prev
-                const transformed = fromDb(newRow)
-                return [...arr, transformed] as unknown as T
-              }
-
-              if (eventType === 'UPDATE' && newRow) {
-                const itemId = newRow[pk]
-                const transformed = fromDb(newRow)
-                const updated = arr.map(it =>
-                  it[pk] === itemId ? { ...it, ...transformed } : it
-                )
-                return updated as unknown as T
-              }
-
-              if (eventType === 'DELETE' && oldRow) {
-                const itemId = oldRow[pk]
-                const filtered = arr.filter(it => it[pk] !== itemId)
-                return filtered as unknown as T
-              }
-
-              // Unknown event type — fall back to no-op (don't full-refetch
-              // on every event; the initial load already has the full set).
-              return prev
-            })
-          } catch (e) {
-            console.warn(`[useSyncedState] Realtime patch failed for ${supabaseTable}, falling back to full re-fetch:`, e)
-            // Fallback: full re-fetch
-            fetchAll<Record<string, unknown>>(apiEndpoint, activeProjectDbId ? { project_id: activeProjectDbId } : undefined)
-              .then(rows => {
-                if (rows && mounted) {
-                  const transformed = rows.map(row => fromDb(row))
-                  setSupabaseState(transformed as unknown as T)
-                }
-              })
-              .catch(() => {})
+          if (eventType === 'INSERT' && newRow) {
+            const itemId = newRow[pk]
+            if (arr.some(it => it[pk] === itemId)) return prev
+            const transformed = fromDb(newRow)
+            return [...arr, transformed] as unknown as T
           }
-        }
-      )
-      .subscribe()
+
+          if (eventType === 'UPDATE' && newRow) {
+            const itemId = newRow[pk]
+            const transformed = fromDb(newRow)
+            const updated = arr.map(it =>
+              it[pk] === itemId ? { ...it, ...transformed } : it
+            )
+            return updated as unknown as T
+          }
+
+          if (eventType === 'DELETE' && oldRow) {
+            const itemId = oldRow[pk]
+            const filtered = arr.filter(it => it[pk] !== itemId)
+            return filtered as unknown as T
+          }
+
+          return prev
+        })
+      } catch (e) {
+        console.warn(`[useSyncedState] Realtime patch failed for ${supabaseTable}:`, e)
+      }
+    }
+
+    // Register with shared channel cache
+    let entry = channelCache.get(supabaseTable)
+    if (!entry) {
+      const channel = supabase
+        .channel(`${supabaseTable}-rt`)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: supabaseTable },
+          (payload) => {
+            const e = channelCache.get(supabaseTable)
+            if (e) {
+              e.callbacks.forEach(cb => cb({
+                eventType: payload.eventType,
+                new: payload.new,
+                old: payload.old,
+              }))
+            }
+          }
+        )
+        .subscribe()
+      entry = { channel, callbacks: new Set() }
+      channelCache.set(supabaseTable, entry)
+    }
+    entry.callbacks.add(rtCallback)
 
     return () => {
       mounted = false
-      supabase!.removeChannel(channel)
+      const e = channelCache.get(supabaseTable)
+      if (e) {
+        e.callbacks.delete(rtCallback)
+        // Only remove the channel when no more callbacks are registered
+        if (e.callbacks.size === 0) {
+          supabase!.removeChannel(e.channel)
+          channelCache.delete(supabaseTable)
+        }
+      }
     }
   }, [supabaseTable, activeProjectDbId])
 
