@@ -185,7 +185,7 @@ describe('Auth demo-mode behavior', () => {
     const DEMO_USER = {
       id: 'demo-user-arjun',
       email: 'arjun.sharma@omnisite.demo',
-      name: 'Arjun Sharma',
+      name: 'Demo User',
       role: 'PM',
       isDemo: true,
     }

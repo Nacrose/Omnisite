@@ -56,8 +56,48 @@ function endpointFor(table: string): string {
 interface ChannelEntry {
   channel: ReturnType<NonNullable<typeof supabase>['channel']>
   callbacks: Set<(payload: { eventType: string; new: unknown; old: unknown }) => void>
+  /** Timestamp of the last callback add/remove — used for GC. */
+  lastActivity: number
 }
 const channelCache = new Map<string, ChannelEntry>()
+
+// ─── Realtime channel cache GC ──────────────────────────────────────────────
+// Channels are removed when callbacks.size === 0, but if a component unmounts
+// without cleanup (e.g. error boundary swallows the cleanup), the channel
+// leaks. This periodic GC sweeps channels with no callbacks that haven't
+// been touched in CHANNEL_IDLE_MS. Runs every GC_INTERVAL_MS.
+const CHANNEL_IDLE_MS = 5 * 60 * 1000 // 5 minutes
+const GC_INTERVAL_MS = 2 * 60 * 1000 // check every 2 minutes
+
+function sweepIdleChannels() {
+  const now = Date.now()
+  for (const [table, entry] of channelCache.entries()) {
+    if (entry.callbacks.size === 0 && now - entry.lastActivity > CHANNEL_IDLE_MS) {
+      try {
+        entry.channel.unsubscribe()
+      } catch {
+        // already closed
+      }
+      channelCache.delete(table)
+    }
+  }
+}
+
+// Start the GC timer once on module load (Node.js + browser).
+if (typeof globalThis !== 'undefined') {
+  // Use setTimeout recursively instead of setInterval so we don't hold
+  // the event loop open in Node.js serverless environments.
+  const scheduleGc = () => {
+    setTimeout(() => {
+      sweepIdleChannels()
+      scheduleGc()
+    }, GC_INTERVAL_MS)
+  }
+  // Only schedule in browser (serverless functions shouldn't run long-lived timers)
+  if (typeof window !== 'undefined') {
+    scheduleGc()
+  }
+}
 
 /**
  * Convert a snake_case string to camelCase.
@@ -85,6 +125,7 @@ export function useSyncedState<T>(
   const [localState, setLocalState] = usePersistentState(localStorageKey, initial)
   const [supabaseState, setSupabaseState] = useState<T | null>(null)
   const [loading, setLoading] = useState(useSupabase)
+  const [truncated, setTruncated] = useState(false)
   // Read the active project's DB UUID from the app store so data is scoped per-project.
   // When the user switches projects, this hook re-fetches with the new project_id.
   const { activeProjectDbId } = useApp()
@@ -182,6 +223,26 @@ export function useSyncedState<T>(
           if (!cursor || rows.length < 200) break
         }
 
+        // If we hit the MAX_PAGES cap (cursor still has data), surface a
+        // toast so the user knows the dataset is truncated — not silently
+        // cut off. The cap is 2000 rows (10 pages × 200); large projects
+        // with thousands of BOQ items will hit this.
+        const wasTruncated = page >= MAX_PAGES && cursor
+        if (wasTruncated) {
+          setTruncated(true)
+          try {
+            const { toast } = await import('sonner')
+            toast.warning('Dataset truncated', {
+              description: `Showing first ${allRows.length} rows from ${supabaseTable}. Refine your filter or contact admin for full data.`,
+              id: `truncated-${supabaseTable}`,
+            })
+          } catch {
+            // sonner not available — the truncated flag is still set
+          }
+        } else {
+          setTruncated(false)
+        }
+
         if (!mounted) return
         if (allRows.length > 0) {
           const transformed = allRows.map((row) => fromDb(row))
@@ -264,17 +325,21 @@ export function useSyncedState<T>(
           }
         )
         .subscribe()
-      entry = { channel, callbacks: new Set() }
+      entry = { channel, callbacks: new Set(), lastActivity: Date.now() }
       channelCache.set(supabaseTable, entry)
     }
     entry.callbacks.add(rtCallback)
+    entry.lastActivity = Date.now()
 
     return () => {
       mounted = false
       const e = channelCache.get(supabaseTable)
       if (e) {
         e.callbacks.delete(rtCallback)
-        // Only remove the channel when no more callbacks are registered
+        e.lastActivity = Date.now()
+        // Only remove the channel when no more callbacks are registered.
+        // The GC sweep also catches channels that miss this cleanup
+        // (e.g. error boundary swallows the unmount).
         if (e.callbacks.size === 0) {
           supabase!.removeChannel(e.channel)
           channelCache.delete(supabaseTable)

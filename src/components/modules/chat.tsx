@@ -52,7 +52,7 @@ const CHANNELS = [
 const TEAM_MEMBERS = [
   {
     id: 'u-arjun',
-    name: 'Arjun Sharma',
+    name: 'Site Engineer',
     initials: 'AS',
     color: '#f97316',
     role: 'Project Manager',

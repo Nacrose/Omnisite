@@ -87,7 +87,7 @@ export function StatusBar() {
           {/* Us (always first) */}
           <div
             className="ring-background flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-rose-500 text-[7px] font-semibold text-white ring-1"
-            title="You · Arjun Sharma"
+            title="You · Site Engineer"
           >
             AS
           </div>

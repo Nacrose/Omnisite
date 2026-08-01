@@ -127,7 +127,7 @@ const URGENT_ACTIONS: {
   {
     type: 'PO Approval',
     desc: 'PO-2410-018 — Cement (Ordinary) 1,200 bags',
-    who: 'Arjun S.',
+    who: 'Engr.',
     due: 'Today',
     severity: 'high',
     module: 'procurement',

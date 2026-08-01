@@ -78,7 +78,7 @@ export function ProcurementInspector({
                 &quot;{req.overrideReason}&quot;
               </div>
               <div className="text-muted-foreground mt-1 text-[10px]">
-                Audit logged · 30 Jul 2026 14:32 · Arjun S.
+                Audit logged · 30 Jul 2026 14:32 · Engr.
               </div>
             </div>
           )}

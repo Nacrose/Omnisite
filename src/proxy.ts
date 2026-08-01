@@ -1,21 +1,38 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createProxySupabaseClient } from '@/lib/supabase-proxy'
+import { randomUUID } from 'crypto'
 
-const SECURITY_HEADERS: Record<string, string> = {
+// Static security headers (set on every response).
+// CSP is built per-request below to include a nonce for script-src.
+const STATIC_SECURITY_HEADERS: Record<string, string> = {
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Content-Security-Policy': [
+}
+
+/**
+ * Build a per-request CSP header with a nonce for script-src.
+ *
+ * Next.js 16 reads the `x-nonce` header (set here) and passes it to
+ * React Server Components via `headers()`, so inline scripts rendered
+ * by Next.js (e.g. for hydration data) get the nonce automatically.
+ *
+ * This removes the need for 'unsafe-inline' in script-src — the main
+ * XSS attack vector for apps that render user-generated content (chat
+ * messages, DSR remarks, letter bodies).
+ */
+function buildCspHeader(nonce: string): string {
+  return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https: blob:",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com https://api.twilio.com",
     "frame-ancestors 'none'",
-  ].join('; '),
+  ].join('; ')
 }
 
 const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -36,12 +53,22 @@ const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL
  * auto-logs in as a demo user client-side.
  */
 export async function proxy(req: NextRequest) {
-  const res = NextResponse.next()
+  // Generate a per-request nonce for CSP script-src.
+  // Next.js 16 reads the `x-nonce` header and passes it to RSCs so inline
+  // scripts (hydration data) get the nonce automatically.
+  const nonce = randomUUID()
+  const res = NextResponse.next({
+    request: { headers: new Headers(req.headers) },
+  })
+  // Set the nonce on the request headers so Next.js can read it via headers()
+  res.headers.set('x-nonce', nonce)
 
-  // Set all security headers
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+  // Set static security headers
+  for (const [key, value] of Object.entries(STATIC_SECURITY_HEADERS)) {
     res.headers.set(key, value)
   }
+  // Set the per-request CSP with the nonce
+  res.headers.set('Content-Security-Policy', buildCspHeader(nonce))
 
   const { pathname } = req.nextUrl
 

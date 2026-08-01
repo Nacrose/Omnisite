@@ -473,7 +473,7 @@ export function RaInspector({ item }: { item: BoqItem }) {
               Audit Log
             </div>
             <AuditRow
-              who="Arjun S."
+              who="Engr."
               action="Updated cement rate from NPR 895 → NPR 920"
               when="2 hrs ago"
             />
@@ -483,7 +483,7 @@ export function RaInspector({ item }: { item: BoqItem }) {
               when="Yesterday 16:42"
             />
             <AuditRow who="System" action="Preset loaded: PCC-M15-Standard" when="3 days ago" />
-            <AuditRow who="Arjun S." action="Created RA from blank template" when="1 week ago" />
+            <AuditRow who="Engr." action="Created RA from blank template" when="1 week ago" />
           </TabsContent>
         </Tabs>
 

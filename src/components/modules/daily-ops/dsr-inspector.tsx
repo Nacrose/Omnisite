@@ -73,7 +73,7 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
         return
       }
       setPhotosLoading(true)
-      listFiles(STORAGE_BUCKETS.DSRR_PHOTOS, entry.id)
+      listFiles(STORAGE_BUCKETS.DSR_PHOTOS, entry.id)
         .then((files) => {
           if (cancelled) return
           // Use the storage path returned by listFiles (not the public URL)
@@ -102,7 +102,7 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
     let ok = 0
     let fail = 0
     for (const file of Array.from(files)) {
-      const result = await uploadFile(STORAGE_BUCKETS.DSRR_PHOTOS, file, entry.id)
+      const result = await uploadFile(STORAGE_BUCKETS.DSR_PHOTOS, file, entry.id)
       if (result.url) {
         setPhotos((prev) => [...prev, { name: file.name, url: result.url, path: result.path }])
         ok++
@@ -115,7 +115,7 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
     e.target.value = ''
     if (ok > 0 && fail === 0) {
       toast.success(`Uploaded ${ok} photo${ok > 1 ? 's' : ''}`, {
-        description: `Saved to ${STORAGE_BUCKETS.DSRR_PHOTOS}/${entry.id}/`,
+        description: `Saved to ${STORAGE_BUCKETS.DSR_PHOTOS}/${entry.id}/`,
       })
     } else if (ok > 0 && fail > 0) {
       toast.warning(`${ok} uploaded, ${fail} failed`)
@@ -126,7 +126,7 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
 
   const handleDeletePhoto = async (photo: StoredPhoto) => {
     if (!photo.path) return
-    const ok = await deleteFile(STORAGE_BUCKETS.DSRR_PHOTOS, photo.path)
+    const ok = await deleteFile(STORAGE_BUCKETS.DSR_PHOTOS, photo.path)
     if (ok) {
       setPhotos((prev) => prev.filter((p) => p.url !== photo.url))
       toast.success('Photo deleted')
@@ -420,8 +420,8 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
             )}
             {photos.length > 0 && (
               <p className="text-muted-foreground mt-2 text-center text-[10px]">
-                {photos.length} photo{photos.length > 1 ? 's' : ''} in {STORAGE_BUCKETS.DSRR_PHOTOS}
-                /{entry.id}/
+                {photos.length} photo{photos.length > 1 ? 's' : ''} in {STORAGE_BUCKETS.DSR_PHOTOS}/
+                {entry.id}/
               </p>
             )}
           </TabsContent>

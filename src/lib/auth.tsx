@@ -8,7 +8,7 @@
  *   uses supabase.auth.signInWithPassword() / signOut() and listens for
  *   session changes via onAuthStateChange(). No bypass, no backdoor.
  * - When Supabase is NOT configured (no env vars), auto-logs in as a demo
- *   user "Arjun Sharma" (PM role) so the app remains usable in demo mode.
+ *   user "Demo User" (PM role) so the app remains usable in demo mode.
  *   This is safe because there's no database to expose.
  *
  * The User shape is intentionally minimal — id / email / name / role — so
@@ -47,10 +47,12 @@ const AuthContext = createContext<AuthContextValue>({
 })
 
 // ─── Demo user (no Supabase configured) ─────────────────────────────────────
+// Generic name avoids fingerprinting — anyone hitting an unconfigured
+// deployment sees "Demo User" instead of a specific person's name.
 const DEMO_USER: OmniUser = {
-  id: 'demo-user-arjun',
-  email: 'arjun.sharma@omnisite.demo',
-  name: 'Arjun Sharma',
+  id: 'demo-user',
+  email: 'demo@omnisite.app',
+  name: 'Demo User',
   role: 'PM',
   isDemo: true,
 }
@@ -122,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true
 
     if (!configured || !supabase) {
-      // Demo mode — no Supabase configured. Auto-login as Arjun Sharma
+      // Demo mode — no Supabase configured. Auto-login as Demo User
       // after a tiny delay so the loading state is visible.
       const t = setTimeout(() => {
         if (!active) return
@@ -175,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
     if (!configured || !supabase) {
-      // Demo mode — accept any non-empty credentials and "sign in" as Arjun.
+      // Demo mode — accept any non-empty credentials and "sign in" as the demo user.
       if (!email.trim() || !password.trim()) {
         return { error: 'Email and password are required' }
       }

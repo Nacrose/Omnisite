@@ -33,7 +33,7 @@ CI runs these on every push/PR automatically.
 
 ### Module Structure
 
-Each of the 14 modules lives in `src/components/modules/`. Complex modules (BOQ, Scheduler, Subcontractor, Daily Ops, Procurement) are split into folder structures with `types.ts`, `index.tsx`, and per-view `.tsx` files.
+Each of the 15 modules lives in `src/components/modules/`. Complex modules (BOQ, Scheduler, Subcontractor, Daily Ops, Procurement) are split into folder structures with `types.ts`, `index.tsx`, and per-view `.tsx` files.
 
 ### API Routes
 

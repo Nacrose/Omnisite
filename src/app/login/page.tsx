@@ -139,8 +139,8 @@ export default function LoginPage() {
               <div>
                 <div className="font-semibold">Demo mode — Supabase not configured</div>
                 <div className="mt-0.5 text-sky-700/80 dark:text-sky-300/80">
-                  Enter any email and password to sign in as the demo user (Arjun Sharma, PM role).
-                  All data stays in your browser.
+                  Enter any email and password to sign in as the demo user (Demo User, PM role). All
+                  data stays in your browser.
                 </div>
               </div>
             </div>

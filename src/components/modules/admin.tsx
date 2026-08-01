@@ -384,7 +384,7 @@ function UsersView({
       <div className="space-y-1.5">
         {[
           {
-            name: 'Arjun Sharma',
+            name: 'Site Engineer',
             email: 'arjun@omnisite.com',
             role: 'Project Manager',
             status: 'Active',
