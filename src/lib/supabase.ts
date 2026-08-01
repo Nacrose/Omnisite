@@ -16,6 +16,10 @@ export const isSupabaseConfigured = (): boolean => {
  * - No more localStorage/cookie mismatch (the previous login-loop root cause)
  * - The proxy can refresh the session cookie on every request
  *
+ * Cookie options:
+ * - secure: true in production (HTTPS-only) — prevents session hijacking over HTTP
+ * - sameSite: 'lax' — prevents CSRF while allowing top-level navigation
+ *
  * Only initialized when env vars are present. When not configured, the app
  * runs in demo mode (auto-login as demo user, all data in localStorage).
  * Callers must check isSupabaseConfigured() before accessing `supabase`.
@@ -23,5 +27,9 @@ export const isSupabaseConfigured = (): boolean => {
 export const supabase: SupabaseClient | null = isSupabaseConfigured()
   ? createBrowserClient(supabaseUrl, supabaseAnonKey, {
       realtime: { params: { eventsPerSecond: 10 } },
+      cookieOptions: {
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      },
     })
   : null

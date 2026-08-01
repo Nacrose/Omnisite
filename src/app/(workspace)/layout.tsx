@@ -52,7 +52,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
     setCommandOpen,
     setQuickAddOpen,
   } = useApp()
-  const { user, loading, signOut, isDemo } = useAuth()
+  const { user, loading, roleLoading, signOut, isDemo } = useAuth()
   const router = useRouter()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -175,8 +175,9 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
 
           <button
             onClick={() => setQuickAddOpen(true)}
-            className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors sm:w-auto sm:px-3"
-            title="Quick Add"
+            disabled={roleLoading}
+            className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-3"
+            title={roleLoading ? 'Resolving permissions…' : 'Quick Add'}
           >
             <Plus className="h-4 w-4" />
             <span className="ml-1.5 hidden md:inline">Quick Add</span>
@@ -206,7 +207,16 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
                     </span>
                   )}
                 </div>
-                <div className="text-muted-foreground text-[10px]">{roleLabel}</div>
+                <div className="text-muted-foreground text-[10px]">
+                  {roleLoading ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      Resolving role…
+                    </span>
+                  ) : (
+                    roleLabel
+                  )}
+                </div>
               </div>
             </button>
 

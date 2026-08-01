@@ -65,7 +65,7 @@ export function BoqModule() {
     '2.1',
     '3',
   ])
-  const [boqRows, setBoqRows, boqLoading] = useSyncedState<BoqItem[]>(
+  const [boqRows, setBoqRows, boqLoading, boqTruncated] = useSyncedState<BoqItem[]>(
     'omnisite-boq-data',
     'boq_items',
     () => structuredClone(BOQ_DATA) as typeof BOQ_DATA,
@@ -274,6 +274,14 @@ export function BoqModule() {
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                 Edit Qty/Rate · drag rows to headings to reparent
               </span>
+              {boqTruncated && (
+                <span
+                  className="hidden items-center gap-1 rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 lg:flex dark:text-amber-300"
+                  title="Dataset hit the 2000-row cap. Refine your filter or contact admin for full data."
+                >
+                  Showing first 2000 rows
+                </span>
+              )}
               {/* Undo/Redo buttons */}
               <div className="mr-1 flex items-center gap-0.5 border-r border-[var(--pane-divider)] pr-1.5">
                 <Button

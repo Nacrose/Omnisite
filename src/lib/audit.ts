@@ -113,3 +113,52 @@ export async function upsertWithAudit(
     return { data: null, error: msg }
   }
 }
+
+/**
+ * Transactional delete + audit log in a single Postgres transaction.
+ *
+ * Calls the `delete_with_audit()` Postgres function (defined in migration
+ * 00000000000007) which:
+ *   1. Captures the pre-delete row state
+ *   2. Deletes the row
+ *   3. Inserts an audit_log entry with the captured state as old_values
+ *
+ * If either step fails, BOTH roll back — the audit trail is never lost.
+ *
+ * @param p_table - Table name (must be in the function's allowlist)
+ * @param p_record_id - The primary key value of the row to delete
+ * @param p_pk - Primary key column name (e.g. 'id' or 'code')
+ * @param p_user_id - The authenticated user's id (from requireAuth)
+ * @returns { deleted: boolean, error: string | null } — deleted=false means
+ *          the row didn't exist (no audit entry written).
+ */
+export async function deleteWithAudit(
+  p_table: string,
+  p_record_id: string,
+  p_pk: string,
+  p_user_id: string
+): Promise<{ deleted: boolean; error: string | null }> {
+  if (!isServiceClientConfigured()) {
+    // Demo mode — no audit log, just report success.
+    return { deleted: true, error: null }
+  }
+
+  try {
+    const serviceClient = getServiceClient()
+    const { data, error } = await serviceClient.rpc('delete_with_audit', {
+      p_table,
+      p_record_id,
+      p_pk,
+      p_user_id,
+    })
+
+    if (error) {
+      return { deleted: false, error: error.message }
+    }
+
+    return { deleted: !!data, error: null }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown error'
+    return { deleted: false, error: msg }
+  }
+}

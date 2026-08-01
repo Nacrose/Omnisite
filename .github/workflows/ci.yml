@@ -37,10 +37,10 @@ jobs:
       - name: Test
         run: bun run test
       - name: Audit dependencies
-        # Surfaces vulnerabilities in the CI log without failing the build.
-        # The `|| true` in the audit script keeps this non-blocking; remove it
-        # from package.json once the transitive vulns (currently js-yaml via
-        # eslint) are resolved.
+        # Fails CI on HIGH/CRITICAL vulns in production-reachable deps.
+        # Dev-only transitive vulns (eslint, vitest, etc.) are non-blocking.
+        # Known pending upgrades (e.g. recharts 2.x → 3.x to drop lodash) are
+        # tracked in scripts/audit.mjs and warned but not blocking.
         run: bun run audit
 
   build:

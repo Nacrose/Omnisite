@@ -22,6 +22,15 @@ import { useApp } from '@/lib/app-store'
  * transform functions. The DB row ↔ API JSON shape is identical, so the same
  * `fieldMap` / `primaryKey` config works for both the legacy direct-Supabase
  * path and the new API path.
+ *
+ * @returns `[state, setState, loading, truncated]`
+ *   - `state`: the current data (Supabase or localStorage-backed)
+ *   - `setState`: updater (value or function) — triggers a debounced upsert
+ *   - `loading`: true while the initial fetch is in flight
+ *   - `truncated`: true if the dataset hit the 2000-row MAX_PAGES cap.
+ *                  Use this to render a persistent "showing first N rows"
+ *                  indicator. The hook also fires a one-shot toast when the
+ *                  cap is hit; this flag lets callers show a persistent UI.
  */
 
 interface SyncConfig {
@@ -120,7 +129,7 @@ export function useSyncedState<T>(
   supabaseTable: string,
   initial: T | (() => T),
   config?: SyncConfig
-): [T, (value: T | ((prev: T) => T)) => void, boolean] {
+): [T, (value: T | ((prev: T) => T)) => void, boolean, boolean] {
   const useSupabase = isSupabaseConfigured()
   const [localState, setLocalState] = usePersistentState(localStorageKey, initial)
   const [supabaseState, setSupabaseState] = useState<T | null>(null)
@@ -415,5 +424,5 @@ export function useSyncedState<T>(
         : initial
     : localState
 
-  return [currentState, setState, loading]
+  return [currentState, setState, loading, truncated]
 }

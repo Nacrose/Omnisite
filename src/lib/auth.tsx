@@ -33,6 +33,8 @@ export interface OmniUser {
 interface AuthContextValue {
   user: OmniUser | null
   loading: boolean
+  /** True while the user's role is being resolved from user_projects. */
+  roleLoading: boolean
   isDemo: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -41,6 +43,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
+  roleLoading: false,
   isDemo: false,
   signIn: async () => ({ error: 'AuthProvider not mounted' }),
   signOut: async () => {},
@@ -94,22 +97,35 @@ function mapSupabaseUser(u: SupabaseUser): OmniUser {
  * Fetch the user's role from the user_projects table (DB-backed source of
  * truth). Updates the OmniUser in-place via the setter. Falls back to
  * 'FOREMAN' if the user has no user_projects rows.
+ *
+ * Calls the onSettled callback when done (success or failure) so the caller
+ * can clear its roleLoading flag.
  */
 async function fetchUserRole(
   userId: string,
-  setUser: (updater: (prev: OmniUser | null) => OmniUser | null) => void
+  setUser: (updater: (prev: OmniUser | null) => OmniUser | null) => void,
+  onSettled?: () => void
 ): Promise<void> {
-  if (!supabase) return
-  const { data } = await supabase
-    .from('user_projects')
-    .select('role')
-    .eq('user_id', userId)
-    .order('role')
-    .limit(1)
-    .single()
+  if (!supabase) {
+    onSettled?.()
+    return
+  }
+  try {
+    const { data } = await supabase
+      .from('user_projects')
+      .select('role')
+      .eq('user_id', userId)
+      .order('role')
+      .limit(1)
+      .single()
 
-  if (data?.role) {
-    setUser((prev) => (prev && prev.id === userId ? { ...prev, role: data.role as Role } : prev))
+    if (data?.role) {
+      setUser((prev) => (prev && prev.id === userId ? { ...prev, role: data.role as Role } : prev))
+    }
+  } catch {
+    // User has no user_projects rows, or query failed — role stays as FOREMAN.
+  } finally {
+    onSettled?.()
   }
 }
 
@@ -119,6 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured()
   const [user, setUser] = useState<OmniUser | null>(null)
   const [loading, setLoading] = useState(true)
+  // roleLoading is true between session bootstrap and the async role fetch
+  // resolving. During this window, the UI shows FOREMAN permissions (the
+  // least-privilege default) — callers should gate write buttons on this
+  // flag to avoid letting users click actions they may not actually have.
+  const [roleLoading, setRoleLoading] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -149,7 +170,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (s?.user) {
           setUser(mapSupabaseUser(s.user))
           // Resolve role async from user_projects (DB-backed, not user_metadata)
-          fetchUserRole(s.user.id, setUser)
+          setRoleLoading(true)
+          fetchUserRole(s.user.id, setUser, () => {
+            if (active) setRoleLoading(false)
+          })
         }
         // No session → user stays null → login page shows.
         setLoading(false)
@@ -163,9 +187,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active) return
       if (session?.user) {
         setUser(mapSupabaseUser(session.user))
-        fetchUserRole(session.user.id, setUser)
+        setRoleLoading(true)
+        fetchUserRole(session.user.id, setUser, () => {
+          if (active) setRoleLoading(false)
+        })
       } else {
         setUser(null)
+        setRoleLoading(false)
       }
     }).data.subscription
 
@@ -199,8 +227,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, isDemo: configured ? false : true, signIn, signOut }),
-    [user, loading, configured]
+    () => ({ user, loading, roleLoading, isDemo: configured ? false : true, signIn, signOut }),
+    [user, loading, roleLoading, configured]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

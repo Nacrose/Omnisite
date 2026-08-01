@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
-import { logAudit, computeDiff } from '@/lib/audit'
+import { requireAuth, requireRole, verifyProjectAccess, isProjectScopedTable } from '@/lib/api-auth'
+import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { logDbError } from '@/lib/safe-log'
 import { validateBody, workerSchema } from '@/lib/validation'
 
 // GET /api/workers — fetch workers, optionally filtered by project_id
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query.order('created_at', { ascending: true })
 
   if (error) {
-    console.error('[API] workers error:', error)
+    logDbError('workers', 'GET', error, { userId: user.id })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
   return NextResponse.json(data)
@@ -48,31 +49,43 @@ export async function POST(req: NextRequest) {
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
 
-  // Fetch old values for audit (before the upsert overwrites them).
+  // Fetch old values via the user-scoped client (RLS-gated).
+  // For UPDATE, this proves the user has read access to the row.
+  // For INSERT, verifyProjectAccess below replaces the implicit RLS check
+  // that the service-role upsert bypasses.
   const { data: oldData } = body.id
     ? await userClient.from('workers').select('*').eq('id', body.id).single()
     : { data: null }
 
-  const { data, error } = await userClient
-    .from('workers')
-    .upsert(body, { onConflict: getPrimaryKey('workers') })
-    .select()
-
-  if (error) {
-    console.error('[API] workers error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  // For INSERTs (no existing row), verify the user has access to the
+  // target project_id. upsertWithAudit uses the service-role client
+  // which bypasses RLS, so this explicit check is mandatory.
+  if (!oldData && isProjectScopedTable('workers')) {
+    const projectId = (body as Record<string, unknown>).project_id as string | undefined
+    const hasAccess = await verifyProjectAccess(userClient, user.id, projectId)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden — no access to this project' }, { status: 403 })
+    }
   }
 
-  // Audit log the mutation (fire-and-forget, uses service-role client).
-  logAudit({
-    table_name: 'workers',
-    record_id: body.id || data?.[0]?.id || 'unknown',
-    action: oldData ? 'UPDATE' : 'INSERT',
-    changed_by: user.id,
-    changed_fields: oldData
-      ? computeDiff(oldData as Record<string, unknown>, body as Record<string, unknown>)
-      : undefined,
-  }).catch(() => {})
+  // Transactional upsert + audit log via service-role client.
+  // If either fails, both roll back — the audit trail is never lost.
+  const { data, error } = await upsertWithAudit(
+    'workers',
+    body as Record<string, unknown>,
+    'id',
+    user.id,
+    oldData ? 'UPDATE' : 'INSERT',
+    oldData as Record<string, unknown> | null
+  )
+
+  if (error || !data) {
+    logDbError('workers', 'POST', error || 'no data returned', {
+      recordId: body.id as string,
+      userId: user.id,
+    })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
   return NextResponse.json(data)
 }
@@ -92,22 +105,23 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  // Use a user-scoped client so RLS policies are enforced.
+  // Pre-flight read via the user-scoped client (RLS-gated) — proves the
+  // user has access to this row before we delete it via the service client.
   const userClient = createUserClient(user.accessToken)
-  const { error } = await userClient.from('workers').delete().eq('id', id)
+  const { data: existing } = await userClient.from('workers').select('id').eq('id', id).limit(1)
 
-  if (error) {
-    console.error('[API] workers error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (!existing || existing.length === 0) {
+    // Row doesn't exist OR RLS denies access — return 404 (don't leak which).
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // Audit log the deletion.
-  logAudit({
-    table_name: 'workers',
-    record_id: id,
-    action: 'DELETE',
-    changed_by: user.id,
-  }).catch(() => {})
+  // Transactional delete + audit log via service-role client.
+  const { deleted, error } = await deleteWithAudit('workers', id, 'id', user.id)
+
+  if (error) {
+    logDbError('workers', 'DELETE', error, { recordId: id, userId: user.id })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
   return NextResponse.json({ success: true })
 }

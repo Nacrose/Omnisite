@@ -73,6 +73,76 @@ export function getPrimaryKey(table: string): string {
 }
 
 /**
+ * Tables that have a `project_id` column (i.e. are project-scoped).
+ * Used by verifyProjectAccess() to know which rows to gate.
+ *
+ * `projects` and `user_projects` are NOT project-scoped (they ARE the
+ * project / assignment tables), so they're excluded.
+ */
+const PROJECT_SCOPED_TABLES = new Set([
+  'boq_items',
+  'tasks',
+  'dsr_entries',
+  'cbs_nodes',
+  'requisitions',
+  'purchase_orders',
+  'drawings',
+  'letters',
+  'qs_items',
+  'equipment',
+  'subcontractors',
+  'workers',
+  'chat_messages',
+  'grns',
+  'stock_items',
+])
+
+/**
+ * Verify that the user has access to a specific project_id.
+ *
+ * IMPORTANT: this is the explicit ownership check that replaces the implicit
+ * RLS gating when routes switch from userClient.upsert() (RLS-enforced) to
+ * upsertWithAudit() (service-role, RLS-bypassed). Without this check, a
+ * malicious user with a valid session could craft a body with a foreign
+ * project_id and write to a project they're not assigned to.
+ *
+ * PMs are granted access to any project (matches the user_has_pm_access()
+ * RLS helper). Other roles must have an explicit user_projects row.
+ *
+ * @returns true if the user has access, false otherwise.
+ */
+export async function verifyProjectAccess(
+  userClient: import('@supabase/supabase-js').SupabaseClient,
+  userId: string,
+  projectId: string | undefined | null
+): Promise<boolean> {
+  if (!projectId) return false
+  // PMs have access to all projects (matches the RLS helper).
+  // We don't have the user's role here directly, but the user_projects
+  // query below will return a PM row for any project the user is a PM on.
+  const { data, error } = await userClient
+    .from('user_projects')
+    .select('role, project_id')
+    .eq('user_id', userId)
+    .limit(100)
+
+  if (error || !data) return false
+
+  // PM on any project → access to all projects.
+  if (data.some((row) => row.role === 'PM')) return true
+  // Otherwise, must be explicitly assigned to this project.
+  return data.some((row) => row.project_id === projectId)
+}
+
+/**
+ * Whether a table is project-scoped (has a project_id column).
+ * Routes use this to decide whether to call verifyProjectAccess().
+ */
+export function isProjectScopedTable(table: string): boolean {
+  return PROJECT_SCOPED_TABLES.has(table)
+}
+
+/**
  * Resolve the user's role from the `user_projects` table (the DB-backed source
  * of truth) instead of trusting `user_metadata.role`.
  *

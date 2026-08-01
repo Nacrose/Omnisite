@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
-import { logAudit, computeDiff } from '@/lib/audit'
+import { requireAuth, requireRole, verifyProjectAccess, isProjectScopedTable } from '@/lib/api-auth'
+import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { logDbError } from '@/lib/safe-log'
 import { validateBody } from '@/lib/validation'
 
 // Stock items — live inventory
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query.order('name', { ascending: true })
 
   if (error) {
-    console.error('[API] stock_items error:', error)
+    logDbError('stock_items', 'GET', error, { userId: user.id })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -64,50 +65,36 @@ export async function POST(req: NextRequest) {
     .eq('code', data.code)
     .single()
 
-  if (existing) {
-    const diff = computeDiff(existing as Record<string, unknown>, data as Record<string, unknown>)
-    const { data: updated, error } = await userClient
-      .from('stock_items')
-      .update(data)
-      .eq('code', data.code)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[API] stock_items update error:', error)
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  // For INSERTs (no existing row), verify the user has access to the
+  // target project_id. upsertWithAudit uses the service-role client
+  // which bypasses RLS, so this explicit check is mandatory.
+  if (!existing && isProjectScopedTable('stock_items')) {
+    const projectId = (data as Record<string, unknown>).project_id as string | undefined
+    const hasAccess = await verifyProjectAccess(userClient, user.id, projectId)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden — no access to this project' }, { status: 403 })
     }
-
-    logAudit({
-      table_name: 'stock_items',
-      record_id: data.code,
-      action: 'UPDATE',
-      changed_by: user.id,
-      changed_fields: diff,
-    }).catch(() => {})
-
-    return NextResponse.json(updated)
   }
 
-  const { data: inserted, error } = await userClient
-    .from('stock_items')
-    .insert(data)
-    .select()
-    .single()
+  // Transactional upsert + audit log via service-role client.
+  const { data: result, error } = await upsertWithAudit(
+    'stock_items',
+    data as Record<string, unknown>,
+    'code',
+    user.id,
+    existing ? 'UPDATE' : 'INSERT',
+    existing as Record<string, unknown> | null
+  )
 
-  if (error) {
-    console.error('[API] stock_items insert error:', error)
+  if (error || !result) {
+    logDbError('stock_items', 'POST', error || 'no data returned', {
+      recordId: data.code as string,
+      userId: user.id,
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
-  logAudit({
-    table_name: 'stock_items',
-    record_id: data.code,
-    action: 'INSERT',
-    changed_by: user.id,
-  }).catch(() => {})
-
-  return NextResponse.json(inserted, { status: 201 })
+  return NextResponse.json(result, { status: existing ? 200 : 201 })
 }
 
 // DELETE /api/stock-items?code=M-CEM-OPC
@@ -126,20 +113,26 @@ export async function DELETE(req: NextRequest) {
   const code = searchParams.get('code')
   if (!code) return NextResponse.json({ error: 'code required' }, { status: 400 })
 
+  // Pre-flight read via the user-scoped client (RLS-gated) — proves the
+  // user has access to this row before we delete it via the service client.
   const userClient = createUserClient(user.accessToken)
-  const { error } = await userClient.from('stock_items').delete().eq('code', code)
+  const { data: existing } = await userClient
+    .from('stock_items')
+    .select('code')
+    .eq('code', code)
+    .limit(1)
 
-  if (error) {
-    console.error('[API] stock_items delete error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (!existing || existing.length === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  logAudit({
-    table_name: 'stock_items',
-    record_id: code,
-    action: 'DELETE',
-    changed_by: user.id,
-  }).catch(() => {})
+  // Transactional delete + audit log via service-role client.
+  const { deleted, error } = await deleteWithAudit('stock_items', code, 'code', user.id)
+
+  if (error) {
+    logDbError('stock_items', 'DELETE', error, { recordId: code, userId: user.id })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
   return NextResponse.json({ success: true })
 }

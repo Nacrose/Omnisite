@@ -138,6 +138,10 @@ export async function createServerSupabaseClient(): Promise<SupabaseClient> {
     )
   }
   const cookieStore = await cookies()
+  // In production, force `secure: true` on all session cookies so they're
+  // only transmitted over HTTPS. @supabase/ssr doesn't set this by default
+  // because dev environments use HTTP — we override here to be explicit.
+  const isProduction = process.env.NODE_ENV === 'production'
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
@@ -145,7 +149,13 @@ export async function createServerSupabaseClient(): Promise<SupabaseClient> {
       },
       setAll(cookiesToSet) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, {
+              ...options,
+              secure: isProduction ? true : options.secure,
+              sameSite: options.sameSite ?? 'lax',
+            })
+          )
         } catch {
           // The `setAll` method was called from a Server Component.
           // This can be ignored if you have middleware refreshing sessions.

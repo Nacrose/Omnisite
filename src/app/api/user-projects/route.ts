@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
-import { logAudit, computeDiff } from '@/lib/audit'
+import { requireAuth, requireRole } from '@/lib/api-auth'
+import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { logDbError } from '@/lib/safe-log'
 import { validateBody } from '@/lib/validation'
 
 // User-project assignments (membership / role linkage)
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
     .order('project_id', { ascending: true })
 
   if (error) {
-    console.error('[API] user_projects error:', error)
+    logDbError('user_projects', 'GET', error, { userId: user.id })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
   return NextResponse.json(data)
@@ -65,31 +66,28 @@ export async function POST(req: NextRequest) {
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
 
-  // Fetch old values for audit (before the upsert overwrites them).
+  // Fetch old values via the user-scoped client (RLS-gated).
   const { data: oldData } = body.id
     ? await userClient.from('user_projects').select('*').eq('id', body.id).single()
     : { data: null }
 
-  const { data, error } = await userClient
-    .from('user_projects')
-    .upsert(body, { onConflict: getPrimaryKey('user_projects') })
-    .select()
+  // Transactional upsert + audit log via service-role client.
+  const { data, error } = await upsertWithAudit(
+    'user_projects',
+    body as Record<string, unknown>,
+    'id',
+    user.id,
+    oldData ? 'UPDATE' : 'INSERT',
+    oldData as Record<string, unknown> | null
+  )
 
-  if (error) {
-    console.error('[API] user_projects error:', error)
+  if (error || !data) {
+    logDbError('user_projects', 'POST', error || 'no data returned', {
+      recordId: body.id as string,
+      userId: user.id,
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  // Audit log the mutation (fire-and-forget, uses service-role client).
-  logAudit({
-    table_name: 'user_projects',
-    record_id: body.id || data?.[0]?.id || 'unknown',
-    action: oldData ? 'UPDATE' : 'INSERT',
-    changed_by: user.id,
-    changed_fields: oldData
-      ? computeDiff(oldData as Record<string, unknown>, body as Record<string, unknown>)
-      : undefined,
-  }).catch(() => {})
 
   return NextResponse.json(data)
 }
@@ -117,22 +115,27 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  // Use a user-scoped client so RLS policies are enforced.
+  // Pre-flight read via the user-scoped client (RLS-gated) — proves the
+  // user has access to this row before we delete it via the service client.
   const userClient = createUserClient(user.accessToken)
-  const { error } = await userClient.from('user_projects').delete().eq('id', id)
+  const { data: existing } = await userClient
+    .from('user_projects')
+    .select('id')
+    .eq('id', id)
+    .limit(1)
 
-  if (error) {
-    console.error('[API] user_projects error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (!existing || existing.length === 0) {
+    // Row doesn't exist OR RLS denies access — return 404 (don't leak which).
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // Audit log the deletion.
-  logAudit({
-    table_name: 'user_projects',
-    record_id: id,
-    action: 'DELETE',
-    changed_by: user.id,
-  }).catch(() => {})
+  // Transactional delete + audit log via service-role client.
+  const { deleted, error } = await deleteWithAudit('user_projects', id, 'id', user.id)
+
+  if (error) {
+    logDbError('user_projects', 'DELETE', error, { recordId: id, userId: user.id })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
   return NextResponse.json({ success: true })
 }

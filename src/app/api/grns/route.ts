@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
-import { logAudit, computeDiff } from '@/lib/audit'
+import { requireAuth, requireRole, verifyProjectAccess, isProjectScopedTable } from '@/lib/api-auth'
+import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { logDbError } from '@/lib/safe-log'
 import { validateBody } from '@/lib/validation'
 
 // GRN (Goods Received Note) — 3-way match (PO vs GRN vs Invoice)
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query.order('date', { ascending: false })
 
   if (error) {
-    console.error('[API] grns error:', error)
+    logDbError('grns', 'GET', error, { userId: user.id })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -64,46 +65,37 @@ export async function POST(req: NextRequest) {
   const userClient = createUserClient(user.accessToken)
   const { data: existing } = await userClient.from('grns').select('*').eq('id', data.id).single()
 
-  if (existing) {
-    const diff = computeDiff(existing as Record<string, unknown>, data as Record<string, unknown>)
-    const { data: updated, error } = await userClient
-      .from('grns')
-      .update(data)
-      .eq('id', data.id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[API] grns update error:', error)
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  // For INSERTs (no existing row), verify the user has access to the
+  // target project_id. upsertWithAudit uses the service-role client
+  // which bypasses RLS, so this explicit check is mandatory.
+  if (!existing && isProjectScopedTable('grns')) {
+    const projectId = (data as Record<string, unknown>).project_id as string | undefined
+    const hasAccess = await verifyProjectAccess(userClient, user.id, projectId)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden — no access to this project' }, { status: 403 })
     }
-
-    logAudit({
-      table_name: 'grns',
-      record_id: data.id,
-      action: 'UPDATE',
-      changed_by: user.id,
-      changed_fields: diff,
-    }).catch(() => {})
-
-    return NextResponse.json(updated)
   }
 
-  const { data: inserted, error } = await userClient.from('grns').insert(data).select().single()
+  // Transactional upsert + audit log via service-role client.
+  // Replaces the prior insert/update branch + fire-and-forget logAudit pattern.
+  const { data: result, error } = await upsertWithAudit(
+    'grns',
+    data as Record<string, unknown>,
+    'id',
+    user.id,
+    existing ? 'UPDATE' : 'INSERT',
+    existing as Record<string, unknown> | null
+  )
 
-  if (error) {
-    console.error('[API] grns insert error:', error)
+  if (error || !result) {
+    logDbError('grns', 'POST', error || 'no data returned', {
+      recordId: data.id as string,
+      userId: user.id,
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
-  logAudit({
-    table_name: 'grns',
-    record_id: data.id,
-    action: 'INSERT',
-    changed_by: user.id,
-  }).catch(() => {})
-
-  return NextResponse.json(inserted, { status: 201 })
+  return NextResponse.json(result, { status: existing ? 200 : 201 })
 }
 
 // DELETE /api/grns?id=GRN-XXX
@@ -122,20 +114,22 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
+  // Pre-flight read via the user-scoped client (RLS-gated) — proves the
+  // user has access to this row before we delete it via the service client.
   const userClient = createUserClient(user.accessToken)
-  const { error } = await userClient.from('grns').delete().eq('id', id)
+  const { data: existing } = await userClient.from('grns').select('id').eq('id', id).limit(1)
 
-  if (error) {
-    console.error('[API] grns delete error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (!existing || existing.length === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  logAudit({
-    table_name: 'grns',
-    record_id: id,
-    action: 'DELETE',
-    changed_by: user.id,
-  }).catch(() => {})
+  // Transactional delete + audit log via service-role client.
+  const { deleted, error } = await deleteWithAudit('grns', id, 'id', user.id)
+
+  if (error) {
+    logDbError('grns', 'DELETE', error, { recordId: id, userId: user.id })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
   return NextResponse.json({ success: true })
 }

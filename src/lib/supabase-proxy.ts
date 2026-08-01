@@ -23,13 +23,21 @@ export function createProxySupabaseClient(req: NextRequest, res: NextResponse): 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Supabase not configured')
   }
+  // In production, force `secure: true` on session cookies (HTTPS-only).
+  const isProduction = process.env.NODE_ENV === 'production'
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return req.cookies.getAll()
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
+        cookiesToSet.forEach(({ name, value, options }) =>
+          res.cookies.set(name, value, {
+            ...options,
+            secure: isProduction ? true : options.secure,
+            sameSite: options.sameSite ?? 'lax',
+          })
+        )
       },
     },
   })
