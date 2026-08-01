@@ -1,9 +1,8 @@
 -- ============================================================
--- OmniSite — Database Schema for Supabase
--- Run this in Supabase SQL Editor (Dashboard → SQL → New Query)
+-- OmniSite — Database Schema for Supabase (fixed: no subquery in DEFAULT)
+-- Run this in Supabase SQL Editor
 -- ============================================================
 
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
@@ -32,14 +31,17 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
--- BOQ Items
+-- Business tables — project_id has NO subquery DEFAULT.
+-- The app always passes project_id explicitly on every INSERT,
+-- so no DEFAULT is needed.
 -- ============================================================
+
 CREATE TABLE IF NOT EXISTS boq_items (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   code TEXT NOT NULL,
   description TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'Priced', -- Priced, Provisional Sum, Daywork, Heading
+  type TEXT NOT NULL DEFAULT 'Priced',
   qty NUMERIC DEFAULT 0,
   uom TEXT,
   rate NUMERIC DEFAULT 0,
@@ -51,14 +53,11 @@ CREATE TABLE IF NOT EXISTS boq_items (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Schedule Tasks
--- ============================================================
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   name TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'Work', -- Work, Milestone, Hammock, Summary
+  type TEXT NOT NULL DEFAULT 'Work',
   start_week INTEGER DEFAULT 0,
   duration INTEGER DEFAULT 1,
   progress INTEGER DEFAULT 0,
@@ -72,19 +71,16 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- DSR (Daily Site Report) Entries
--- ============================================================
 CREATE TABLE IF NOT EXISTS dsr_entries (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   task TEXT NOT NULL,
-  source TEXT DEFAULT 'Sched', -- Sched, Backlog, RFI, Manual
+  source TEXT DEFAULT 'Sched',
   chainage TEXT,
   planned NUMERIC DEFAULT 0,
   actual NUMERIC DEFAULT 0,
   uom TEXT,
-  status TEXT DEFAULT 'in-progress', -- in-progress, completed, blocked, pending
+  status TEXT DEFAULT 'in-progress',
   has_rfi BOOLEAN DEFAULT false,
   has_photos BOOLEAN DEFAULT false,
   remarks TEXT,
@@ -93,12 +89,9 @@ CREATE TABLE IF NOT EXISTS dsr_entries (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- CBS (Cost Breakdown Structure) Nodes — Financials
--- ============================================================
 CREATE TABLE IF NOT EXISTS cbs_nodes (
   code TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   name TEXT NOT NULL,
   budget NUMERIC DEFAULT 0,
   committed NUMERIC DEFAULT 0,
@@ -111,50 +104,41 @@ CREATE TABLE IF NOT EXISTS cbs_nodes (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Procurement — Requisitions
--- ============================================================
 CREATE TABLE IF NOT EXISTS requisitions (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   item TEXT NOT NULL,
   uom TEXT,
   qty NUMERIC DEFAULT 0,
-  status TEXT DEFAULT 'Draft', -- Draft, Approved, Partially PO'd, Fully PO'd
+  status TEXT DEFAULT 'Draft',
   source TEXT DEFAULT 'Sched',
-  vendors JSONB DEFAULT '[]', -- [{name, rate, selected}]
+  vendors JSONB DEFAULT '[]',
   override_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Procurement — Purchase Orders
--- ============================================================
 CREATE TABLE IF NOT EXISTS purchase_orders (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   vendor TEXT NOT NULL,
   date TEXT,
   value NUMERIC DEFAULT 0,
-  status TEXT DEFAULT 'Pending', -- Pending, Partial, Delivered
+  status TEXT DEFAULT 'Pending',
   items INTEGER DEFAULT 0,
   has_grn BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Drawings
--- ============================================================
 CREATE TABLE IF NOT EXISTS drawings (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   number TEXT NOT NULL,
   title TEXT NOT NULL,
   revision TEXT DEFAULT 'A',
   date TEXT,
-  status TEXT DEFAULT 'Pending', -- Approved for Construction, Pending, Superseded, Rejected
+  status TEXT DEFAULT 'Pending',
   size TEXT DEFAULT 'A2',
   discipline TEXT,
   links JSONB DEFAULT '[]',
@@ -164,15 +148,12 @@ CREATE TABLE IF NOT EXISTS drawings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Correspondence (Letters)
--- ============================================================
 CREATE TABLE IF NOT EXISTS letters (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   number TEXT NOT NULL,
   date TEXT,
-  type TEXT NOT NULL, -- Incoming, Outgoing, Site Instruction
+  type TEXT NOT NULL,
   from_party TEXT,
   to_party TEXT,
   subject TEXT,
@@ -184,35 +165,29 @@ CREATE TABLE IF NOT EXISTS letters (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Q&S Items (ITRs, NCRs, Punch List, Incidents)
--- ============================================================
 CREATE TABLE IF NOT EXISTS qs_items (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
-  type TEXT NOT NULL, -- ITR, NCR, Punch, Incident, Near-Miss
+  project_id UUID REFERENCES projects(id),
+  type TEXT NOT NULL,
   title TEXT NOT NULL,
   linked_boq TEXT,
-  status TEXT DEFAULT 'Open', -- Open, CAP Submitted, Consultant Sign-off, Closed, Approved, Rejected
+  status TEXT DEFAULT 'Open',
   date TEXT,
   assignee TEXT,
   due_date TEXT,
-  severity TEXT, -- low, medium, high
+  severity TEXT,
   billing_hold BOOLEAN DEFAULT false,
-  cap JSONB, -- {rootCause, action, assignee, dueDate}
+  cap JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Equipment
--- ============================================================
 CREATE TABLE IF NOT EXISTS equipment (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   name TEXT NOT NULL,
   type TEXT,
-  status TEXT DEFAULT 'idle', -- active, breakdown, idle
+  status TEXT DEFAULT 'idle',
   owned BOOLEAN DEFAULT false,
   operator TEXT,
   license_expiry TEXT,
@@ -221,18 +196,15 @@ CREATE TABLE IF NOT EXISTS equipment (
   hours_today NUMERIC DEFAULT 0,
   burn_rate NUMERIC DEFAULT 0,
   burn_norm NUMERIC DEFAULT 0,
-  rental JSONB, -- {vendor, rate, terms[]}
+  rental JSONB,
   docs JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Subcontractors
--- ============================================================
 CREATE TABLE IF NOT EXISTS subcontractors (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   name TEXT NOT NULL,
   scope TEXT,
   agreement_value NUMERIC DEFAULT 0,
@@ -258,49 +230,40 @@ CREATE TABLE IF NOT EXISTS subcontractors (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Workers (Time & Attendance)
--- ============================================================
 CREATE TABLE IF NOT EXISTS workers (
   id TEXT PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   name TEXT NOT NULL,
   trade TEXT,
   phone TEXT,
-  status TEXT DEFAULT 'off-site', -- on-site, off-site, break
+  status TEXT DEFAULT 'off-site',
   clock_in TEXT,
   clock_out TEXT,
   geo_fence BOOLEAN DEFAULT true,
   today_hours NUMERIC DEFAULT 0,
-  allocated JSONB DEFAULT '[]', -- [{task, hours}]
+  allocated JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Chat Messages (future WhatsApp-like messaging)
--- ============================================================
 CREATE TABLE IF NOT EXISTS chat_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  project_id UUID REFERENCES projects(id) DEFAULT (SELECT id FROM projects LIMIT 1),
+  project_id UUID REFERENCES projects(id),
   sender_id TEXT NOT NULL,
   sender_name TEXT NOT NULL,
   sender_initials TEXT,
   sender_color TEXT,
-  channel_id TEXT DEFAULT 'general', -- general, site, management, etc.
+  channel_id TEXT DEFAULT 'general',
   content TEXT,
-  message_type TEXT DEFAULT 'text', -- text, image, file, voice
+  message_type TEXT DEFAULT 'text',
   media_url TEXT,
   reply_to UUID,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
--- Enable Row Level Security (multi-tenancy)
+-- Enable Row Level Security
 -- ============================================================
--- RLS is enabled on all tables. The actual policies are in
--- supabase-rls-policies.sql — run that file AFTER this one.
--- DO NOT create "Allow all" policies here; they defeat the purpose of RLS.
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE boq_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
