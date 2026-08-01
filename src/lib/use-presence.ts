@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/lib/app-store'
-import { supabase } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 export interface PresenceUser {
   id: string
@@ -14,27 +14,6 @@ export interface PresenceUser {
   lastSeen?: number
 }
 
-export interface RemoteCursor {
-  id: string
-  name: string
-  initials: string
-  color: string
-  x: number
-  y: number
-  canvas: string
-}
-
-const SIMULATED_USERS: PresenceUser[] = [
-  { id: 'sim-br', name: 'Bikash Rai', initials: 'BR', color: '#3b82f6', module: 'scheduler', hasCursor: false },
-  { id: 'sim-sg', name: 'Sita Gurung', initials: 'SG', color: '#10b981', module: 'daily-ops', hasCursor: false },
-  { id: 'sim-rb', name: 'Ram Bahadur', initials: 'RB', color: '#8b5cf6', module: 'boq', hasCursor: false },
-]
-
-const SIMULATED_CURSORS: RemoteCursor[] = [
-  { id: 'sim-br', name: 'Bikash Rai', initials: 'BR', color: '#3b82f6', x: 30, y: 20, canvas: 'gantt' },
-  { id: 'sim-sg', name: 'Sita Gurung', initials: 'SG', color: '#10b981', x: 60, y: 50, canvas: 'gantt' },
-]
-
 const CURRENT_USER: PresenceUser = {
   id: 'local',
   name: 'You',
@@ -44,130 +23,137 @@ const CURRENT_USER: PresenceUser = {
   hasCursor: false,
 }
 
-let connectionCount = 0
-let fallbackActive = false
+type RealtimeChannel = ReturnType<NonNullable<typeof supabase>['channel']>
 
 /**
- * Simulated presence — shows fake collaborators.
+ * Real Supabase Realtime Presence.
  *
- * Originally this had a socket.io WebSocket path that was never wired up.
- * That code has been removed. The hook now always uses simulated users.
+ * Subscribes to the `presence` channel, tracks the current user (including
+ * their active module), and mirrors remote joins/leaves into local state.
  *
- * To wire up real presence: replace this with Supabase Realtime Presence
- * (supabase.channel('presence').on('presence', { event: 'sync' }, ...)).
+ * Behavior:
+ * - No simulated users. When Supabase is not configured (env vars missing,
+ *   demo mode) or the subscription fails, `users` is empty and
+ *   `usingFallback` is true.
+ * - The channel is captured in a ref and properly unsubscribed + untracked
+ *   on unmount (no leak).
+ * - `activeModule` is read through a ref so the SUBSCRIBED callback always
+ *   broadcasts the latest module, and a separate effect re-tracks on change
+ *   without tearing the channel down.
+ * - `usingFallback` only flips to true when subscription actually fails
+ *   (CHANNEL_ERROR / TIMED_OUT) or when Supabase is not configured — never
+ *   synchronously at mount.
  */
 export function usePresence() {
   const { activeModule } = useApp()
   const [users, setUsers] = useState<PresenceUser[]>([])
-  const [cursors, setCursors] = useState<Record<string, RemoteCursor>>({})
   const [isConnected, setIsConnected] = useState(false)
-  const [usingFallback, setUsingFallback] = useState(fallbackActive)
-  const fallbackCursorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Initialize from isSupabaseConfigured() so we never have to synchronously
+  // call setUsingFallback(true) inside the mount effect — when Supabase isn't
+  // configured, fallback is a static fact, not a transient state.
+  const [usingFallback, setUsingFallback] = useState(() => !isSupabaseConfigured())
 
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  const userIdRef = useRef<string>(CURRENT_USER.id)
+  const activeModuleRef = useRef<string>(activeModule)
+
+  // Keep the latest activeModule in a ref so the SUBSCRIBED callback (which
+  // closes over the ref, not the value) always broadcasts the current module.
   useEffect(() => {
-    connectionCount++
+    activeModuleRef.current = activeModule
+  }, [activeModule])
 
-    if (!fallbackActive) {
-      fallbackActive = true
-      setUsingFallback(true)
-      // Try real Supabase Realtime Presence; fall back to simulated if unavailable
-      if (supabase) {
-        try {
-          const channel = supabase.channel('presence', {
-            config: { presence: { key: CURRENT_USER.id } },
-          })
-          channel
-            .on('presence', { event: 'sync' }, () => {
-              const state = channel.presenceState()
-              const remoteUsers: PresenceUser[] = []
-              for (const [key, presences] of Object.entries(state)) {
-                if (key === CURRENT_USER.id) continue
-                for (const p of presences) {
-                  const pu = p as unknown as PresenceUser
-                  if (pu.id) remoteUsers.push(pu)
-                }
-              }
-              if (remoteUsers.length > 0) {
-                setUsers(remoteUsers)
-                setIsConnected(true)
-                setUsingFallback(false)
-              }
-            })
-            .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-              if (key === CURRENT_USER.id) return
-              for (const p of newPresences) {
-                const pu = p as unknown as PresenceUser
-                if (pu.id) {
-                  setUsers(prev => prev.find(u => u.id === pu.id) ? prev : [...prev, pu])
-                }
-              }
-            })
-            .subscribe((status: string) => {
-              if (status === 'SUBSCRIBED') {
-                setIsConnected(true)
-                channel.track({ ...CURRENT_USER, module: activeModule })
-              } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                setIsConnected(false)
-                // Fall back to simulated
-                if (!fallbackActive) {
-                  fallbackActive = true
-                  setUsingFallback(true)
-                  setUsers(SIMULATED_USERS)
-                }
-              }
-            })
-        } catch {
-          // Supabase not configured or error — use simulated
-          setUsers(SIMULATED_USERS)
-        }
-      } else {
-        setUsers(SIMULATED_USERS)
-      }
-    }
+  // Set up the channel once on mount; tear down on unmount.
+  useEffect(() => {
+    // If Supabase isn't configured, `usingFallback` already started true
+    // (lazy initial state) and there's no channel to set up.
+    if (!supabase) return
 
-    // Simulated cursor movement — updates every 3.5 seconds
-    const cursorInterval = setInterval(() => {
-      setCursors(prev => {
-        const next = { ...prev }
-        for (const key of Object.keys(next)) {
-          next[key] = {
-            ...next[key],
-            x: 15 + Math.random() * 70,
-            y: 10 + Math.random() * 80,
+    const channel = supabase.channel('presence', {
+      config: { presence: { key: userIdRef.current } },
+    })
+    channelRef.current = channel
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState()
+        const remoteUsers: PresenceUser[] = []
+        for (const [key, presences] of Object.entries(state)) {
+          if (key === userIdRef.current) continue
+          for (const p of presences) {
+            const pu = p as unknown as PresenceUser
+            if (pu?.id) remoteUsers.push(pu)
           }
         }
-        return next
+        setUsers(remoteUsers)
+        setIsConnected(true)
       })
-    }, 3500)
-    fallbackCursorIntervalRef.current = cursorInterval
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        if (key === userIdRef.current) return
+        setUsers(prev => {
+          const additions: PresenceUser[] = []
+          for (const p of newPresences) {
+            const pu = p as unknown as PresenceUser
+            if (pu?.id && !prev.some(u => u.id === pu.id)) {
+              additions.push(pu)
+            }
+          }
+          return additions.length ? [...prev, ...additions] : prev
+        })
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        if (key === userIdRef.current) return
+        const leavingIds = new Set(
+          leftPresences
+            .map(p => (p as unknown as PresenceUser)?.id)
+            .filter((id): id is string => typeof id === 'string')
+        )
+        setUsers(prev => prev.filter(u => !leavingIds.has(u.id)))
+      })
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          channel
+            .track({ ...CURRENT_USER, module: activeModuleRef.current })
+            .catch(() => {
+              /* track failures are non-fatal; sync will still receive our presence */
+            })
+          setIsConnected(true)
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setIsConnected(false)
+          setUsingFallback(true)
+        }
+      })
 
     return () => {
-      connectionCount--
-      if (fallbackCursorIntervalRef.current) {
-        clearInterval(fallbackCursorIntervalRef.current)
-        fallbackCursorIntervalRef.current = null
+      // Tear down: stop tracking, unsubscribe, drop the ref.
+      try {
+        channel.untrack().catch(() => {})
+        channel.unsubscribe()
+      } catch {
+        // Channel may already be closed — safe to ignore.
       }
-      if (connectionCount === 0) {
-        fallbackActive = false
+      if (channelRef.current === channel) {
+        channelRef.current = null
       }
+      setIsConnected(false)
     }
   }, [])
 
-  const sendCursor = useCallback((_x: number, _y: number, _canvas: string) => {
-    // No-op — cursors feature was deleted; this stub keeps the API
-    // compatible in case status-bar.tsx or other callers still reference it.
-  }, [])
-
-  const stopCursor = useCallback(() => {
-    // No-op
-  }, [])
+  // Re-track presence when the active module changes, without tearing down
+  // the channel. Other users see our presence module update in real time.
+  useEffect(() => {
+    const channel = channelRef.current
+    if (!channel) return
+    channel
+      .track({ ...CURRENT_USER, module: activeModule })
+      .catch(() => {
+        /* ignore — best-effort re-track */
+      })
+  }, [activeModule])
 
   return {
     users,
-    cursors: Object.values(cursors),
     isConnected,
     usingFallback,
-    sendCursor,
-    stopCursor,
   }
 }
