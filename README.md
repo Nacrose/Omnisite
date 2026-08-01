@@ -44,14 +44,18 @@ bun install
 cp .env.example .env.local
 # Edit .env.local with your Supabase URL and anon key
 
-# Set up the database (in Supabase Dashboard → SQL Editor):
-# 1. Run supabase-schema.sql (creates all tables + triggers)
-# 2. Run supabase-rls-policies.sql (enables row-level security)
-# 3. Run supabase-seed.sql (inserts demo project + BOQ + tasks + CBS + workers)
-# 4. Run supabase/migrations/00000000000003_task_dependencies.sql (CPM links)
-# 5. Run supabase/migrations/00000000000004_cbs_subtree_trigger.sql (DB rollup)
+# Set up the database — single command via Supabase CLI:
+#   supabase db push
 #
-# Or run the combined file: download/omnisite-full-setup.sql (all 5 in order)
+# Or manually: paste each file in supabase/migrations/ (in order) into
+# Supabase Dashboard → SQL Editor → Run:
+#   00000000000000_schema.sql            — all tables + triggers
+#   00000000000001_rls_policies.sql      — row-level security (PM-gated)
+#   00000000000002_audit_log.sql         — audit_log table
+#   00000000000003_task_dependencies.sql — CPM dependency links
+#   00000000000004_cbs_subtree_trigger.sql — DB-level CBS rollup
+#   00000000000005_procurement_grns_stock.sql — GRN + stock tables
+#   00000000000006_seed_data.sql         — demo project + BOQ + tasks + CBS
 
 # Create your first user in Supabase Dashboard → Authentication → Users
 # Then assign them to the project as PM (in SQL Editor):

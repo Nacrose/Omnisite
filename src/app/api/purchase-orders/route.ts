@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole } from '@/lib/api-auth'
+import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
 import { logAudit, computeDiff } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody } from '@/lib/validation'
@@ -66,7 +66,10 @@ export async function POST(req: NextRequest) {
     ? await userClient.from('purchase_orders').select('*').eq('id', body.id).single()
     : { data: null }
 
-  const { data, error } = await userClient.from('purchase_orders').upsert(body).select()
+  const { data, error } = await userClient
+    .from('purchase_orders')
+    .upsert(body, { onConflict: getPrimaryKey('purchase_orders') })
+    .select()
 
   if (error) {
     console.error('[API] purchase_orders error:', error)

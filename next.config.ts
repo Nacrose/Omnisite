@@ -18,9 +18,10 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
-  // Security headers are set in src/middleware.ts (runs on every request,
-  // including API routes). This avoids duplication between middleware and
-  // next.config headers().
+  // Security headers are set in src/proxy.ts (runs on every request,
+  // including API routes). Next.js 16 renamed middleware.ts → proxy.ts;
+  // the function export is also `proxy` instead of `middleware`.
+  // This avoids duplication between proxy and next.config headers().
 }
 
 export default withBundleAnalyzer(nextConfig)

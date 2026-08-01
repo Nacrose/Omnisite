@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Search, CornerDownLeft, Hash, ArrowRight } from 'lucide-react'
 import { ModuleIcon } from '@/components/module-icon'
-import { searchAll, SearchResult } from '@/lib/search-index'
+import { searchAll, SearchResult, type SearchDataSources } from '@/lib/search-index'
 import { cn } from '@/lib/utils'
 
 type CmdEntry = { id: string; label: string; hint?: string; icon: string; action: () => void }
@@ -63,8 +63,31 @@ export function CommandPalette() {
     setWasOpen(false)
   }
 
-  // Global search results
-  const searchResults = useMemo(() => searchAll(query, 30), [query])
+  // Global search results — pass live data from localStorage (written by
+  // useSyncedState). This is a bridge: ideally the palette would subscribe
+  // to each module's React state directly, but that requires a larger
+  // refactor (context or zustand store for all module data). The localStorage
+  // read here is at least explicit about what it's doing, and the searchAll
+  // function no longer reads localStorage itself.
+  const searchResults = useMemo(() => {
+    const readLocal = (key: string) => {
+      if (typeof window === 'undefined') return undefined
+      try {
+        const raw = window.localStorage.getItem(key)
+        return raw ? JSON.parse(raw) : undefined
+      } catch {
+        return undefined
+      }
+    }
+    const sources: SearchDataSources = {
+      boqItems: readLocal('omnisite-boq-data'),
+      tasks: readLocal('omnisite-scheduler-tasks'),
+      cbsNodes: readLocal('omnisite-financials-cbs'),
+      subcontractors: readLocal('omnisite-scs'),
+      qsItems: readLocal('omnisite-qs-items'),
+    }
+    return searchAll(query, sources, 30)
+  }, [query])
 
   // Default actions (shown when query is empty)
   const defaultActions: CmdEntry[] = [

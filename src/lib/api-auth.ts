@@ -38,6 +38,41 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
 }
 
 /**
+ * Primary key column for each table. Used by API routes to pass an explicit
+ * `onConflict` to .upsert() calls — without this, a malicious client can
+ * overwrite an existing row by sending its PK in the body (Supabase defaults
+ * to conflict-on-PK, but being explicit prevents ambiguity and documents
+ * the expected conflict target per table).
+ *
+ * Tables not listed here default to 'id'.
+ */
+export const TABLE_PRIMARY_KEYS: Record<string, string> = {
+  boq_items: 'id',
+  tasks: 'id',
+  dsr_entries: 'id',
+  cbs_nodes: 'code', // cbs_nodes uses 'code' as PK, not 'id'
+  requisitions: 'id',
+  purchase_orders: 'id',
+  drawings: 'id',
+  letters: 'id',
+  qs_items: 'id',
+  equipment: 'id',
+  subcontractors: 'id',
+  workers: 'id',
+  chat_messages: 'id',
+  projects: 'id',
+  user_projects: 'id',
+  grns: 'id',
+  stock_items: 'code', // stock_items uses 'code' as PK
+  audit_log: 'id',
+}
+
+/** Get the PK column for a table (defaults to 'id'). */
+export function getPrimaryKey(table: string): string {
+  return TABLE_PRIMARY_KEYS[table] ?? 'id'
+}
+
+/**
  * Resolve the user's role from the `user_projects` table (the DB-backed source
  * of truth) instead of trusting `user_metadata.role`.
  *

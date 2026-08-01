@@ -62,8 +62,11 @@ export async function proxy(req: NextRequest) {
   }
 
   // Create a proxy-scoped Supabase client that reads + writes cookies.
-  // Wrapped in try/catch so that a Supabase outage or network error doesn't
-  // 500 every request — falls back to client-side auth gating.
+  // Fail-CLOSED: if getUser() throws (Supabase outage, network error,
+  // misconfigured env), redirect to /login with an error message rather
+  // than letting the request through. The previous fail-open pattern
+  // turned a Supabase outage into an auth bypass — the client-side gate
+  // may also fail, exposing unauthenticated content.
   try {
     const supabase = createProxySupabaseClient(req, res)
 
@@ -81,9 +84,12 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
   } catch {
-    // Supabase call failed (network error, misconfigured env, etc.).
-    // Let the request through — client-side auth will handle the redirect.
-    // This prevents a hard outage if Supabase is temporarily unreachable.
+    // Supabase call failed — fail CLOSED. Redirect to /login with an
+    // error param so the user sees a message instead of a blank page.
+    const loginUrl = new URL('/login', req.url)
+    loginUrl.searchParams.set('error', 'auth_service_unavailable')
+    loginUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
   return res

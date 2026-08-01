@@ -87,6 +87,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ─── 2b. Helper function: check if user is a PM on a project ───────────────
+-- Returns true only if the user has the PM role on the project (or is a PM
+-- on any project, which grants PM everywhere). Used to gate sensitive writes
+-- (CBS nodes, subcontractors, projects) that non-PM roles shouldn't touch.
+CREATE OR REPLACE FUNCTION user_has_pm_access(project_uuid UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM user_projects
+    WHERE user_id = auth.uid()
+    AND project_id = project_uuid
+    AND role = 'PM'
+  ) OR EXISTS (
+    SELECT 1 FROM user_projects
+    WHERE user_id = auth.uid()
+    AND role = 'PM'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 -- ─── 3. Drop the "Allow all for development" policies ──────────────────────
 DROP POLICY IF EXISTS "Allow all for development" ON projects;
 DROP POLICY IF EXISTS "Allow all for development" ON boq_items;
@@ -186,17 +206,20 @@ DROP POLICY IF EXISTS "cbs_select" ON cbs_nodes;
 CREATE POLICY "cbs_select" ON cbs_nodes
   FOR SELECT USING (user_has_project_access(project_id));
 
+-- CBS writes require PM role — financial data is too sensitive to allow
+-- non-PM roles (Foreman, Storekeeper) to mutate. This closes the gap where
+-- user_has_project_access() granted write to anyone assigned to the project.
 DROP POLICY IF EXISTS "cbs_insert" ON cbs_nodes;
 CREATE POLICY "cbs_insert" ON cbs_nodes
-  FOR INSERT WITH CHECK (user_has_project_access(project_id));
+  FOR INSERT WITH CHECK (user_has_pm_access(project_id));
 
 DROP POLICY IF EXISTS "cbs_update" ON cbs_nodes;
 CREATE POLICY "cbs_update" ON cbs_nodes
-  FOR UPDATE USING (user_has_project_access(project_id)) WITH CHECK (user_has_project_access(project_id));
+  FOR UPDATE USING (user_has_pm_access(project_id)) WITH CHECK (user_has_pm_access(project_id));
 
 DROP POLICY IF EXISTS "cbs_delete" ON cbs_nodes;
 CREATE POLICY "cbs_delete" ON cbs_nodes
-  FOR DELETE USING (user_has_project_access(project_id));
+  FOR DELETE USING (user_has_pm_access(project_id));
 
 -- ─── requisitions ──
 DROP POLICY IF EXISTS "req_select" ON requisitions;
@@ -305,17 +328,19 @@ DROP POLICY IF EXISTS "sc_select" ON subcontractors;
 CREATE POLICY "sc_select" ON subcontractors
   FOR SELECT USING (user_has_project_access(project_id));
 
+-- Subcontractor writes require PM role (subcontract agreements, advances,
+-- retentions are financial commitments).
 DROP POLICY IF EXISTS "sc_insert" ON subcontractors;
 CREATE POLICY "sc_insert" ON subcontractors
-  FOR INSERT WITH CHECK (user_has_project_access(project_id));
+  FOR INSERT WITH CHECK (user_has_pm_access(project_id));
 
 DROP POLICY IF EXISTS "sc_update" ON subcontractors;
 CREATE POLICY "sc_update" ON subcontractors
-  FOR UPDATE USING (user_has_project_access(project_id)) WITH CHECK (user_has_project_access(project_id));
+  FOR UPDATE USING (user_has_pm_access(project_id)) WITH CHECK (user_has_pm_access(project_id));
 
 DROP POLICY IF EXISTS "sc_delete" ON subcontractors;
 CREATE POLICY "sc_delete" ON subcontractors
-  FOR DELETE USING (user_has_project_access(project_id));
+  FOR DELETE USING (user_has_pm_access(project_id));
 
 -- ─── workers ──
 DROP POLICY IF EXISTS "workers_select" ON workers;
@@ -381,5 +406,5 @@ CREATE POLICY "audit_select_assigned" ON audit_log
 
 -- Add CHECK constraint on user_projects.role
 ALTER TABLE user_projects DROP CONSTRAINT IF EXISTS valid_role;
-ALTER TABLE user_projects ADD CONSTRAINT valid_role
+ALTER TABLE user_projects ADD CONSTRAINT valid_role 
   CHECK (role IN ('PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'));

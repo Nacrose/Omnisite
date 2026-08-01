@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole } from '@/lib/api-auth'
+import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
 import { logAudit, computeDiff } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody } from '@/lib/validation'

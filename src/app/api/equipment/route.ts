@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole } from '@/lib/api-auth'
+import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
 import { logAudit, computeDiff } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody, equipmentSchema } from '@/lib/validation'
@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
     ? await userClient.from('equipment').select('*').eq('id', body.id).single()
     : { data: null }
 
-  const { data, error } = await userClient.from('equipment').upsert(body).select()
+  const { data, error } = await userClient
+    .from('equipment')
+    .upsert(body, { onConflict: getPrimaryKey('equipment') })
+    .select()
 
   if (error) {
     console.error('[API] equipment error:', error)

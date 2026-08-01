@@ -30,6 +30,10 @@ export function computeDiff(
  *
  * On failure, reports to Sentry (if configured) and logs to console.
  * Never rejects — audit failures must not fail the mutation.
+ *
+ * NOTE: This is the legacy fire-and-forget pattern. Prefer upsertWithAudit()
+ * for new routes — it performs the business write + audit entry in a single
+ * Postgres transaction, so the audit trail is never lost.
  */
 export async function logAudit(entry: Omit<AuditEntry, 'timestamp'>): Promise<void> {
   if (!isServiceClientConfigured()) {
@@ -52,5 +56,60 @@ export async function logAudit(entry: Omit<AuditEntry, 'timestamp'>): Promise<vo
     } catch {
       // Sentry not configured — console.error above is sufficient
     }
+  }
+}
+
+/**
+ * Transactional upsert + audit log in a single Postgres transaction.
+ *
+ * Calls the `upsert_with_audit()` Postgres function (defined in migration
+ * 00000000000007) which:
+ *   1. Upserts the row into p_table (ON CONFLICT p_pk DO UPDATE)
+ *   2. Inserts an audit_log entry with field-level diff
+ *   3. Returns the resulting row as JSON
+ *
+ * If either step fails, BOTH roll back — the business write is never
+ * committed without an audit trail.
+ *
+ * @param p_table - Table name (e.g. 'boq_items')
+ * @param p_row - Row data as JSON (must include the PK field)
+ * @param p_pk - Primary key column name (e.g. 'id' or 'code')
+ * @param p_user_id - The authenticated user's id (from requireAuth)
+ * @param p_action - 'INSERT' | 'UPDATE' | 'DELETE'
+ * @param p_old_values - Previous row snapshot (for UPDATE/DELETE diff). Null for INSERT.
+ * @returns The upserted row as JSON, or null on failure.
+ */
+export async function upsertWithAudit(
+  p_table: string,
+  p_row: Record<string, unknown>,
+  p_pk: string,
+  p_user_id: string,
+  p_action: 'INSERT' | 'UPDATE' | 'DELETE',
+  p_old_values: Record<string, unknown> | null
+): Promise<{ data: Record<string, unknown> | null; error: string | null }> {
+  if (!isServiceClientConfigured()) {
+    // Demo mode — no audit log, just return the row.
+    return { data: p_row, error: null }
+  }
+
+  try {
+    const serviceClient = getServiceClient()
+    const { data, error } = await serviceClient.rpc('upsert_with_audit', {
+      p_table,
+      p_row: p_row as Record<string, unknown> as object,
+      p_pk,
+      p_user_id,
+      p_action,
+      p_old_values: p_old_values as Record<string, unknown> as object,
+    })
+
+    if (error) {
+      return { data: null, error: error.message }
+    }
+
+    return { data: data as Record<string, unknown>, error: null }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown error'
+    return { data: null, error: msg }
   }
 }

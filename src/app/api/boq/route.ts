@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole } from '@/lib/api-auth'
+import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
 import { logAudit, computeDiff } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody, boqItemSchema } from '@/lib/validation'
@@ -67,7 +67,10 @@ export async function POST(req: NextRequest) {
     ? await userClient.from('boq_items').select('*').eq('id', body.id).single()
     : { data: null }
 
-  const { data, error } = await userClient.from('boq_items').upsert(body).select()
+  const { data, error } = await userClient
+    .from('boq_items')
+    .upsert(body, { onConflict: getPrimaryKey('boq_items') })
+    .select()
 
   if (error) {
     console.error('[API] boq_items error:', error)

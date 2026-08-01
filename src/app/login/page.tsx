@@ -19,6 +19,18 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Show error from proxy redirect (e.g. auth service unavailable).
+  // Computed outside the effect to avoid the set-state-in-effect lint rule.
+  const [proxyError] = useState(() => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get('error')
+    if (err === 'auth_service_unavailable') {
+      return 'Authentication service is temporarily unavailable. Please try again in a moment.'
+    }
+    return null
+  })
+
   // If already signed in, bounce to /.
   useEffect(() => {
     if (!loading && user) {
@@ -92,13 +104,13 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && (
+            {(error || proxyError) && (
               <div
                 role="alert"
                 className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-700 dark:text-red-300"
               >
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                <span>{error}</span>
+                <span>{error || proxyError}</span>
               </div>
             )}
 

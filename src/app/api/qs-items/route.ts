@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole } from '@/lib/api-auth'
+import { requireAuth, requireRole, getPrimaryKey } from '@/lib/api-auth'
 import { logAudit, computeDiff } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateBody, qsItemSchema } from '@/lib/validation'
@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
     ? await userClient.from('qs_items').select('*').eq('id', body.id).single()
     : { data: null }
 
-  const { data, error } = await userClient.from('qs_items').upsert(body).select()
+  const { data, error } = await userClient
+    .from('qs_items')
+    .upsert(body, { onConflict: getPrimaryKey('qs_items') })
+    .select()
 
   if (error) {
     console.error('[API] qs_items error:', error)

@@ -71,6 +71,30 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Task dependency links for CPM (Critical Path Method) scheduling.
+-- Each row represents a dependency: successor (task_id) depends on
+-- predecessor (predecessor_id) with a given relationship type and lag.
+--
+-- Relationship types (standard CPM):
+--   FS = Finish-to-Start (predecessor must finish before successor starts)
+--   SS = Start-to-Start  (predecessor must start before successor starts)
+--   FF = Finish-to-Finish (predecessor must finish before successor finishes)
+--   SF = Start-to-Finish  (predecessor must start before successor finishes)
+-- Lag is in weeks (can be negative for lead/acceleration).
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES projects(id),
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  predecessor_id TEXT NOT NULL,
+  link_type TEXT NOT NULL DEFAULT 'FS' CHECK (link_type IN ('FS', 'SS', 'FF', 'SF')),
+  lag_weeks INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(task_id, predecessor_id, link_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_deps_successor ON task_dependencies(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_deps_predecessor ON task_dependencies(predecessor_id);
+
 CREATE TABLE IF NOT EXISTS dsr_entries (
   id TEXT PRIMARY KEY,
   project_id UUID REFERENCES projects(id),
@@ -127,6 +151,43 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   status TEXT DEFAULT 'Pending',
   items INTEGER DEFAULT 0,
   has_grn BOOLEAN DEFAULT false,
+  req_id TEXT,             -- originating requisition (traceability)
+  material_code TEXT,      -- links to stock_items.code
+  rate NUMERIC DEFAULT 0,  -- unit rate at PO creation
+  po_qty NUMERIC DEFAULT 0, -- ordered quantity
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- GRN (Goods Received Notes) — 3-way match (PO vs GRN vs Invoice)
+CREATE TABLE IF NOT EXISTS grns (
+  id TEXT PRIMARY KEY,
+  project_id UUID REFERENCES projects(id),
+  po_id TEXT NOT NULL,
+  vendor TEXT NOT NULL,
+  po_qty NUMERIC NOT NULL DEFAULT 0,
+  grn_qty NUMERIC NOT NULL DEFAULT 0,
+  invoice_qty NUMERIC NOT NULL DEFAULT 0,
+  rate NUMERIC NOT NULL DEFAULT 0,
+  pay_status TEXT NOT NULL DEFAULT 'Awaiting GRN'
+    CHECK (pay_status IN ('Cleared', 'Hold', 'Partial Hold', 'Awaiting GRN')),
+  material_code TEXT,
+  date TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_grns_po ON grns(po_id);
+CREATE INDEX IF NOT EXISTS idx_grns_material ON grns(material_code);
+
+-- Stock items — live inventory
+CREATE TABLE IF NOT EXISTS stock_items (
+  code TEXT PRIMARY KEY,
+  project_id UUID REFERENCES projects(id),
+  name TEXT NOT NULL,
+  on_hand NUMERIC NOT NULL DEFAULT 0,
+  reserved NUMERIC NOT NULL DEFAULT 0,
+  avg_cost NUMERIC NOT NULL DEFAULT 0,
+  warehouse TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -278,15 +339,22 @@ ALTER TABLE equipment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subcontractors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE grns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_items ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- Enable Realtime for live updates
 -- ============================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE boq_items;
-ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
-ALTER PUBLICATION supabase_realtime ADD TABLE dsr_entries;
-ALTER PUBLICATION supabase_realtime ADD TABLE cbs_nodes;
-ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+DO $$
+BEGIN
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE boq_items; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE tasks; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE dsr_entries; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE cbs_nodes; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE grns; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE stock_items; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
 
 -- ============================================================
 -- Updated_at trigger
@@ -313,3 +381,72 @@ CREATE TRIGGER update_equipment_updated_at BEFORE UPDATE ON equipment FOR EACH R
 CREATE TRIGGER update_subcontractors_updated_at BEFORE UPDATE ON subcontractors FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER update_workers_updated_at BEFORE UPDATE ON workers FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER update_chat_messages_updated_at BEFORE UPDATE ON chat_messages FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ─── CBS subtree recompute trigger ─────────────────────────────────────────
+-- After any INSERT/UPDATE/DELETE on cbs_nodes, walks UP the tree and
+-- recomputes each ancestor's budget/committed/actual/forecast/margin_pct
+-- from its children. Ensures rollups stay correct regardless of write path.
+CREATE OR REPLACE FUNCTION recompute_cbs_subtree()
+RETURNS TRIGGER AS $$
+DECLARE
+  parent_code_val TEXT;
+  current_code_val TEXT;
+BEGIN
+  -- Re-entrancy guard: the walk-up loop and the self-recompute block below
+  -- both issue UPDATE cbs_nodes, which re-fires THIS trigger. Without this
+  -- guard, any node with children recurses forever (stack depth exceeded).
+  IF pg_trigger_depth() > 1 THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  current_code_val := COALESCE(NEW.code, OLD.code);
+  parent_code_val := COALESCE(NEW.parent_code, OLD.parent_code);
+
+  WHILE parent_code_val IS NOT NULL LOOP
+    UPDATE cbs_nodes SET
+      budget = COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      committed = COALESCE((SELECT SUM(committed) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      actual = COALESCE((SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      forecast = COALESCE((SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      margin_pct = CASE
+        WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val), 0) > 0
+        THEN ROUND(
+          ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) -
+           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = parent_code_val)) /
+          (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) * 100.0,
+          2
+        )
+        ELSE 0
+      END,
+      updated_at = NOW()
+    WHERE code = parent_code_val;
+    SELECT parent_code INTO parent_code_val FROM cbs_nodes WHERE code = parent_code_val;
+  END LOOP;
+
+  IF EXISTS (SELECT 1 FROM cbs_nodes WHERE parent_code = current_code_val) THEN
+    UPDATE cbs_nodes SET
+      budget = COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      committed = COALESCE((SELECT SUM(committed) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      actual = COALESCE((SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      forecast = COALESCE((SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = current_code_val), 0),
+      margin_pct = CASE
+        WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val), 0) > 0
+        THEN ROUND(
+          ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) -
+           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = current_code_val)) /
+          (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) * 100.0,
+          2
+        )
+        ELSE 0
+      END,
+      updated_at = NOW()
+    WHERE code = current_code_val;
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER cbs_nodes_subtree_recompute
+  AFTER INSERT OR UPDATE OR DELETE ON cbs_nodes
+  FOR EACH ROW EXECUTE FUNCTION recompute_cbs_subtree();
