@@ -29,6 +29,8 @@ export interface BoqGridProps {
   onToggleSelect: (id: string, value: boolean) => void
   onUpdateItem: (id: string, field: 'qty' | 'rate', value: number) => void
   onSetEditing: (e: BoqEditingState | null) => void
+  /** Column visibility checker. If provided, cells whose key returns false are hidden. */
+  isVisible?: (key: string) => boolean
 }
 
 /**
@@ -75,6 +77,8 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
   props: BoqGridProps
 }) {
   const { selected, editing, onSelectId, onContextMenu, onToggleExpand, onToggleSelect, onUpdateItem, onSetEditing } = props
+  // Column visibility — defaults to always-visible if not provided.
+  const vis = props.isVisible ?? (() => true)
   return (
     <div
       onClick={() => onSelectId(item.id)}
@@ -110,7 +114,7 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
         )}
       </div>
       {/* Code — same position for all rows; hierarchy shown by numbering (1, 1.1, 1.1.1) */}
-      <div className={cn('w-16 flex-shrink-0 px-2 font-mono', isHeading ? 'text-foreground font-semibold' : 'text-muted-foreground')}>{item.code}</div>
+      {vis('code') && <div className={cn('w-16 flex-shrink-0 px-2 font-mono', isHeading ? 'text-foreground font-semibold' : 'text-muted-foreground')}>{item.code}</div>}
       {/* Description — only the TEXT indents based on depth; the cell boundary stays aligned. */}
       <div
         className={cn('flex-1 min-w-0 truncate px-2', isHeading && 'font-semibold')}
@@ -119,7 +123,7 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
         {item.desc}
       </div>
       {/* Qty cell — inline editable for non-heading items */}
-      <div className="w-24 flex-shrink-0 pr-2">
+      {vis('qty') && <div className="w-24 flex-shrink-0 pr-2">
         {isHeading || item.type === 'Provisional Sum' ? (
           <span className="text-right block text-muted-foreground">{item.qty > 0 ? item.qty.toLocaleString() : '—'}</span>
         ) : (
@@ -138,10 +142,10 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
             )}
           />
         )}
-      </div>
-      <div className="w-14 flex-shrink-0 text-muted-foreground">{item.uom || '—'}</div>
+      </div>}
+      {vis('uom') && <div className="w-14 flex-shrink-0 text-muted-foreground">{item.uom || '—'}</div>}
       {/* Rate cell — inline editable for non-heading items (locked for Provisional Sum) */}
-      <div className="w-28 flex-shrink-0 pr-2">
+      {vis('rate') && <div className="w-28 flex-shrink-0 pr-2">
         {isHeading ? (
           <span className="text-right block font-mono text-muted-foreground">—</span>
         ) : item.type === 'Provisional Sum' ? (
@@ -165,12 +169,12 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
             )}
           />
         )}
-      </div>
+      </div>}
       {/* Amount cell — auto-calculated, live updates */}
-      <div className="w-28 flex-shrink-0 text-right pr-3 font-mono font-medium tabular-nums">
+      {vis('amount') && <div className="w-28 flex-shrink-0 text-right pr-3 font-mono font-medium tabular-nums">
         {item.qty * item.rate > 0 ? (item.qty * item.rate).toLocaleString() : '—'}
-      </div>
-      <div className="w-24 flex-shrink-0 pr-2">
+      </div>}
+      {vis('type') && <div className="w-24 flex-shrink-0 pr-2">
         {isHeading ? (
           <Badge variant="outline" className="text-[10px]">Heading</Badge>
         ) : (
@@ -181,10 +185,10 @@ function BoqRow({ item, depth, isHeading, isSelected, hasChildren, isExpanded, p
             {item.type}
           </Badge>
         )}
-      </div>
-      <div className="w-10 flex-shrink-0 flex justify-center">
+      </div>}
+      {vis('ra') && <div className="w-10 flex-shrink-0 flex justify-center">
         {!isHeading && item.hasRA && <Lock className="w-3 h-3 text-emerald-500" />}
-      </div>
+      </div>}
     </div>
   )
 }

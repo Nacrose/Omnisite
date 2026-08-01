@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
 import {
   DndContext, DragOverlay,
@@ -91,6 +92,20 @@ export function BoqModule() {
   const [editing, setEditing] = useState<BoqEditingState | null>(null)
   // Search query — filters the tree by code/description.
   const [searchQuery, setSearchQuery] = useState('')
+  // Column visibility
+  const BOQ_COLS: ColumnDef[] = [
+    { key: 'checkbox', label: 'Checkbox', hideable: false },
+    { key: 'expand', label: 'Expand', hideable: false },
+    { key: 'code', label: 'Code' },
+    { key: 'desc', label: 'Description', hideable: false },
+    { key: 'qty', label: 'Qty' },
+    { key: 'uom', label: 'UOM' },
+    { key: 'rate', label: 'Rate (NPR)' },
+    { key: 'amount', label: 'Amount (NPR)' },
+    { key: 'type', label: 'Type' },
+    { key: 'ra', label: 'RA' },
+  ]
+  const { visible: boqColVisible, isVisible: boqIsVisible, toggle: boqToggleCol } = useColumnVisibility(BOQ_COLS.map(c => c.key), [], 'boq-grid')
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
   // Drag-and-drop state
@@ -549,21 +564,23 @@ export function BoqModule() {
             </Button>
             <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Item</Button>
           </PaneHeader>
-          {/* Column header */}
-          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
+          {/* Column header — sticky on vertical scroll, scrolls horizontally with body */}
+          <StickyTableShell minWidth={1000}>
+          <StickyTableHeader>
             <div className="w-6" />
             <div className="w-7" />
-            <div className="w-16 px-2">Code</div>
+            {boqIsVisible('code') && <div className="w-16 px-2">Code</div>}
             <div className="flex-1 px-2">Description</div>
-            <div className="w-24 px-2 text-right">Qty</div>
-            <div className="w-14 px-2">UOM</div>
-            <div className="w-28 px-2 text-right">Rate (NPR)</div>
-            <div className="w-28 px-2 text-right">Amount (NPR)</div>
-            <div className="w-24 px-2">Type</div>
-            <div className="w-10 text-center">RA</div>
-          </div>
-          <PaneBody className="px-0">
-            <DndContext
+            {boqIsVisible('qty') && <div className="w-24 px-2 text-right">Qty</div>}
+            {boqIsVisible('uom') && <div className="w-14 px-2">UOM</div>}
+            {boqIsVisible('rate') && <div className="w-28 px-2 text-right">Rate (NPR)</div>}
+            {boqIsVisible('amount') && <div className="w-28 px-2 text-right">Amount (NPR)</div>}
+            {boqIsVisible('type') && <div className="w-24 px-2">Type</div>}
+            {boqIsVisible('ra') && <div className="w-10 text-center">RA</div>}
+            <div className="flex-shrink-0 pr-2"><ColumnToggle columns={BOQ_COLS} visible={boqColVisible} onToggle={boqToggleCol} /></div>
+          </StickyTableHeader>
+          <StickyTableBody>
+          <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragStart={handleDragStart}
@@ -585,6 +602,7 @@ export function BoqModule() {
                 onToggleSelect={handleToggleSelect}
                 onUpdateItem={updateItem}
                 onSetEditing={setEditing}
+                isVisible={boqIsVisible}
               />
               <DragOverlay>
                 {draggedItem ? (
@@ -597,7 +615,8 @@ export function BoqModule() {
                 ) : null}
               </DragOverlay>
             </DndContext>
-          </PaneBody>
+          </StickyTableBody>
+          </StickyTableShell>
           {/* Footer — contract summary moved from the old left outline pane */}
           <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs text-muted-foreground bg-secondary/30 gap-4">
             <span className="flex items-center gap-1.5">

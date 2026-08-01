@@ -12,6 +12,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import {
+  useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef,
+} from '@/components/ui/table-utils'
 
 interface Dwg {
   id: string; number: string; title: string; revision: string; date: string; status: 'Approved for Construction' | 'Pending' | 'Superseded' | 'Rejected'
@@ -67,6 +70,16 @@ export function DrawingsModule() {
     return true
   })
 
+  const COLS: ColumnDef[] = [
+    { key: 'number', label: 'Number' },
+    { key: 'title', label: 'Title' },
+    { key: 'discipline', label: 'Discipline' },
+    { key: 'rev', label: 'Rev' },
+    { key: 'size', label: 'Size' },
+    { key: 'status', label: 'Status' },
+  ]
+  const { visible, isVisible, toggle } = useColumnVisibility(COLS.map(c => c.key), [], 'drawings-register')
+
   return (
     <Workspace3Pane
       leftPane={
@@ -99,40 +112,44 @@ export function DrawingsModule() {
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Upload drawing', { description: 'Opens the drawing upload form.' })}><Upload className="w-3.5 h-3.5" />Upload</Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Export register', { description: 'Exports the drawing register to CSV.' })}><Download className="w-3.5 h-3.5" />Export</Button>
           </PaneHeader>
-          {/* Column header */}
-          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-            <div className="w-32 px-2">Number</div>
-            <div className="flex-1 px-2">Title</div>
-            <div className="w-16 px-2">Discipline</div>
-            <div className="w-20 px-2">Rev</div>
-            <div className="w-12 px-2">Size</div>
-            <div className="w-24 px-2">Status</div>
-          </div>
-          <PaneBody className="px-0">
-            {filtered.length === 0 ? (
-              <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">No drawings match this filter.</div>
-            ) : (
-              filtered.map(d => (
-                <button
-                  key={d.id}
-                  onClick={() => setSelectedId(d.id)}
-                  className={cn(
-                    'w-full flex items-center h-10 border-b border-[var(--pane-divider)] text-xs hover:bg-accent/50 transition-colors text-left',
-                    selectedId === d.id && 'bg-accent border-l-2 border-l-primary'
-                  )}
-                >
-                  <div className="w-32 px-2 font-mono text-muted-foreground">{d.number}</div>
-                  <div className="flex-1 px-2 font-medium truncate">{d.title}</div>
-                  <div className="w-16 px-2 text-muted-foreground">{d.discipline}</div>
-                  <div className="w-20 px-2 font-mono">{d.revision}</div>
-                  <div className="w-12 px-2">{d.size}</div>
-                  <div className="w-24 px-2">
-                    <Badge variant="outline" className={cn('text-[9px]', d.status === 'Approved for Construction' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', d.status === 'Pending' && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{d.status === 'Approved for Construction' ? 'AFC' : d.status}</Badge>
-                  </div>
-                </button>
-              ))
-            )}
-          </PaneBody>
+          <StickyTableShell minWidth={680}>
+            <StickyTableHeader>
+              {isVisible('number') && <div className="w-32 px-2">Number</div>}
+              {isVisible('title') && <div className="flex-1 px-2">Title</div>}
+              {isVisible('discipline') && <div className="w-16 px-2">Discipline</div>}
+              {isVisible('rev') && <div className="w-20 px-2">Rev</div>}
+              {isVisible('size') && <div className="w-12 px-2">Size</div>}
+              {isVisible('status') && <div className="w-24 px-2">Status</div>}
+              <div className="flex-shrink-0 pr-2"><ColumnToggle columns={COLS} visible={visible} onToggle={toggle} /></div>
+            </StickyTableHeader>
+            <StickyTableBody>
+              {filtered.length === 0 ? (
+                <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">No drawings match this filter.</div>
+              ) : (
+                filtered.map(d => (
+                  <button
+                    key={d.id}
+                    onClick={() => setSelectedId(d.id)}
+                    className={cn(
+                      'w-full flex items-center h-10 border-b border-[var(--pane-divider)] text-xs hover:bg-accent/50 transition-colors text-left',
+                      selectedId === d.id && 'bg-accent border-l-2 border-l-primary'
+                    )}
+                  >
+                    {isVisible('number') && <div className="w-32 px-2 font-mono text-muted-foreground">{d.number}</div>}
+                    {isVisible('title') && <div className="flex-1 px-2 font-medium truncate">{d.title}</div>}
+                    {isVisible('discipline') && <div className="w-16 px-2 text-muted-foreground">{d.discipline}</div>}
+                    {isVisible('rev') && <div className="w-20 px-2 font-mono">{d.revision}</div>}
+                    {isVisible('size') && <div className="w-12 px-2">{d.size}</div>}
+                    {isVisible('status') && (
+                      <div className="w-24 px-2">
+                        <Badge variant="outline" className={cn('text-[9px]', d.status === 'Approved for Construction' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', d.status === 'Pending' && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{d.status === 'Approved for Construction' ? 'AFC' : d.status}</Badge>
+                      </div>
+                    )}
+                  </button>
+                ))
+              )}
+            </StickyTableBody>
+          </StickyTableShell>
         </>
       }
       rightPane={<DrawingInspector key={selected.id} dwg={selected} />}

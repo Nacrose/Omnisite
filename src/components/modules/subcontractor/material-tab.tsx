@@ -6,6 +6,9 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Subcontractor } from './types'
 import { fmtNPR } from './types'
+import {
+  useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef,
+} from '@/components/ui/table-utils'
 
 // ─── Material Reconciliation Tab ─────────────────────────────────────────────
 
@@ -63,6 +66,16 @@ export function MaterialTab({ sc }: { sc: Subcontractor }) {
 
   const materials = Array.from(materialMap.values())
 
+  const COLS: ColumnDef[] = [
+    { key: 'material', label: 'Material' },
+    { key: 'theoretical', label: 'Theoretical' },
+    { key: 'issued', label: 'Issued' },
+    { key: 'returned', label: 'Ret.' },
+    { key: 'netused', label: 'Net Used' },
+    { key: 'variance', label: 'Var%' },
+  ]
+  const { visible, isVisible, toggle } = useColumnVisibility(COLS.map(c => c.key), [], 'sc-material-recon')
+
   return (
     <div className="p-4 space-y-3 text-xs">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -86,38 +99,49 @@ export function MaterialTab({ sc }: { sc: Subcontractor }) {
       </div>
 
       {/* Reconciliation table */}
-      <div className="rounded-md border border-[var(--pane-divider)] overflow-hidden">
-        <div className="grid grid-cols-12 gap-1 px-2 py-1.5 bg-secondary/30 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <div className="col-span-4">Material</div>
-          <div className="col-span-2 text-right">Theoretical</div>
-          <div className="col-span-2 text-right">Issued</div>
-          <div className="col-span-1 text-right">Ret.</div>
-          <div className="col-span-2 text-right">Net Used</div>
-          <div className="col-span-1 text-right">Var%</div>
-        </div>
-        {materials.map(m => {
-          const netUsed = m.issued - m.returned
-          const hasTheoretical = m.theoretical > 0
-          const variance = hasTheoretical ? ((netUsed - m.theoretical) / m.theoretical) * 100 : 0
-          const overVariance = hasTheoretical && Math.abs(variance) > 5
-          return (
-            <div key={m.code} className={cn('grid grid-cols-12 gap-1 px-2 py-1.5 border-t border-[var(--pane-divider)]', overVariance && 'bg-amber-500/5')}>
-              <div className="col-span-4 min-w-0">
-                <div className="font-medium truncate">{m.name}</div>
-                <div className="text-[9px] text-muted-foreground font-mono">{m.code}</div>
-              </div>
-              <div className="col-span-2 text-right font-mono text-muted-foreground">
-                {hasTheoretical ? `${m.theoretical.toFixed(1)} ${m.uom}` : <span className="text-[9px] opacity-60">N/A</span>}
-              </div>
-              <div className="col-span-2 text-right font-mono">{m.issued.toFixed(1)}</div>
-              <div className="col-span-1 text-right font-mono text-muted-foreground">{m.returned.toFixed(0)}</div>
-              <div className="col-span-2 text-right font-mono font-medium">{netUsed.toFixed(1)}</div>
-              <div className={cn('col-span-1 text-right font-mono font-bold', overVariance ? 'text-amber-600' : hasTheoretical ? 'text-emerald-600' : 'text-muted-foreground/50')}>
-                {hasTheoretical ? `${variance >= 0 ? '+' : ''}${variance.toFixed(0)}%` : '—'}
-              </div>
-            </div>
-          )
-        })}
+      <div className="rounded-md border border-[var(--pane-divider)]">
+        <StickyTableShell minWidth={700}>
+          <StickyTableHeader>
+            {isVisible('material') && <div className="w-44 px-2">Material</div>}
+            {isVisible('theoretical') && <div className="w-24 px-2 text-right">Theoretical</div>}
+            {isVisible('issued') && <div className="w-24 px-2 text-right">Issued</div>}
+            {isVisible('returned') && <div className="w-16 px-2 text-right">Ret.</div>}
+            {isVisible('netused') && <div className="w-24 px-2 text-right">Net Used</div>}
+            {isVisible('variance') && <div className="w-16 px-2 text-right">Var%</div>}
+            <div className="flex-shrink-0 pr-2"><ColumnToggle columns={COLS} visible={visible} onToggle={toggle} /></div>
+          </StickyTableHeader>
+          <StickyTableBody>
+            {materials.map(m => {
+              const netUsed = m.issued - m.returned
+              const hasTheoretical = m.theoretical > 0
+              const variance = hasTheoretical ? ((netUsed - m.theoretical) / m.theoretical) * 100 : 0
+              const overVariance = hasTheoretical && Math.abs(variance) > 5
+              return (
+                <div key={m.code} className={cn('flex items-center px-2 py-1.5 border-t border-[var(--pane-divider)]', overVariance && 'bg-amber-500/5')}>
+                  {isVisible('material') && (
+                    <div className="w-44 px-2 min-w-0">
+                      <div className="font-medium truncate">{m.name}</div>
+                      <div className="text-[9px] text-muted-foreground font-mono">{m.code}</div>
+                    </div>
+                  )}
+                  {isVisible('theoretical') && (
+                    <div className="w-24 px-2 text-right font-mono text-muted-foreground">
+                      {hasTheoretical ? `${m.theoretical.toFixed(1)} ${m.uom}` : <span className="text-[9px] opacity-60">N/A</span>}
+                    </div>
+                  )}
+                  {isVisible('issued') && <div className="w-24 px-2 text-right font-mono">{m.issued.toFixed(1)}</div>}
+                  {isVisible('returned') && <div className="w-16 px-2 text-right font-mono text-muted-foreground">{m.returned.toFixed(0)}</div>}
+                  {isVisible('netused') && <div className="w-24 px-2 text-right font-mono font-medium">{netUsed.toFixed(1)}</div>}
+                  {isVisible('variance') && (
+                    <div className={cn('w-16 px-2 text-right font-mono font-bold', overVariance ? 'text-amber-600' : hasTheoretical ? 'text-emerald-600' : 'text-muted-foreground/50')}>
+                      {hasTheoretical ? `${variance >= 0 ? '+' : ''}${variance.toFixed(0)}%` : '—'}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </StickyTableBody>
+        </StickyTableShell>
       </div>
 
       <div className="p-2 rounded-md bg-blue-500/10 border border-blue-500/30 text-[10px] text-muted-foreground">

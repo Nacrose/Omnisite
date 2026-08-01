@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { exportToCsv } from '@/lib/csv-export'
 import { toast } from 'sonner'
@@ -194,6 +195,18 @@ export function FinancialsModule() {
 
   // Non-persistent UI state
   const [editing, setEditing] = useState<{ code: string; field: 'committed' | 'actual' | 'forecast' } | null>(null)
+  // Column visibility
+  const CBS_COLS: ColumnDef[] = [
+    { key: 'expand', label: 'Expand', hideable: false },
+    { key: 'code', label: 'Code' },
+    { key: 'name', label: 'CBS Node', hideable: false },
+    { key: 'budget', label: 'Budget' },
+    { key: 'committed', label: 'Committed' },
+    { key: 'actual', label: 'Actual' },
+    { key: 'forecast', label: 'Forecast' },
+    { key: 'margin', label: 'Margin %' },
+  ]
+  const { visible: cbsColVisible, isVisible: cbsIsVisible, toggle: cbsToggleCol } = useColumnVisibility(CBS_COLS.map(c => c.key), [], 'cbs-grid')
   const [cbsSearch, setCbsSearch] = useState('')
 
   // Update a CBS node's committed/actual/forecast.
@@ -259,11 +272,11 @@ export function FinancialsModule() {
               </button>
             )}
           </div>
-          <div className="w-16 font-mono text-muted-foreground">{c.code}</div>
+          {cbsIsVisible('code') && <div className="w-16 font-mono text-muted-foreground">{c.code}</div>}
           <div className={cn('flex-1 truncate', depth === 0 && 'font-semibold')}>{c.name}</div>
-          <div className="w-24 text-right pr-2 font-mono text-muted-foreground">{fmt(c.budget)}</div>
+          {cbsIsVisible('budget') && <div className="w-24 text-right pr-2 font-mono text-muted-foreground">{fmt(c.budget)}</div>}
           {/* Committed — inline editable for leaf nodes */}
-          <div className="w-24 pr-2">
+          {cbsIsVisible('committed') && <div className="w-24 pr-2">
             {isLeaf ? (
               <input
                 type="number"
@@ -282,9 +295,9 @@ export function FinancialsModule() {
             ) : (
               <span className="text-right block font-mono text-muted-foreground">{fmt(c.committed)}</span>
             )}
-          </div>
+          </div>}
           {/* Actual — inline editable for leaf nodes */}
-          <div className="w-24 pr-2">
+          {cbsIsVisible('actual') && <div className="w-24 pr-2">
             {isLeaf ? (
               <input
                 type="number"
@@ -303,9 +316,9 @@ export function FinancialsModule() {
             ) : (
               <span className="text-right block font-mono">{fmt(c.actual)}</span>
             )}
-          </div>
+          </div>}
           {/* Forecast — inline editable for leaf nodes */}
-          <div className="w-24 pr-2">
+          {cbsIsVisible('forecast') && <div className="w-24 pr-2">
             {isLeaf ? (
               <input
                 type="number"
@@ -324,11 +337,11 @@ export function FinancialsModule() {
             ) : (
               <span className="text-right block font-mono">{fmt(c.forecast)}</span>
             )}
-          </div>
+          </div>}
           {/* Margin — live recalculated, color-coded */}
-          <div className={cn('w-20 text-right pr-3 font-mono font-medium tabular-nums', c.marginPct >= 0 ? 'delta-up' : 'delta-down')}>
+          {cbsIsVisible('margin') && <div className={cn('w-20 text-right pr-3 font-mono font-medium tabular-nums', c.marginPct >= 0 ? 'delta-up' : 'delta-down')}>
             {c.marginPct >= 0 ? '+' : ''}{c.marginPct.toFixed(1)}%
-          </div>
+          </div>}
         </div>
       )
       if (hasChildren && isExpanded) rows.push(...renderCbsRows(c.children!, depth + 1))
@@ -402,28 +415,32 @@ export function FinancialsModule() {
             <KpiCell label="Forecast (EAC)" value={`NPR ${fmt(totals.forecast)}`} />
           </div>
 
-          {/* Column header */}
-          <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
+          {/* Column header — sticky on vertical scroll, scrolls horizontally with body */}
+          <StickyTableShell minWidth={900}>
+          <StickyTableHeader>
             <div className="w-5" />
-            <div className="w-16 px-2">Code</div>
+            {cbsIsVisible('code') && <div className="w-16 px-2">Code</div>}
             <div className="flex-1 px-2">CBS Node</div>
-            <div className="w-24 px-2 text-right">Budget</div>
-            <div className="w-24 px-2 text-right">Committed</div>
-            <div className="w-24 px-2 text-right">Actual</div>
-            <div className="w-24 px-2 text-right">Forecast</div>
-            <div className="w-20 px-2 text-right">Margin %</div>
-          </div>
-          <PaneBody className="px-0">{renderCbsRows(cbsData, 0)}</PaneBody>
+            {cbsIsVisible('budget') && <div className="w-24 px-2 text-right">Budget</div>}
+            {cbsIsVisible('committed') && <div className="w-24 px-2 text-right">Committed</div>}
+            {cbsIsVisible('actual') && <div className="w-24 px-2 text-right">Actual</div>}
+            {cbsIsVisible('forecast') && <div className="w-24 px-2 text-right">Forecast</div>}
+            {cbsIsVisible('margin') && <div className="w-20 px-2 text-right">Margin %</div>}
+            <div className="flex-shrink-0 pr-2"><ColumnToggle columns={CBS_COLS} visible={cbsColVisible} onToggle={cbsToggleCol} /></div>
+          </StickyTableHeader>
+          <StickyTableBody>{renderCbsRows(cbsData, 0)}</StickyTableBody>
+          </StickyTableShell>
+          {/* Footer — project totals */}
           <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs bg-secondary/30">
             <span className="font-medium">Project Totals</span>
             <div className="flex-1" />
-            <span className="w-24 text-right font-mono">{fmt(totals.budget)}</span>
-            <span className="w-24 text-right font-mono text-muted-foreground">{fmt(totals.committed)}</span>
-            <span className="w-24 text-right font-mono">{fmt(totals.actual)}</span>
-            <span className="w-24 text-right font-mono">{fmt(totals.forecast)}</span>
-            <span className={cn('w-20 text-right font-mono font-bold tabular-nums', totalMarginPct >= 0 ? 'delta-up' : 'delta-down')}>
+            {cbsIsVisible('budget') && <span className="w-24 text-right font-mono">{fmt(totals.budget)}</span>}
+            {cbsIsVisible('committed') && <span className="w-24 text-right font-mono text-muted-foreground">{fmt(totals.committed)}</span>}
+            {cbsIsVisible('actual') && <span className="w-24 text-right font-mono">{fmt(totals.actual)}</span>}
+            {cbsIsVisible('forecast') && <span className="w-24 text-right font-mono">{fmt(totals.forecast)}</span>}
+            {cbsIsVisible('margin') && <span className={cn('w-20 text-right font-mono font-bold tabular-nums', totalMarginPct >= 0 ? 'delta-up' : 'delta-down')}>
               {totalMarginPct >= 0 ? '+' : ''}{totalMarginPct.toFixed(1)}%
-            </span>
+            </span>}
           </div>
         </>
       }

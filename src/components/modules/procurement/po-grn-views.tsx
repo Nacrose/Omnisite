@@ -9,35 +9,55 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Po, STOCK } from './types'
+import {
+  useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef,
+} from '@/components/ui/table-utils'
 
 export function PoCenterView({ pos }: { pos: Po[] }) {
+  const COLS: ColumnDef[] = [
+    { key: 'po', label: 'PO #' },
+    { key: 'vendor', label: 'Vendor' },
+    { key: 'date', label: 'Date' },
+    { key: 'items', label: 'Items' },
+    { key: 'value', label: 'Value (NPR)' },
+    { key: 'status', label: 'Status' },
+    { key: 'grn', label: 'GRN' },
+  ]
+  const { visible, isVisible, toggle } = useColumnVisibility(COLS.map(c => c.key), [], 'po-list')
   return (
-    <PaneBody className="px-0">
-      <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-        <div className="w-32 px-2">PO #</div>
-        <div className="flex-1 px-2">Vendor</div>
-        <div className="w-24 px-2">Date</div>
-        <div className="w-16 px-2 text-center">Items</div>
-        <div className="w-28 px-2 text-right">Value (NPR)</div>
-        <div className="w-24 px-2">Status</div>
-        <div className="w-16 px-2 text-center">GRN</div>
-      </div>
-      {pos.map(p => (
-        <div key={p.id} className="flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer">
-          <div className="w-32 px-2 font-mono">{p.id}</div>
-          <div className="flex-1 px-2 font-medium truncate">{p.vendor}</div>
-          <div className="w-24 px-2 text-muted-foreground">{p.date}</div>
-          <div className="w-16 px-2 text-center">{p.items}</div>
-          <div className="w-28 px-2 text-right font-mono">{p.value.toLocaleString()}</div>
-          <div className="w-24 px-2">
-            <Badge variant="secondary" className={cn('text-[10px]', p.status === 'Delivered' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', p.status === 'Pending' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300')}>{p.status}</Badge>
+    <StickyTableShell minWidth={820}>
+      <StickyTableHeader>
+        {isVisible('po') && <div className="w-32 px-2">PO #</div>}
+        {isVisible('vendor') && <div className="flex-1 px-2">Vendor</div>}
+        {isVisible('date') && <div className="w-24 px-2">Date</div>}
+        {isVisible('items') && <div className="w-16 px-2 text-center">Items</div>}
+        {isVisible('value') && <div className="w-28 px-2 text-right">Value (NPR)</div>}
+        {isVisible('status') && <div className="w-24 px-2">Status</div>}
+        {isVisible('grn') && <div className="w-16 px-2 text-center">GRN</div>}
+        <div className="flex-shrink-0 pr-2"><ColumnToggle columns={COLS} visible={visible} onToggle={toggle} /></div>
+      </StickyTableHeader>
+      <StickyTableBody>
+        {pos.map(p => (
+          <div key={p.id} className="flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer">
+            {isVisible('po') && <div className="w-32 px-2 font-mono">{p.id}</div>}
+            {isVisible('vendor') && <div className="flex-1 px-2 font-medium truncate">{p.vendor}</div>}
+            {isVisible('date') && <div className="w-24 px-2 text-muted-foreground">{p.date}</div>}
+            {isVisible('items') && <div className="w-16 px-2 text-center">{p.items}</div>}
+            {isVisible('value') && <div className="w-28 px-2 text-right font-mono">{p.value.toLocaleString()}</div>}
+            {isVisible('status') && (
+              <div className="w-24 px-2">
+                <Badge variant="secondary" className={cn('text-[10px]', p.status === 'Delivered' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', p.status === 'Pending' && 'bg-amber-500/15 text-amber-700 dark:text-amber-300')}>{p.status}</Badge>
+              </div>
+            )}
+            {isVisible('grn') && (
+              <div className="w-16 px-2 text-center">
+                {p.grn ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-muted-foreground/40">—</span>}
+              </div>
+            )}
           </div>
-          <div className="w-16 px-2 text-center">
-            {p.grn ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-muted-foreground/40">—</span>}
-          </div>
-        </div>
-      ))}
-    </PaneBody>
+        ))}
+      </StickyTableBody>
+    </StickyTableShell>
   )
 }
 
@@ -57,6 +77,18 @@ export function GrnCenterView() {
     .filter(r => !isMatched(r) && r.grnq > 0)
     .reduce((sum, r) => sum + r.invq * r.rate, 0)
 
+  const COLS: ColumnDef[] = [
+    { key: 'po', label: 'PO #' },
+    { key: 'vendor', label: 'Vendor' },
+    { key: 'poq', label: 'PO Qty' },
+    { key: 'grnq', label: 'GRN Qty' },
+    { key: 'invq', label: 'Invoice Qty' },
+    { key: 'match', label: 'Match' },
+    { key: 'pay', label: 'Pay Status' },
+    { key: 'action', label: 'Action' },
+  ]
+  const { visible, isVisible, toggle } = useColumnVisibility(COLS.map(c => c.key), [], 'grn-3way')
+
   // Toggle payment approval — only allowed if 3-way match passes
   const toggleApproval = (po: string) => {
     setRows(prev => prev.map(r => {
@@ -73,65 +105,70 @@ export function GrnCenterView() {
 
   return (
     <PaneBody className="p-4">
-      <div className="rounded-lg border border-[var(--pane-divider)] overflow-hidden">
+      <div className="rounded-lg border border-[var(--pane-divider)]">
         <div className="px-3 py-2 border-b border-[var(--pane-divider)] bg-secondary/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
           <span>3-Way Match · PO vs GRN vs Invoice</span>
           <span className="text-[10px] normal-case font-normal">Click ✓ to approve — locked if mismatch</span>
         </div>
-        <table className="w-full text-xs">
-          <thead className="bg-secondary/20">
-            <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              <th className="text-left p-2">PO #</th>
-              <th className="text-left p-2">Vendor</th>
-              <th className="text-right p-2">PO Qty</th>
-              <th className="text-right p-2">GRN Qty</th>
-              <th className="text-right p-2">Invoice Qty</th>
-              <th className="text-center p-2">Match</th>
-              <th className="text-right p-2">Pay Status</th>
-              <th className="text-center p-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
+        <StickyTableShell minWidth={820}>
+          <StickyTableHeader>
+            {isVisible('po') && <div className="w-24 px-2">PO #</div>}
+            {isVisible('vendor') && <div className="flex-1 px-2">Vendor</div>}
+            {isVisible('poq') && <div className="w-20 px-2 text-right">PO Qty</div>}
+            {isVisible('grnq') && <div className="w-20 px-2 text-right">GRN Qty</div>}
+            {isVisible('invq') && <div className="w-20 px-2 text-right">Invoice Qty</div>}
+            {isVisible('match') && <div className="w-20 px-2 text-center">Match</div>}
+            {isVisible('pay') && <div className="w-28 px-2 text-right">Pay Status</div>}
+            {isVisible('action') && <div className="w-24 px-2 text-center">Action</div>}
+            <div className="flex-shrink-0 pr-2"><ColumnToggle columns={COLS} visible={visible} onToggle={toggle} /></div>
+          </StickyTableHeader>
+          <StickyTableBody>
             {rows.map((r, i) => {
               const matched = isMatched(r)
               return (
-                <tr key={i} className="border-t border-[var(--pane-divider)] row-hover">
-                  <td className="p-2 font-mono">{r.po}</td>
-                  <td className="p-2 truncate">{r.vendor}</td>
-                  <td className="p-2 text-right font-mono">{r.poq}</td>
-                  <td className="p-2 text-right font-mono">{r.grnq}</td>
-                  <td className="p-2 text-right font-mono">{r.invq}</td>
-                  <td className="p-2 text-center">
-                    {matched
-                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
-                      : <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />}
-                  </td>
-                  <td className={cn('p-2 text-right text-[11px] font-medium',
-                    r.pay === 'Cleared' ? 'text-emerald-600' : 'text-amber-600')}>
-                    {r.pay}
-                  </td>
-                  <td className="p-2 text-center">
-                    <button
-                      onClick={() => toggleApproval(r.po)}
-                      disabled={!matched}
-                      className={cn(
-                        'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
-                        matched
-                          ? r.pay === 'Cleared'
-                            ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25'
-                            : 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25'
-                          : 'bg-secondary text-muted-foreground/40 cursor-not-allowed'
-                      )}
-                      title={matched ? 'Toggle payment approval' : 'Locked — 3-way match fails'}
-                    >
-                      {matched ? (r.pay === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
-                    </button>
-                  </td>
-                </tr>
+                <div key={i} className="flex items-center h-9 border-t border-[var(--pane-divider)] text-xs row-hover">
+                  {isVisible('po') && <div className="w-24 px-2 font-mono">{r.po}</div>}
+                  {isVisible('vendor') && <div className="flex-1 px-2 truncate">{r.vendor}</div>}
+                  {isVisible('poq') && <div className="w-20 px-2 text-right font-mono">{r.poq}</div>}
+                  {isVisible('grnq') && <div className="w-20 px-2 text-right font-mono">{r.grnq}</div>}
+                  {isVisible('invq') && <div className="w-20 px-2 text-right font-mono">{r.invq}</div>}
+                  {isVisible('match') && (
+                    <div className="w-20 px-2 text-center">
+                      {matched
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                        : <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />}
+                    </div>
+                  )}
+                  {isVisible('pay') && (
+                    <div className={cn('w-28 px-2 text-right text-[11px] font-medium',
+                      r.pay === 'Cleared' ? 'text-emerald-600' : 'text-amber-600')}>
+                      {r.pay}
+                    </div>
+                  )}
+                  {isVisible('action') && (
+                    <div className="w-24 px-2 text-center">
+                      <button
+                        onClick={() => toggleApproval(r.po)}
+                        disabled={!matched}
+                        className={cn(
+                          'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
+                          matched
+                            ? r.pay === 'Cleared'
+                              ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25'
+                              : 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25'
+                            : 'bg-secondary text-muted-foreground/40 cursor-not-allowed'
+                        )}
+                        title={matched ? 'Toggle payment approval' : 'Locked — 3-way match fails'}
+                      >
+                        {matched ? (r.pay === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               )
             })}
-          </tbody>
-        </table>
+          </StickyTableBody>
+        </StickyTableShell>
       </div>
       <div className={cn('mt-3 p-3 rounded-md text-xs', lockedAmount > 0 ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-emerald-500/10 border border-emerald-500/30')}>
         <div className={cn('font-medium flex items-center gap-1.5', lockedAmount > 0 ? 'text-amber-600' : 'text-emerald-600')}>
@@ -152,37 +189,50 @@ export function StockCenterView() {
   // Compute live stats from STOCK so the header never lies.
   const stockValue = STOCK.reduce((s, x) => s + x.onHand * x.avgCost, 0)
   const warehouseCount = new Set(STOCK.map(s => s.warehouse)).size
+  const COLS: ColumnDef[] = [
+    { key: 'code', label: 'Code' },
+    { key: 'material', label: 'Material' },
+    { key: 'onhand', label: 'On Hand' },
+    { key: 'reserved', label: 'Reserved' },
+    { key: 'available', label: 'Available' },
+    { key: 'avgcost', label: 'Avg Cost' },
+    { key: 'warehouse', label: 'Warehouse' },
+  ]
+  const { visible, isVisible, toggle } = useColumnVisibility(COLS.map(c => c.key), [], 'stock-list')
   return (
     <>
       <div className="px-4 py-3 border-b border-[var(--pane-divider)] bg-secondary/20 flex items-center gap-3 text-xs">
         <Badge variant="outline"><Boxes className="w-3 h-3 mr-1" />{STOCK.length} SKUs · {warehouseCount} warehouses</Badge>
         <span className="text-muted-foreground">Total stock value: <span className="font-mono font-semibold text-foreground">NPR {stockValue.toLocaleString('en-IN')}</span></span>
       </div>
-      <PaneBody className="px-0">
-        <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-          <div className="w-32 px-2">Code</div>
-          <div className="flex-1 px-2">Material</div>
-          <div className="w-20 px-2 text-right">On Hand</div>
-          <div className="w-20 px-2 text-right">Reserved</div>
-          <div className="w-20 px-2 text-right">Available</div>
-          <div className="w-28 px-2 text-right">Avg Cost</div>
-          <div className="flex-1 px-2">Warehouse</div>
-        </div>
-        {STOCK.map(s => {
-          const lowStock = s.available < s.onHand * 0.3
-          return (
-            <div key={s.code} className={cn('flex items-center h-9 border-b border-[var(--pane-divider)] text-xs row-hover', lowStock && 'bg-amber-500/5')}>
-              <div className="w-32 px-2 font-mono text-muted-foreground">{s.code}</div>
-              <div className="flex-1 px-2 font-medium">{s.name}</div>
-              <div className="w-20 px-2 text-right font-mono">{s.onHand.toLocaleString()}</div>
-              <div className="w-20 px-2 text-right font-mono text-muted-foreground">{s.reserved.toLocaleString()}</div>
-              <div className={cn('w-20 px-2 text-right font-mono font-medium', lowStock && 'text-amber-600')}>{s.available.toLocaleString()}</div>
-              <div className="w-28 px-2 text-right font-mono">{s.avgCost.toLocaleString()}</div>
-              <div className="flex-1 px-2 text-muted-foreground text-[10px] truncate">{s.warehouse}</div>
-            </div>
-          )
-        })}
-      </PaneBody>
+      <StickyTableShell minWidth={880}>
+        <StickyTableHeader>
+          {isVisible('code') && <div className="w-32 px-2">Code</div>}
+          {isVisible('material') && <div className="flex-1 px-2">Material</div>}
+          {isVisible('onhand') && <div className="w-20 px-2 text-right">On Hand</div>}
+          {isVisible('reserved') && <div className="w-20 px-2 text-right">Reserved</div>}
+          {isVisible('available') && <div className="w-20 px-2 text-right">Available</div>}
+          {isVisible('avgcost') && <div className="w-28 px-2 text-right">Avg Cost</div>}
+          {isVisible('warehouse') && <div className="flex-1 px-2">Warehouse</div>}
+          <div className="flex-shrink-0 pr-2"><ColumnToggle columns={COLS} visible={visible} onToggle={toggle} /></div>
+        </StickyTableHeader>
+        <StickyTableBody>
+          {STOCK.map(s => {
+            const lowStock = s.available < s.onHand * 0.3
+            return (
+              <div key={s.code} className={cn('flex items-center h-9 border-b border-[var(--pane-divider)] text-xs row-hover', lowStock && 'bg-amber-500/5')}>
+                {isVisible('code') && <div className="w-32 px-2 font-mono text-muted-foreground">{s.code}</div>}
+                {isVisible('material') && <div className="flex-1 px-2 font-medium">{s.name}</div>}
+                {isVisible('onhand') && <div className="w-20 px-2 text-right font-mono">{s.onHand.toLocaleString()}</div>}
+                {isVisible('reserved') && <div className="w-20 px-2 text-right font-mono text-muted-foreground">{s.reserved.toLocaleString()}</div>}
+                {isVisible('available') && <div className={cn('w-20 px-2 text-right font-mono font-medium', lowStock && 'text-amber-600')}>{s.available.toLocaleString()}</div>}
+                {isVisible('avgcost') && <div className="w-28 px-2 text-right font-mono">{s.avgCost.toLocaleString()}</div>}
+                {isVisible('warehouse') && <div className="flex-1 px-2 text-muted-foreground text-[10px] truncate">{s.warehouse}</div>}
+              </div>
+            )
+          })}
+        </StickyTableBody>
+      </StickyTableShell>
     </>
   )
 }

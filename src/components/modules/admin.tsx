@@ -13,6 +13,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import {
+  useColumnVisibility, ColumnToggle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef,
+} from '@/components/ui/table-utils'
 
 type Cat = 'users' | 'materials' | 'vendors' | 'rates' | 'presets'
 
@@ -156,68 +159,103 @@ function UsersView({ selectedRole, onSelectRole, searchQuery }: { selectedRole: 
 function MaterialsView({ selectedMaterial, onSelectMaterial, searchQuery }: { selectedMaterial: Material; onSelectMaterial: (m: Material) => void; searchQuery: string }) {
   const q = searchQuery.toLowerCase()
   const filtered = MATERIALS.filter(m => m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q))
+  const COLS: ColumnDef[] = [
+    { key: 'code', label: 'Code' },
+    { key: 'material', label: 'Material' },
+    { key: 'uom', label: 'UOM' },
+    { key: 'orgrate', label: 'Org Rate' },
+    { key: 'projectrate', label: 'Project Rate' },
+    { key: 'tier', label: 'Tier' },
+    { key: 'altuom', label: 'Alt UOM' },
+  ]
+  const { visible, isVisible, toggle } = useColumnVisibility(COLS.map(c => c.key), [], 'admin-materials')
   return (
-    <PaneBody className="px-0">
+    <>
       <div className="px-4 py-2 bg-secondary/20 text-[11px] text-muted-foreground border-b border-[var(--pane-divider)]">
         Two-tier system: <span className="font-medium text-foreground">Org Master</span> (district rates, read-only) → <span className="font-medium text-foreground">Project List</span> (editable snapshot). Soft-archive only.
       </div>
-      <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-        <div className="w-28 px-2">Code</div>
-        <div className="flex-1 px-2">Material</div>
-        <div className="w-16 px-2">UOM</div>
-        <div className="w-28 px-2 text-right">Org Rate</div>
-        <div className="w-28 px-2 text-right">Project Rate</div>
-        <div className="w-20 px-2">Tier</div>
-        <div className="w-16 px-2 text-center">Alt UOM</div>
-      </div>
-      {filtered.map(m => (
-        <div key={m.code} onClick={() => onSelectMaterial(m)} className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer transition-colors', m.archived && 'opacity-50', selectedMaterial.code === m.code && 'bg-accent border-l-2 border-l-primary')}>
-          <div className="w-28 px-2 font-mono text-muted-foreground">{m.code}</div>
-          <div className="flex-1 px-2 font-medium flex items-center gap-1.5">
-            {m.archived && <Badge variant="outline" className="text-[9px]">Archived</Badge>}
-            {m.name}
-          </div>
-          <div className="w-16 px-2 text-muted-foreground">{m.uom}</div>
-          <div className="w-28 px-2 text-right font-mono">{m.rate.toLocaleString()}</div>
-          <div className="w-28 px-2 text-right font-mono font-medium text-primary">{(m.projectRate ?? m.rate).toLocaleString()}</div>
-          <div className="w-20 px-2">
-            <Badge variant="outline" className={cn('text-[9px]', m.org && 'border-sky-500/40 text-sky-700 dark:text-sky-300')}>{m.org ? 'Org' : 'Project'}</Badge>
-          </div>
-          <div className="w-16 px-2 text-center">
-            {m.altUoms ? <Badge variant="secondary" className="text-[9px]">{m.altUoms.length + 1}</Badge> : <span className="text-muted-foreground/40">—</span>}
-          </div>
-        </div>
-      ))}
-    </PaneBody>
+      <StickyTableShell minWidth={800}>
+        <StickyTableHeader>
+          {isVisible('code') && <div className="w-28 px-2">Code</div>}
+          {isVisible('material') && <div className="flex-1 px-2">Material</div>}
+          {isVisible('uom') && <div className="w-16 px-2">UOM</div>}
+          {isVisible('orgrate') && <div className="w-28 px-2 text-right">Org Rate</div>}
+          {isVisible('projectrate') && <div className="w-28 px-2 text-right">Project Rate</div>}
+          {isVisible('tier') && <div className="w-20 px-2">Tier</div>}
+          {isVisible('altuom') && <div className="w-16 px-2 text-center">Alt UOM</div>}
+          <div className="flex-shrink-0 pr-2"><ColumnToggle columns={COLS} visible={visible} onToggle={toggle} /></div>
+        </StickyTableHeader>
+        <StickyTableBody>
+          {filtered.map(m => (
+            <div key={m.code} onClick={() => onSelectMaterial(m)} className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer transition-colors', m.archived && 'opacity-50', selectedMaterial.code === m.code && 'bg-accent border-l-2 border-l-primary')}>
+              {isVisible('code') && <div className="w-28 px-2 font-mono text-muted-foreground">{m.code}</div>}
+              {isVisible('material') && (
+                <div className="flex-1 px-2 font-medium flex items-center gap-1.5">
+                  {m.archived && <Badge variant="outline" className="text-[9px]">Archived</Badge>}
+                  {m.name}
+                </div>
+              )}
+              {isVisible('uom') && <div className="w-16 px-2 text-muted-foreground">{m.uom}</div>}
+              {isVisible('orgrate') && <div className="w-28 px-2 text-right font-mono">{m.rate.toLocaleString()}</div>}
+              {isVisible('projectrate') && <div className="w-28 px-2 text-right font-mono font-medium text-primary">{(m.projectRate ?? m.rate).toLocaleString()}</div>}
+              {isVisible('tier') && (
+                <div className="w-20 px-2">
+                  <Badge variant="outline" className={cn('text-[9px]', m.org && 'border-sky-500/40 text-sky-700 dark:text-sky-300')}>{m.org ? 'Org' : 'Project'}</Badge>
+                </div>
+              )}
+              {isVisible('altuom') && (
+                <div className="w-16 px-2 text-center">
+                  {m.altUoms ? <Badge variant="secondary" className="text-[9px]">{m.altUoms.length + 1}</Badge> : <span className="text-muted-foreground/40">—</span>}
+                </div>
+              )}
+            </div>
+          ))}
+        </StickyTableBody>
+      </StickyTableShell>
+    </>
   )
 }
 
 function VendorsView({ selectedVendor, onSelectVendor, searchQuery }: { selectedVendor: typeof VENDORS[0]; onSelectVendor: (v: typeof VENDORS[0]) => void; searchQuery: string }) {
   const q = searchQuery.toLowerCase()
   const filtered = VENDORS.filter(v => v.name.toLowerCase().includes(q) || v.id.toLowerCase().includes(q))
+  const COLS: ColumnDef[] = [
+    { key: 'id', label: 'ID' },
+    { key: 'vendor', label: 'Vendor' },
+    { key: 'pan', label: 'PAN' },
+    { key: 'rating', label: 'Rating' },
+    { key: 'brand', label: 'Brand / Material' },
+    { key: 'compliance', label: 'Compliance' },
+  ]
+  const { visible, isVisible, toggle } = useColumnVisibility(COLS.map(c => c.key), [], 'admin-vendors')
   return (
-    <PaneBody className="px-0">
-      <div className="flex items-center h-8 border-b border-[var(--pane-divider)] text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/30">
-        <div className="w-16 px-2">ID</div>
-        <div className="flex-1 px-2">Vendor</div>
-        <div className="w-28 px-2">PAN</div>
-        <div className="w-20 px-2 text-center">Rating</div>
-        <div className="w-32 px-2">Brand / Material</div>
-        <div className="w-16 px-2 text-center">Compliance</div>
-      </div>
-      {filtered.map(v => (
-        <div key={v.id} onClick={() => onSelectVendor(v)} className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer transition-colors', selectedVendor.id === v.id && 'bg-accent border-l-2 border-l-primary')}>
-          <div className="w-16 px-2 font-mono text-muted-foreground">{v.id}</div>
-          <div className="flex-1 px-2 font-medium">{v.name}</div>
-          <div className="w-28 px-2 font-mono text-[10px] text-muted-foreground">{v.pan}</div>
-          <div className="w-20 px-2 text-center">
-            <Badge variant="outline" className={cn('text-[10px]', v.rating.startsWith('A') && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', v.rating.startsWith('B') && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{v.rating}</Badge>
+    <StickyTableShell minWidth={700}>
+      <StickyTableHeader>
+        {isVisible('id') && <div className="w-16 px-2">ID</div>}
+        {isVisible('vendor') && <div className="flex-1 px-2">Vendor</div>}
+        {isVisible('pan') && <div className="w-28 px-2">PAN</div>}
+        {isVisible('rating') && <div className="w-20 px-2 text-center">Rating</div>}
+        {isVisible('brand') && <div className="w-32 px-2">Brand / Material</div>}
+        {isVisible('compliance') && <div className="w-16 px-2 text-center">Compliance</div>}
+        <div className="flex-shrink-0 pr-2"><ColumnToggle columns={COLS} visible={visible} onToggle={toggle} /></div>
+      </StickyTableHeader>
+      <StickyTableBody>
+        {filtered.map(v => (
+          <div key={v.id} onClick={() => onSelectVendor(v)} className={cn('flex items-center h-10 border-b border-[var(--pane-divider)] text-xs row-hover cursor-pointer transition-colors', selectedVendor.id === v.id && 'bg-accent border-l-2 border-l-primary')}>
+            {isVisible('id') && <div className="w-16 px-2 font-mono text-muted-foreground">{v.id}</div>}
+            {isVisible('vendor') && <div className="flex-1 px-2 font-medium">{v.name}</div>}
+            {isVisible('pan') && <div className="w-28 px-2 font-mono text-[10px] text-muted-foreground">{v.pan}</div>}
+            {isVisible('rating') && (
+              <div className="w-20 px-2 text-center">
+                <Badge variant="outline" className={cn('text-[10px]', v.rating.startsWith('A') && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300', v.rating.startsWith('B') && 'border-amber-500/40 text-amber-700 dark:text-amber-300')}>{v.rating}</Badge>
+              </div>
+            )}
+            {isVisible('brand') && <div className="w-32 px-2 text-[10px] truncate">{v.brand}</div>}
+            {isVisible('compliance') && <div className="w-16 px-2 text-center"><ShieldCheck className="w-4 h-4 text-emerald-500 mx-auto" /></div>}
           </div>
-          <div className="w-32 px-2 text-[10px] truncate">{v.brand}</div>
-          <div className="w-16 px-2 text-center"><ShieldCheck className="w-4 h-4 text-emerald-500 mx-auto" /></div>
-        </div>
-      ))}
-    </PaneBody>
+        ))}
+      </StickyTableBody>
+    </StickyTableShell>
   )
 }
 
