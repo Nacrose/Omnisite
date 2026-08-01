@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createUserClient } from '@/lib/supabase-server'
 import { requireAuth } from '@/lib/api-auth'
 import { logAudit } from '@/lib/audit'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { validateBody, taskSchema } from '@/lib/validation'
 
 // GET /api/tasks — fetch tasks, optionally filtered by project_id
 export async function GET(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimitError = checkRateLimit(req)
+  if (rateLimitError) return rateLimitError
 
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('project_id')
@@ -30,7 +35,12 @@ export async function POST(req: NextRequest) {
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
+  const rateLimitError = checkRateLimit(req)
+  if (rateLimitError) return rateLimitError
+
+  const rawBody = await req.json()
+  const { data: body, error: validationError } = validateBody(taskSchema, rawBody)
+  if (validationError) return validationError
 
   // Use a user-scoped client so RLS policies are enforced.
   const userClient = createUserClient(user.accessToken)
@@ -59,6 +69,9 @@ export async function DELETE(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rateLimitError = checkRateLimit(req)
+  if (rateLimitError) return rateLimitError
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')

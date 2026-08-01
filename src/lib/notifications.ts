@@ -1,20 +1,18 @@
 /**
  * OmniSite — server-side notification dispatch.
  *
- * `sendNotification()` is intended to be called from API route handlers
- * (server-side) when a business event triggers an alert — e.g. an RFI crossing
- * its due date, an NCR placing a billing hold, a PO awaiting approval, etc.
+ * `sendNotification()` is called from API route handlers (server-side) when
+ * a business event triggers an alert.
  *
- * Behaviour:
- *  - ALWAYS logs to console (visible in `bun run dev` output and Vercel logs).
- *  - When EMAIL_PROVIDER env var is set → would send an email (stub for now;
- *    wire up Resend / SendGrid / Postmark later).
- *  - When SMS_PROVIDER env var is set → would send an SMS (stub for now;
- *    wire up Twilio / SparrowSMS-Nepal later).
+ * Delivery channels:
+ *  - Console: ALWAYS logs (visible in Vercel logs / dev output).
+ *  - Email: When RESEND_API_KEY env var is set, sends via Resend.
+ *  - SMS: When TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN env vars are set,
+ *    sends via Twilio. For Nepal, SparrowSMS can be added similarly.
  *
- * Because the function reads `process.env` directly, it works correctly on
- * the server. On the client, the env vars are undefined and only the console
- * log fires — which is acceptable for development/demo mode.
+ * If no provider env vars are set, only the console log fires — which is
+ * the current state (no provider configured yet). The interface is real;
+ * the delivery is console-only until a provider key is added to Vercel.
  */
 
 export type NotificationType =
@@ -27,9 +25,8 @@ export type NotificationType =
 export interface NotificationMeta {
   type: NotificationType
   message: string
-  recipient: string                  // user id, email, or role tag
+  recipient: string
   subject?: string
-  /** Arbitrary payload — record id, amount, etc. */
   context?: Record<string, unknown>
 }
 
@@ -49,12 +46,6 @@ const TYPE_SEVERITY: Record<NotificationType, 'info' | 'warning' | 'critical'> =
   variation_threshold: 'warning',
 }
 
-/**
- * Send a notification through every configured channel.
- *
- * @returns a summary of which channels dispatched successfully — useful for
- *          audit log / debugging.
- */
 export async function sendNotification(
   type: NotificationType,
   message: string,
@@ -65,44 +56,69 @@ export async function sendNotification(
   const meta: NotificationMeta = { type, message, recipient, subject, context }
   const severity = TYPE_SEVERITY[type]
   const label = TYPE_LABELS[type]
-
   const result = { console: false, email: false, sms: false }
 
-  // ─── 1. Always log to console ────────────────────────────────────────────
-  // Tagged prefix makes these easy to grep in `dev.log`.
+  // 1. Console — always
   console.log(
     `[NOTIFY:${severity.toUpperCase()}] ${label} → ${recipient}`,
     { message, subject: subject ?? label, context: context ?? {} },
   )
   result.console = true
 
-  // ─── 2. Email (stub) ──────────────────────────────────────────────────────
-  // Wire up a real provider later — e.g. Resend:
-  //   if (process.env.EMAIL_PROVIDER === 'resend') {
-  //     await resend.emails.send({ from, to: recipient, subject, html })
-  //   }
-  const emailProvider = process.env.EMAIL_PROVIDER
-  if (emailProvider) {
+  // 2. Email via Resend (when RESEND_API_KEY is configured)
+  const resendKey = process.env.RESEND_API_KEY
+  const emailFrom = process.env.EMAIL_FROM || 'noreply@omnisite.app'
+  if (resendKey) {
     try {
-      // STUB: replace with real provider call.
-      console.log(`[NOTIFY:EMAIL→${emailProvider}] to=${recipient} subject="${subject ?? label}"`)
-      result.email = true
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: emailFrom,
+          to: recipient,
+          subject: subject ?? label,
+          text: `${label}: ${message}\n\nContext: ${JSON.stringify(context ?? {})}`,
+        }),
+      })
+      if (res.ok) {
+        result.email = true
+      } else {
+        console.error('[NOTIFY:EMAIL] Resend API error:', res.status, await res.text())
+      }
     } catch (e) {
       console.error('[NOTIFY:EMAIL] dispatch failed:', e)
     }
   }
 
-  // ─── 3. SMS (stub) ─────────────────────────────────────────────────────────
-  // Wire up Twilio / SparrowSMS-Nepal later:
-  //   if (process.env.SMS_PROVIDER === 'twilio') {
-  //     await twilio.messages.create({ to: recipient, from, body: message })
-  //   }
-  const smsProvider = process.env.SMS_PROVIDER
-  if (smsProvider) {
+  // 3. SMS via Twilio (when TWILIO_ACCOUNT_SID is configured)
+  const twilioSid = process.env.TWILIO_ACCOUNT_SID
+  const twilioToken = process.env.TWILIO_AUTH_TOKEN
+  const twilioFrom = process.env.TWILIO_PHONE_NUMBER
+  if (twilioSid && twilioToken && twilioFrom) {
     try {
-      // STUB: replace with real provider call.
-      console.log(`[NOTIFY:SMS→${smsProvider}] to=${recipient} body="${message}"`)
-      result.sms = true
+      const res = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            From: twilioFrom,
+            To: recipient,
+            Body: `${label}: ${message}`,
+          }),
+        },
+      )
+      if (res.ok) {
+        result.sms = true
+      } else {
+        console.error('[NOTIFY:SMS] Twilio API error:', res.status, await res.text())
+      }
     } catch (e) {
       console.error('[NOTIFY:SMS] dispatch failed:', e)
     }

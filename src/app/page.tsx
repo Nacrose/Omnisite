@@ -19,23 +19,28 @@ import { ROLE_TEMPLATES } from '@/lib/permissions'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Search, ChevronDown, PanelRight, Building2, Loader2, LogOut, Plus,
+  Search, ChevronDown, PanelRight, PanelLeft, Building2, Loader2, LogOut, Plus,
 } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import { DashboardModule } from '@/components/modules/dashboard'
-import { BoqModule } from '@/components/modules/boq'
-import { SchedulerModule } from '@/components/modules/scheduler'
-import { DailyOpsModule } from '@/components/modules/daily-ops'
-import { EquipmentModule } from '@/components/modules/equipment'
-import { ProcurementModule } from '@/components/modules/procurement'
-import { FinancialsModule } from '@/components/modules/financials'
-import { SubcontractorModule } from '@/components/modules/subcontractor'
-import { DrawingsModule } from '@/components/modules/drawings'
-import { CorrespondenceModule } from '@/components/modules/correspondence'
-import { AdminModule } from '@/components/modules/admin'
-import { ReportsModule } from '@/components/modules/reports'
-import { QsModule } from '@/components/modules/qs'
-import { TimeAttendanceModule } from '@/components/modules/time-attendance'
-import { ChatModule } from '@/components/modules/chat'
+
+// Lazy-load all modules except Dashboard (which is the landing page and
+// should be in the initial bundle). Each module is a separate chunk that
+// loads on demand when the user navigates to it.
+const BoqModule = dynamic(() => import('@/components/modules/boq').then(m => ({ default: m.BoqModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const SchedulerModule = dynamic(() => import('@/components/modules/scheduler').then(m => ({ default: m.SchedulerModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const DailyOpsModule = dynamic(() => import('@/components/modules/daily-ops').then(m => ({ default: m.DailyOpsModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const EquipmentModule = dynamic(() => import('@/components/modules/equipment').then(m => ({ default: m.EquipmentModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const ProcurementModule = dynamic(() => import('@/components/modules/procurement').then(m => ({ default: m.ProcurementModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const FinancialsModule = dynamic(() => import('@/components/modules/financials').then(m => ({ default: m.FinancialsModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const SubcontractorModule = dynamic(() => import('@/components/modules/subcontractor').then(m => ({ default: m.SubcontractorModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const DrawingsModule = dynamic(() => import('@/components/modules/drawings').then(m => ({ default: m.DrawingsModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const CorrespondenceModule = dynamic(() => import('@/components/modules/correspondence').then(m => ({ default: m.CorrespondenceModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const AdminModule = dynamic(() => import('@/components/modules/admin').then(m => ({ default: m.AdminModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const ReportsModule = dynamic(() => import('@/components/modules/reports').then(m => ({ default: m.ReportsModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const QsModule = dynamic(() => import('@/components/modules/qs').then(m => ({ default: m.QsModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const TimeAttendanceModule = dynamic(() => import('@/components/modules/time-attendance').then(m => ({ default: m.TimeAttendanceModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
+const ChatModule = dynamic(() => import('@/components/modules/chat').then(m => ({ default: m.ChatModule })), { loading: () => <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading…</div> })
 
 const MODULE_RENDERERS: Record<ModuleId, () => React.ReactNode> = {
   dashboard: () => <DashboardModule />,
@@ -56,7 +61,7 @@ const MODULE_RENDERERS: Record<ModuleId, () => React.ReactNode> = {
 }
 
 export default function Home() {
-  const { activeModule, toggleRightPane, setCommandOpen, setQuickAddOpen } = useApp()
+  const { activeModule, toggleRightPane, toggleLeftPane, setCommandOpen, setQuickAddOpen } = useApp()
   const { user, loading, signOut, isDemo } = useAuth()
   const router = useRouter()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -228,11 +233,18 @@ export default function Home() {
             )}
           </div>
 
-          {/* Inspector toggle — desktop only */}
+          {/* Pane toggles — desktop only */}
+          <button
+            onClick={toggleLeftPane}
+            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hidden md:block"
+            title="Toggle left pane ([)"
+          >
+            <PanelLeft className="w-4 h-4" />
+          </button>
           <button
             onClick={toggleRightPane}
             className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hidden md:block"
-            title="Toggle inspector"
+            title="Toggle inspector (])"
           >
             <PanelRight className="w-4 h-4" />
           </button>
