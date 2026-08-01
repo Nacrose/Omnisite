@@ -84,14 +84,12 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE TABLE IF NOT EXISTS task_dependencies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID REFERENCES projects(id),
-  task_id TEXT NOT NULL,          -- successor task
-  predecessor_id TEXT NOT NULL,   -- predecessor task
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  predecessor_id TEXT NOT NULL,
   link_type TEXT NOT NULL DEFAULT 'FS' CHECK (link_type IN ('FS', 'SS', 'FF', 'SF')),
   lag_weeks INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(task_id, predecessor_id, link_type),
-  -- Soft FK (no hard FK because tasks use TEXT ids and may be cross-project)
-  FOREIGN KEY (task_id, project_id) REFERENCES tasks(id, project_id) ON DELETE CASCADE
+  UNIQUE(task_id, predecessor_id, link_type)
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_deps_successor ON task_dependencies(task_id);
