@@ -6,14 +6,33 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  Search, Plus, Download,
-  Edit3, FileSpreadsheet,
-  History, Link2, Copy, Trash2, FilePlus, Undo2, Redo2, GripVertical,
+  Search,
+  Plus,
+  Download,
+  Edit3,
+  FileSpreadsheet,
+  History,
+  Link2,
+  Copy,
+  Trash2,
+  FilePlus,
+  Undo2,
+  Redo2,
+  GripVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
-import { useColumnVisibility, useColumnWidths, ColumnToggle, ColumnResizeHandle, StickyTableShell, StickyTableHeader, StickyTableBody, type ColumnDef } from '@/components/ui/table-utils'
+import {
+  useColumnVisibility,
+  useColumnWidths,
+  ColumnToggle,
+  ColumnResizeHandle,
+  StickyTableShell,
+  StickyTableHeader,
+  StickyTableBody,
+  type ColumnDef,
+} from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core'
@@ -23,8 +42,15 @@ import { BoqGrid, ContextMenuItem, type BoqEditingState } from './boq-grid'
 import { RaInspector, NonPricedInspector } from './ra-inspector'
 import { exportToCsv } from '@/lib/csv-export'
 import {
-  undo, redo, updateItem, duplicateItem, deleteItem,
-  addChildItem, reparentItem, exportRa, rebuildBoqTree,
+  undo,
+  redo,
+  updateItem,
+  duplicateItem,
+  deleteItem,
+  addChildItem,
+  reparentItem,
+  exportRa,
+  rebuildBoqTree,
   type BoqHandlerCtx,
 } from './handlers'
 import { useBoqDnd } from './dnd'
@@ -32,11 +58,17 @@ import { useBoqDnd } from './dnd'
 export function BoqModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedId, setSelectedId] = usePersistentState('omnisite-boq-selected', '1.1.3')
-  const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-boq-expanded', ['1', '1.1', '2', '2.1', '3'])
+  const [expandedArr, setExpandedArr] = usePersistentState<string[]>('omnisite-boq-expanded', [
+    '1',
+    '1.1',
+    '2',
+    '2.1',
+    '3',
+  ])
   const [boqRows, setBoqRows, boqLoading] = useSyncedState<BoqItem[]>(
     'omnisite-boq-data',
     'boq_items',
-    () => JSON.parse(JSON.stringify(BOQ_DATA)),
+    () => structuredClone(BOQ_DATA) as typeof BOQ_DATA,
     {
       fieldMap: { desc: 'description', hasRA: 'has_ra', parentId: 'parent_id' },
       primaryKey: 'id',
@@ -64,13 +96,29 @@ export function BoqModule() {
     { key: 'type', label: 'Type' },
     { key: 'ra', label: 'RA' },
   ]
-  const { visible: boqColVisible, isVisible: boqIsVisible, toggle: boqToggleCol } = useColumnVisibility(BOQ_COLS.map(c => c.key), [], 'boq-grid')
+  const {
+    visible: boqColVisible,
+    isVisible: boqIsVisible,
+    toggle: boqToggleCol,
+  } = useColumnVisibility(
+    BOQ_COLS.map((c) => c.key),
+    [],
+    'boq-grid'
+  )
   // Column width management — drag to resize, persisted to localStorage.
   const { widths: colWidths, startDrag: colStartDrag } = useColumnWidths('boq-grid', {
-    code: 64, qty: 96, uom: 56, rate: 112, amount: 112, type: 96, ra: 40,
+    code: 64,
+    qty: 96,
+    uom: 56,
+    rate: 112,
+    amount: 112,
+    type: 96,
+    ra: 40,
   })
   // Context menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(
+    null
+  )
   // Undo/redo history stacks (deep snapshots of boqData)
   const [undoStack, setUndoStack] = useState<BoqItem[][]>([])
   const [redoStack, setRedoStack] = useState<BoqItem[][]>([])
@@ -103,11 +151,11 @@ export function BoqModule() {
     return filterTree(boqData)
   })()
 
-  const selectedLeaf = allFlat.find(i => i.id === selectedId) ?? allFlat[2]
+  const selectedLeaf = allFlat.find((i) => i.id === selectedId) ?? allFlat[2]
 
   // Live contract total — sum of qty × rate for all non-heading items
   const contractTotal = allFlat
-    .filter(i => i.type !== 'Heading')
+    .filter((i) => i.type !== 'Heading')
     .reduce((sum, i) => sum + i.qty * i.rate, 0)
 
   // Keep a ref to the latest `undo` so async callbacks (e.g. undoableToast
@@ -139,7 +187,9 @@ export function BoqModule() {
   // Stable `undo` / `redo` wrappers that bind the current ctx.
   const undoFn = () => undo(ctx)
   const redoFn = () => redo(ctx)
-  useEffect(() => { undoRef.current = undoFn })
+  useEffect(() => {
+    undoRef.current = undoFn
+  })
 
   // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z)
   useEffect(() => {
@@ -167,7 +217,9 @@ export function BoqModule() {
   useEffect(() => {
     if (!contextMenu) return
     const close = () => setContextMenu(null)
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
     document.addEventListener('click', close)
     document.addEventListener('keydown', onKey)
     return () => {
@@ -177,181 +229,346 @@ export function BoqModule() {
   }, [contextMenu])
 
   const toggleExpand = (id: string) => {
-    setExpandedArr(prev => {
-      const arr = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    setExpandedArr((prev) => {
+      const arr = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
       return arr
     })
   }
 
   const handleToggleSelect = (id: string, value: boolean) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const n = new Set(prev)
-      if (value) n.add(id); else n.delete(id)
+      if (value) n.add(id)
+      else n.delete(id)
       return n
     })
   }
 
   if (boqLoading) {
-    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading BOQ items…" /></div>
+    return (
+      <div className="flex h-full items-center justify-center">
+        <LoadingState label="Loading BOQ items…" />
+      </div>
+    )
   }
 
   return (
     <>
-    <Workspace3Pane
-      centerPane={
-        <>
-          <PaneHeader title={`BOQ · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}>
-            {/* Search — moved from the old left outline pane */}
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Filter BOQ items…" className="h-7 w-44 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-            </div>
-            <span className="hidden lg:flex items-center gap-1.5 text-[10px] text-muted-foreground px-2 py-0.5 rounded bg-secondary/60">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Edit Qty/Rate · drag rows to headings to reparent
-            </span>
-            {/* Undo/Redo buttons */}
-            <div className="flex items-center gap-0.5 border-r border-[var(--pane-divider)] pr-1.5 mr-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn('h-7 w-7 p-0', !canUndo && 'opacity-40 cursor-not-allowed')}
-                onClick={undoFn}
-                disabled={!canUndo}
-                title="Undo (⌘Z)"
-              >
-                <Undo2 className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn('h-7 w-7 p-0', !canRedo && 'opacity-40 cursor-not-allowed')}
-                onClick={redoFn}
-                disabled={!canRedo}
-                title="Redo (⌘⇧Z)"
-              >
-                <Redo2 className="w-3.5 h-3.5" />
-              </Button>
-              {(canUndo || canRedo) && (
-                <span className="text-[9px] text-muted-foreground font-mono px-1">
-                  {undoStack.length}/{undoStack.length + redoStack.length}
-                </span>
-              )}
-            </div>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5">
-              <FileSpreadsheet className="w-3.5 h-3.5" />Export RA (DoR Format)
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
-              const flat = flatten(boqData)
-              exportToCsv('omnisite-boq.csv', ['Code', 'Description', 'Type', 'Qty', 'UOM', 'Rate (NPR)', 'Amount (NPR)'],
-                flat.map(i => [i.code, i.desc, i.type, i.qty, i.uom, i.rate, i.qty * i.rate]))
-              toast.success('BOQ exported', { description: `${flat.length} items exported to CSV` })
-            }}>
-              <Download className="w-3.5 h-3.5" />Export CSV
-            </Button>
-            <Button size="sm" className="h-7 text-xs gap-1.5"><Plus className="w-3.5 h-3.5" />Item</Button>
-          </PaneHeader>
-          {/* Column header — sticky on vertical scroll, scrolls horizontally with body */}
-          <StickyTableShell minWidth={1000}>
-          <StickyTableHeader>
-            <div className="w-6" />
-            <div className="w-7" />
-            {boqIsVisible('code') && <div className="px-2 relative" style={{ width: `${colWidths.code || 64}px` }}>Code<ColumnResizeHandle columnKey="code" currentWidth={colWidths.code || 64} onDragStart={colStartDrag} /></div>}
-            <div className="flex-1 px-2">Description</div>
-            {boqIsVisible('qty') && <div className="px-2 text-right relative" style={{ width: `${colWidths.qty || 96}px` }}>Qty<ColumnResizeHandle columnKey="qty" currentWidth={colWidths.qty || 96} onDragStart={colStartDrag} /></div>}
-            {boqIsVisible('uom') && <div className="px-2 relative" style={{ width: `${colWidths.uom || 56}px` }}>UOM<ColumnResizeHandle columnKey="uom" currentWidth={colWidths.uom || 56} onDragStart={colStartDrag} /></div>}
-            {boqIsVisible('rate') && <div className="px-2 text-right relative" style={{ width: `${colWidths.rate || 112}px` }}>Rate (NPR)<ColumnResizeHandle columnKey="rate" currentWidth={colWidths.rate || 112} onDragStart={colStartDrag} /></div>}
-            {boqIsVisible('amount') && <div className="px-2 text-right relative" style={{ width: `${colWidths.amount || 112}px` }}>Amount (NPR)<ColumnResizeHandle columnKey="amount" currentWidth={colWidths.amount || 112} onDragStart={colStartDrag} /></div>}
-            {boqIsVisible('type') && <div className="px-2 relative" style={{ width: `${colWidths.type || 96}px` }}>Type<ColumnResizeHandle columnKey="type" currentWidth={colWidths.type || 96} onDragStart={colStartDrag} /></div>}
-            {boqIsVisible('ra') && <div className="text-center relative" style={{ width: `${colWidths.ra || 40}px` }}>RA<ColumnResizeHandle columnKey="ra" currentWidth={colWidths.ra || 40} onDragStart={colStartDrag} /></div>}
-            <div className="flex-shrink-0 pr-2"><ColumnToggle columns={BOQ_COLS} visible={boqColVisible} onToggle={boqToggleCol} /></div>
-          </StickyTableHeader>
-          <StickyTableBody>
-          <DndContext
-              sensors={dnd.sensors}
-              collisionDetection={closestCenter}
-              onDragStart={dnd.handleDragStart}
-              onDragOver={dnd.handleDragOver}
-              onDragEnd={dnd.handleDragEnd}
-              onDragCancel={dnd.handleDragCancel}
+      <Workspace3Pane
+        centerPane={
+          <>
+            <PaneHeader
+              title={`BOQ · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}
             >
-              <BoqGrid
-                items={filteredBoqData}
-                expanded={searchQuery.trim() ? new Set(allFlat.map(i => i.id)) : expanded}
-                selectedId={selectedId}
-                selected={selected}
-                editing={editing}
-                draggedItem={dnd.draggedItem}
-                dragOverHeading={dnd.dragOverHeading}
-                onSelectId={setSelectedId}
-                onContextMenu={setContextMenu}
-                onToggleExpand={toggleExpand}
-                onToggleSelect={handleToggleSelect}
-                onUpdateItem={(id, field, value) => updateItem(id, field, value, ctx)}
-                onSetEditing={setEditing}
-                isVisible={boqIsVisible}
-                colWidths={colWidths}
-              />
-              <DragOverlay>
-                {dnd.draggedItem ? (
-                  <div className="flex items-center h-9 px-4 pane border border-primary rounded-md shadow-lg text-xs gap-2">
-                    <GripVertical className="w-3 h-3 text-primary" />
-                    <span className="font-mono text-muted-foreground">{dnd.draggedItem.code}</span>
-                    <span className="font-medium truncate">{dnd.draggedItem.desc}</span>
-                    <Badge variant="secondary" className="text-[9px] ml-2">{dnd.draggedItem.type}</Badge>
+              {/* Search — moved from the old left outline pane */}
+              <div className="relative">
+                <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                <Input
+                  placeholder="Filter BOQ items…"
+                  className="h-7 w-44 pl-7 text-xs"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <span className="text-muted-foreground bg-secondary/60 hidden items-center gap-1.5 rounded px-2 py-0.5 text-[10px] lg:flex">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                Edit Qty/Rate · drag rows to headings to reparent
+              </span>
+              {/* Undo/Redo buttons */}
+              <div className="mr-1 flex items-center gap-0.5 border-r border-[var(--pane-divider)] pr-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn('h-7 w-7 p-0', !canUndo && 'cursor-not-allowed opacity-40')}
+                  onClick={undoFn}
+                  disabled={!canUndo}
+                  title="Undo (⌘Z)"
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn('h-7 w-7 p-0', !canRedo && 'cursor-not-allowed opacity-40')}
+                  onClick={redoFn}
+                  disabled={!canRedo}
+                  title="Redo (⌘⇧Z)"
+                >
+                  <Redo2 className="h-3.5 w-3.5" />
+                </Button>
+                {(canUndo || canRedo) && (
+                  <span className="text-muted-foreground px-1 font-mono text-[9px]">
+                    {undoStack.length}/{undoStack.length + redoStack.length}
+                  </span>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Export RA (DoR Format)
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => {
+                  const flat = flatten(boqData)
+                  exportToCsv(
+                    'omnisite-boq.csv',
+                    ['Code', 'Description', 'Type', 'Qty', 'UOM', 'Rate (NPR)', 'Amount (NPR)'],
+                    flat.map((i) => [i.code, i.desc, i.type, i.qty, i.uom, i.rate, i.qty * i.rate])
+                  )
+                  toast.success('BOQ exported', {
+                    description: `${flat.length} items exported to CSV`,
+                  })
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+              <Button size="sm" className="h-7 gap-1.5 text-xs">
+                <Plus className="h-3.5 w-3.5" />
+                Item
+              </Button>
+            </PaneHeader>
+            {/* Column header — sticky on vertical scroll, scrolls horizontally with body */}
+            <StickyTableShell minWidth={1000}>
+              <StickyTableHeader>
+                <div className="w-6" />
+                <div className="w-7" />
+                {boqIsVisible('code') && (
+                  <div className="relative px-2" style={{ width: `${colWidths.code || 64}px` }}>
+                    Code
+                    <ColumnResizeHandle
+                      columnKey="code"
+                      currentWidth={colWidths.code || 64}
+                      onDragStart={colStartDrag}
+                    />
                   </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
-          </StickyTableBody>
-          </StickyTableShell>
-          {/* Footer — contract summary moved from the old left outline pane */}
-          <div className="h-9 border-t border-[var(--pane-divider)] flex items-center px-4 text-xs text-muted-foreground bg-secondary/30 gap-4">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {allFlat.filter(i => i.type !== 'Heading').length} line items · live totals
-            </span>
-            <span className="text-muted-foreground/50">·</span>
-            <span>{allFlat.filter(i => i.type === 'Priced').length} priced</span>
-            <span className="text-muted-foreground/50">·</span>
-            <span>{allFlat.filter(i => i.type === 'Provisional Sum').length} PS</span>
-            <span className="text-muted-foreground/50">·</span>
-            <span>{allFlat.filter(i => i.type === 'Daywork').length} daywork</span>
-            <div className="flex-1" />
-            <span>Contract Total: <span className="font-mono font-bold text-foreground tabular-nums">NPR {contractTotal.toLocaleString()}</span></span>
-          </div>
-        </>
-      }
-      rightPane={
-        selectedLeaf.type === 'Priced' ? (
-          // key={item.id} forces RaInspector to remount when the selected
-          // BOQ item changes, so its internal coefficient/row state resets
-          // instead of leaking from the previous item.
-          <RaInspector key={selectedLeaf.id} item={selectedLeaf} />
-        ) : (
-          <NonPricedInspector key={selectedLeaf.id} item={selectedLeaf} />
-        )
-      }
-      rightPaneWidth="380px"
-    />
+                )}
+                <div className="flex-1 px-2">Description</div>
+                {boqIsVisible('qty') && (
+                  <div
+                    className="relative px-2 text-right"
+                    style={{ width: `${colWidths.qty || 96}px` }}
+                  >
+                    Qty
+                    <ColumnResizeHandle
+                      columnKey="qty"
+                      currentWidth={colWidths.qty || 96}
+                      onDragStart={colStartDrag}
+                    />
+                  </div>
+                )}
+                {boqIsVisible('uom') && (
+                  <div className="relative px-2" style={{ width: `${colWidths.uom || 56}px` }}>
+                    UOM
+                    <ColumnResizeHandle
+                      columnKey="uom"
+                      currentWidth={colWidths.uom || 56}
+                      onDragStart={colStartDrag}
+                    />
+                  </div>
+                )}
+                {boqIsVisible('rate') && (
+                  <div
+                    className="relative px-2 text-right"
+                    style={{ width: `${colWidths.rate || 112}px` }}
+                  >
+                    Rate (NPR)
+                    <ColumnResizeHandle
+                      columnKey="rate"
+                      currentWidth={colWidths.rate || 112}
+                      onDragStart={colStartDrag}
+                    />
+                  </div>
+                )}
+                {boqIsVisible('amount') && (
+                  <div
+                    className="relative px-2 text-right"
+                    style={{ width: `${colWidths.amount || 112}px` }}
+                  >
+                    Amount (NPR)
+                    <ColumnResizeHandle
+                      columnKey="amount"
+                      currentWidth={colWidths.amount || 112}
+                      onDragStart={colStartDrag}
+                    />
+                  </div>
+                )}
+                {boqIsVisible('type') && (
+                  <div className="relative px-2" style={{ width: `${colWidths.type || 96}px` }}>
+                    Type
+                    <ColumnResizeHandle
+                      columnKey="type"
+                      currentWidth={colWidths.type || 96}
+                      onDragStart={colStartDrag}
+                    />
+                  </div>
+                )}
+                {boqIsVisible('ra') && (
+                  <div
+                    className="relative text-center"
+                    style={{ width: `${colWidths.ra || 40}px` }}
+                  >
+                    RA
+                    <ColumnResizeHandle
+                      columnKey="ra"
+                      currentWidth={colWidths.ra || 40}
+                      onDragStart={colStartDrag}
+                    />
+                  </div>
+                )}
+                <div className="flex-shrink-0 pr-2">
+                  <ColumnToggle
+                    columns={BOQ_COLS}
+                    visible={boqColVisible}
+                    onToggle={boqToggleCol}
+                  />
+                </div>
+              </StickyTableHeader>
+              <StickyTableBody>
+                <DndContext
+                  sensors={dnd.sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={dnd.handleDragStart}
+                  onDragOver={dnd.handleDragOver}
+                  onDragEnd={dnd.handleDragEnd}
+                  onDragCancel={dnd.handleDragCancel}
+                >
+                  <BoqGrid
+                    items={filteredBoqData}
+                    expanded={searchQuery.trim() ? new Set(allFlat.map((i) => i.id)) : expanded}
+                    selectedId={selectedId}
+                    selected={selected}
+                    editing={editing}
+                    draggedItem={dnd.draggedItem}
+                    dragOverHeading={dnd.dragOverHeading}
+                    onSelectId={setSelectedId}
+                    onContextMenu={setContextMenu}
+                    onToggleExpand={toggleExpand}
+                    onToggleSelect={handleToggleSelect}
+                    onUpdateItem={(id, field, value) => updateItem(id, field, value, ctx)}
+                    onSetEditing={setEditing}
+                    isVisible={boqIsVisible}
+                    colWidths={colWidths}
+                  />
+                  <DragOverlay>
+                    {dnd.draggedItem ? (
+                      <div className="pane border-primary flex h-9 items-center gap-2 rounded-md border px-4 text-xs shadow-lg">
+                        <GripVertical className="text-primary h-3 w-3" />
+                        <span className="text-muted-foreground font-mono">
+                          {dnd.draggedItem.code}
+                        </span>
+                        <span className="truncate font-medium">{dnd.draggedItem.desc}</span>
+                        <Badge variant="secondary" className="ml-2 text-[9px]">
+                          {dnd.draggedItem.type}
+                        </Badge>
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              </StickyTableBody>
+            </StickyTableShell>
+            {/* Footer — contract summary moved from the old left outline pane */}
+            <div className="text-muted-foreground bg-secondary/30 flex h-9 items-center gap-4 border-t border-[var(--pane-divider)] px-4 text-xs">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                {allFlat.filter((i) => i.type !== 'Heading').length} line items · live totals
+              </span>
+              <span className="text-muted-foreground/50">·</span>
+              <span>{allFlat.filter((i) => i.type === 'Priced').length} priced</span>
+              <span className="text-muted-foreground/50">·</span>
+              <span>{allFlat.filter((i) => i.type === 'Provisional Sum').length} PS</span>
+              <span className="text-muted-foreground/50">·</span>
+              <span>{allFlat.filter((i) => i.type === 'Daywork').length} daywork</span>
+              <div className="flex-1" />
+              <span>
+                Contract Total:{' '}
+                <span className="text-foreground font-mono font-bold tabular-nums">
+                  NPR {contractTotal.toLocaleString()}
+                </span>
+              </span>
+            </div>
+          </>
+        }
+        rightPane={
+          selectedLeaf.type === 'Priced' ? (
+            // key={item.id} forces RaInspector to remount when the selected
+            // BOQ item changes, so its internal coefficient/row state resets
+            // instead of leaking from the previous item.
+            <RaInspector key={selectedLeaf.id} item={selectedLeaf} />
+          ) : (
+            <NonPricedInspector key={selectedLeaf.id} item={selectedLeaf} />
+          )
+        }
+        rightPaneWidth="380px"
+      />
 
       {/* Context Menu */}
       {contextMenu && (
         <>
           <div
-            className="fixed z-50 pane border border-[var(--pane-divider)] rounded-lg shadow-2xl overflow-hidden py-1 w-52 animate-in fade-in zoom-in-95 duration-100"
-            style={{ left: Math.min(contextMenu.x, window.innerWidth - 220), top: Math.min(contextMenu.y, window.innerHeight - 280) }}
+            className="pane animate-in fade-in zoom-in-95 fixed z-50 w-52 overflow-hidden rounded-lg border border-[var(--pane-divider)] py-1 shadow-2xl duration-100"
+            style={{
+              left: Math.min(contextMenu.x, window.innerWidth - 220),
+              top: Math.min(contextMenu.y, window.innerHeight - 280),
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <ContextMenuItem icon={<Edit3 className="w-3.5 h-3.5" />} label="Edit item" onClick={() => { setContextMenu(null); toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' }) }} />
-            <ContextMenuItem icon={<Copy className="w-3.5 h-3.5" />} label="Duplicate" shortcut="⌘D" onClick={() => { duplicateItem(contextMenu.itemId, ctx); setContextMenu(null) }} />
-            <ContextMenuItem icon={<FilePlus className="w-3.5 h-3.5" />} label="Add child item" onClick={() => { addChildItem(contextMenu.itemId, ctx); setContextMenu(null) }} />
+            <ContextMenuItem
+              icon={<Edit3 className="h-3.5 w-3.5" />}
+              label="Edit item"
+              disabled
+              onClick={() => setContextMenu(null)}
+            />
+            <ContextMenuItem
+              icon={<Copy className="h-3.5 w-3.5" />}
+              label="Duplicate"
+              shortcut="⌘D"
+              onClick={() => {
+                duplicateItem(contextMenu.itemId, ctx)
+                setContextMenu(null)
+              }}
+            />
+            <ContextMenuItem
+              icon={<FilePlus className="h-3.5 w-3.5" />}
+              label="Add child item"
+              onClick={() => {
+                addChildItem(contextMenu.itemId, ctx)
+                setContextMenu(null)
+              }}
+            />
             <div className="my-1 h-px bg-[var(--pane-divider)]" />
-            <ContextMenuItem icon={<FileSpreadsheet className="w-3.5 h-3.5" />} label="Export RA (DoR)" onClick={() => { exportRa(contextMenu.itemId); setContextMenu(null) }} />
-            <ContextMenuItem icon={<Link2 className="w-3.5 h-3.5" />} label="Link to Schedule" onClick={() => { setContextMenu(null); toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' }) }} />
-            <ContextMenuItem icon={<History className="w-3.5 h-3.5" />} label="View audit log" onClick={() => { setContextMenu(null); toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' }) }} />
+            <ContextMenuItem
+              icon={<FileSpreadsheet className="h-3.5 w-3.5" />}
+              label="Export RA (DoR)"
+              onClick={() => {
+                exportRa(allFlat.find((i) => i.id === contextMenu.itemId))
+                setContextMenu(null)
+              }}
+            />
+            <ContextMenuItem
+              icon={<Link2 className="h-3.5 w-3.5" />}
+              label="Link to Schedule"
+              disabled
+              onClick={() => setContextMenu(null)}
+            />
+            <ContextMenuItem
+              icon={<History className="h-3.5 w-3.5" />}
+              label="View audit log"
+              disabled
+              onClick={() => setContextMenu(null)}
+            />
             <div className="my-1 h-px bg-[var(--pane-divider)]" />
-            <ContextMenuItem icon={<Trash2 className="w-3.5 h-3.5" />} label="Delete" danger onClick={() => { deleteItem(contextMenu.itemId, ctx); setContextMenu(null) }} />
+            <ContextMenuItem
+              icon={<Trash2 className="h-3.5 w-3.5" />}
+              label="Delete"
+              danger
+              onClick={() => {
+                deleteItem(contextMenu.itemId, ctx)
+                setContextMenu(null)
+              }}
+            />
           </div>
         </>
       )}

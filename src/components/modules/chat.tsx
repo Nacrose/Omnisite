@@ -7,8 +7,18 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
-  Plus, Search, Send, Hash, Users, Paperclip, Smile, Phone,
-  ArrowLeft, Image as ImageIcon, FileText, MoreVertical,
+  Plus,
+  Search,
+  Send,
+  Hash,
+  Users,
+  Paperclip,
+  Smile,
+  Phone,
+  ArrowLeft,
+  Image as ImageIcon,
+  FileText,
+  MoreVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
@@ -40,7 +50,13 @@ const CHANNELS = [
 ]
 
 const TEAM_MEMBERS = [
-  { id: 'u-arjun', name: 'Arjun Sharma', initials: 'AS', color: '#f97316', role: 'Project Manager' },
+  {
+    id: 'u-arjun',
+    name: 'Arjun Sharma',
+    initials: 'AS',
+    color: '#f97316',
+    role: 'Project Manager',
+  },
   { id: 'u-bikash', name: 'Bikash Rai', initials: 'BR', color: '#3b82f6', role: 'Site Engineer' },
   { id: 'u-sita', name: 'Sita Gurung', initials: 'SG', color: '#10b981', role: 'Storekeeper' },
   { id: 'u-ram', name: 'Ram Bahadur', initials: 'RB', color: '#8b5cf6', role: 'Foreman' },
@@ -63,12 +79,13 @@ export function ChatModule() {
   const currentUser = {
     id: user?.id ?? 'demo-user',
     name: user?.name ?? user?.email ?? 'Anonymous',
-    initials: (user?.name || user?.email || 'A')
-      .split(/\s|@|\./)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map(s => s.charAt(0).toUpperCase())
-      .join('') || 'A',
+    initials:
+      (user?.name || user?.email || 'A')
+        .split(/\s|@|\./)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((s) => s.charAt(0).toUpperCase())
+        .join('') || 'A',
     color: '#f97316',
   }
 
@@ -98,7 +115,8 @@ export function ChatModule() {
     // Real-time subscription
     const channel = supabase!
       .channel('chat-messages-rt')
-      .on('postgres_changes',
+      .on(
+        'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         (payload) => {
           if (!mounted) return
@@ -106,8 +124,8 @@ export function ChatModule() {
           // De-duplicate: sendMessage() already optimistically inserts the
           // returned row, so the realtime INSERT event for the same row
           // would otherwise render the message twice.
-          setMessages(prev =>
-            prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming],
+          setMessages((prev) =>
+            prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]
           )
         }
       )
@@ -126,24 +144,26 @@ export function ChatModule() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, activeChannel])
 
-  const channelMessages = messages.filter(m => m.channel_id === activeChannel)
-  const activeChannelInfo = CHANNELS.find(c => c.id === activeChannel) || CHANNELS[0]
+  const channelMessages = messages.filter((m) => m.channel_id === activeChannel)
+  const activeChannelInfo = CHANNELS.find((c) => c.id === activeChannel) || CHANNELS[0]
 
   // Filter channels and team members by the search query (matches channel
   // name/desc/last-message or member name/role).
   const q = searchQuery.trim().toLowerCase()
   const visibleChannels = q
-    ? CHANNELS.filter(ch => {
+    ? CHANNELS.filter((ch) => {
         if (ch.name.toLowerCase().includes(q) || ch.desc.toLowerCase().includes(q)) return true
-        return messages.some(m =>
-          m.channel_id === ch.id &&
-          (m.content.toLowerCase().includes(q) ||
-            m.sender_name.toLowerCase().includes(q)))
+        return messages.some(
+          (m) =>
+            m.channel_id === ch.id &&
+            (m.content.toLowerCase().includes(q) || m.sender_name.toLowerCase().includes(q))
+        )
       })
     : CHANNELS
   const visibleTeamMembers = q
-    ? TEAM_MEMBERS.filter(m =>
-        m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q))
+    ? TEAM_MEMBERS.filter(
+        (m) => m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q)
+      )
     : TEAM_MEMBERS
 
   const sendMessage = async () => {
@@ -167,12 +187,11 @@ export function ChatModule() {
       try {
         // The server returns the full row including id/created_at — cast to
         // the local ChatMessage type for state insertion.
-        const saved = (await upsertOne('chat-messages', newMsg)) as unknown as ChatMessage | undefined
+        const saved = (await upsertOne('chat-messages', newMsg)) as unknown as
+          ChatMessage | undefined
         if (saved) {
           // Real-time will also fire, but add locally too for instant feedback.
-          setMessages(prev =>
-            prev.some(m => m.id === saved.id) ? prev : [...prev, saved],
-          )
+          setMessages((prev) => (prev.some((m) => m.id === saved.id) ? prev : [...prev, saved]))
         }
       } catch (err) {
         toast.error('Failed to send message', {
@@ -186,7 +205,7 @@ export function ChatModule() {
         ...newMsg,
         created_at: new Date().toISOString(),
       }
-      setMessages(prev => [...prev, localMsg])
+      setMessages((prev) => [...prev, localMsg])
     }
   }
 
@@ -202,7 +221,10 @@ export function ChatModule() {
     const groups: { date: string; messages: ChatMessage[] }[] = []
     let currentDate = ''
     for (const msg of channelMessages) {
-      const date = new Date(msg.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+      const date = new Date(msg.created_at).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+      })
       if (date !== currentDate) {
         groups.push({ date, messages: [] })
         currentDate = date
@@ -217,39 +239,48 @@ export function ChatModule() {
       listPane={
         <>
           <PaneHeader title="Messages">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
           </PaneHeader>
-          <div className="px-3 py-2 border-b border-[var(--pane-divider)]">
+          <div className="border-b border-[var(--pane-divider)] px-3 py-2">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Search messages…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+              <Input
+                placeholder="Search messages…"
+                className="h-8 pl-7 text-xs"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
           <PaneBody className="py-2">
             {/* Channels */}
-            <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <div className="text-muted-foreground/70 px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
               Channels
             </div>
-            {visibleChannels.map(ch => {
+            {visibleChannels.map((ch) => {
               const Icon = ch.icon
-              const count = messages.filter(m => m.channel_id === ch.id).length
-              const lastMsg = messages.filter(m => m.channel_id === ch.id).pop()
+              const count = messages.filter((m) => m.channel_id === ch.id).length
+              const lastMsg = messages.filter((m) => m.channel_id === ch.id).pop()
               return (
                 <button
                   key={ch.id}
                   onClick={() => setActiveChannel(ch.id)}
                   className={cn(
-                    'w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-accent/50 transition-colors',
-                    activeChannel === ch.id && 'bg-accent border-l-2 border-l-primary'
+                    'hover:bg-accent/50 flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors',
+                    activeChannel === ch.id && 'bg-accent border-l-primary border-l-2'
                   )}
                 >
-                  <Icon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
+                  <Icon className="text-muted-foreground mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium">{ch.name}</span>
-                      {count > 0 && <span className="text-[10px] text-muted-foreground">{count}</span>}
+                      {count > 0 && (
+                        <span className="text-muted-foreground text-[10px]">{count}</span>
+                      )}
                     </div>
-                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                    <div className="text-muted-foreground mt-0.5 truncate text-[10px]">
                       {lastMsg ? `${lastMsg.sender_initials}: ${lastMsg.content}` : ch.desc}
                     </div>
                   </div>
@@ -258,27 +289,28 @@ export function ChatModule() {
             })}
 
             {/* Team members */}
-            <div className="px-3 py-1.5 mt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <div className="text-muted-foreground/70 mt-3 px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
               Team
             </div>
-            {visibleTeamMembers.map(m => (
+            {visibleTeamMembers.map((m) => (
               <button
                 key={m.id}
-                onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}
-                className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50 transition-colors"
+                disabled
+                title="Coming soon"
+                className="hover:bg-accent/50 flex w-full items-center gap-2.5 px-3 py-2 transition-colors"
               >
                 <div className="relative flex-shrink-0">
                   <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-white"
                     style={{ background: m.color }}
                   >
                     {m.initials}
                   </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-1 ring-background" />
+                  <div className="ring-background absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-1" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{m.name}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{m.role}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium">{m.name}</div>
+                  <div className="text-muted-foreground truncate text-[10px]">{m.role}</div>
                 </div>
               </button>
             ))}
@@ -288,46 +320,63 @@ export function ChatModule() {
       detailPane={
         <>
           {/* Chat header */}
-          <div className="h-12 flex-shrink-0 flex items-center gap-2 px-4 border-b border-[var(--pane-divider)] vibrancy">
-            <Hash className="w-4 h-4 text-muted-foreground" />
+          <div className="vibrancy flex h-12 flex-shrink-0 items-center gap-2 border-b border-[var(--pane-divider)] px-4">
+            <Hash className="text-muted-foreground h-4 w-4" />
             <span className="text-sm font-semibold">{activeChannelInfo.name}</span>
-            <Separator orientation="vertical" className="h-5 mx-1" />
-            <span className="text-xs text-muted-foreground hidden sm:block">{activeChannelInfo.desc}</span>
+            <Separator orientation="vertical" className="mx-1 h-5" />
+            <span className="text-muted-foreground hidden text-xs sm:block">
+              {activeChannelInfo.desc}
+            </span>
             <div className="flex-1" />
             <button
               onClick={() => setShowMembers(!showMembers)}
-              className={cn('p-1.5 rounded-md hover:bg-accent text-muted-transition', showMembers && 'bg-accent')}
+              className={cn(
+                'hover:bg-accent text-muted-transition rounded-md p-1.5',
+                showMembers && 'bg-accent'
+              )}
               title="Team members"
             >
-              <Users className="w-4 h-4" />
+              <Users className="h-4 w-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="Call" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
-              <Phone className="w-4 h-4" />
+            <button
+              className="hover:bg-accent text-muted-foreground rounded-md p-1.5"
+              title="Call (coming soon)"
+              disabled
+            >
+              <Phone className="h-4 w-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-accent text-muted-foreground" title="More" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
-              <MoreVertical className="w-4 h-4" />
+            <button
+              className="hover:bg-accent text-muted-foreground rounded-md p-1.5"
+              title="More (coming soon)"
+              disabled
+            >
+              <MoreVertical className="h-4 w-4" />
             </button>
           </div>
 
           {/* Messages area */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
             {loading ? (
-              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">Loading messages…</div>
+              <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+                Loading messages…
+              </div>
             ) : channelMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <Hash className="w-10 h-10 mb-3 opacity-20" />
+              <div className="text-muted-foreground flex h-full flex-col items-center justify-center">
+                <Hash className="mb-3 h-10 w-10 opacity-20" />
                 <div className="text-sm font-medium">No messages yet</div>
-                <div className="text-xs mt-1">Send the first message in #{activeChannel}</div>
+                <div className="mt-1 text-xs">Send the first message in #{activeChannel}</div>
               </div>
             ) : (
               <>
                 {groupedMessages.map((group, gi) => (
                   <div key={gi}>
                     {/* Date separator */}
-                    <div className="flex items-center gap-3 my-3">
-                      <div className="flex-1 h-px bg-[var(--pane-divider)]" />
-                      <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{group.date}</span>
-                      <div className="flex-1 h-px bg-[var(--pane-divider)]" />
+                    <div className="my-3 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-[var(--pane-divider)]" />
+                      <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+                        {group.date}
+                      </span>
+                      <div className="h-px flex-1 bg-[var(--pane-divider)]" />
                     </div>
                     {/* Messages */}
                     {group.messages.map((msg, mi) => {
@@ -338,13 +387,17 @@ export function ChatModule() {
                       return (
                         <div
                           key={msg.id}
-                          className={cn('flex gap-2.5 mb-1', isOwn && 'flex-row-reverse', showAvatar ? 'mt-3' : 'mt-0.5')}
+                          className={cn(
+                            'mb-1 flex gap-2.5',
+                            isOwn && 'flex-row-reverse',
+                            showAvatar ? 'mt-3' : 'mt-0.5'
+                          )}
                         >
                           {/* Avatar */}
                           <div className="w-8 flex-shrink-0">
                             {showAvatar && (
                               <div
-                                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-semibold"
+                                className="flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-semibold text-white"
                                 style={{ background: msg.sender_color }}
                               >
                                 {msg.sender_initials}
@@ -353,18 +406,26 @@ export function ChatModule() {
                           </div>
 
                           {/* Message bubble */}
-                          <div className={cn('flex flex-col max-w-[75%]', isOwn && 'items-end')}>
+                          <div className={cn('flex max-w-[75%] flex-col', isOwn && 'items-end')}>
                             {showAvatar && (
-                              <div className={cn('flex items-center gap-2 mb-0.5', isOwn && 'flex-row-reverse')}>
+                              <div
+                                className={cn(
+                                  'mb-0.5 flex items-center gap-2',
+                                  isOwn && 'flex-row-reverse'
+                                )}
+                              >
                                 <span className="text-xs font-medium">{msg.sender_name}</span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {new Date(msg.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                <span className="text-muted-foreground text-[10px]">
+                                  {new Date(msg.created_at).toLocaleTimeString('en-GB', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
                                 </span>
                               </div>
                             )}
                             <div
                               className={cn(
-                                'px-3 py-2 rounded-2xl text-sm break-words',
+                                'rounded-2xl px-3 py-2 text-sm break-words',
                                 isOwn
                                   ? 'bg-primary text-primary-foreground rounded-br-sm'
                                   : 'bg-secondary text-foreground rounded-bl-sm'
@@ -384,42 +445,54 @@ export function ChatModule() {
           </div>
 
           {/* Composer */}
-          <div className="flex-shrink-0 p-3 border-t border-[var(--pane-divider)]">
+          <div className="flex-shrink-0 border-t border-[var(--pane-divider)] p-3">
             <div className="flex items-center gap-2">
-              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground" title="Attach file" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
-                <Paperclip className="w-4 h-4" />
+              <button
+                className="hover:bg-accent text-muted-foreground rounded-lg p-2"
+                title="Attach file (coming soon)"
+                disabled
+              >
+                <Paperclip className="h-4 w-4" />
               </button>
-              <button className="p-2 rounded-lg hover:bg-accent text-muted-foreground hidden sm:block" title="Attach image" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
-                <ImageIcon className="w-4 h-4" />
+              <button
+                className="hover:bg-accent text-muted-foreground hidden rounded-lg p-2 sm:block"
+                title="Attach image (coming soon)"
+                disabled
+              >
+                <ImageIcon className="h-4 w-4" />
               </button>
-              <div className="flex-1 flex items-center gap-2 bg-secondary rounded-2xl px-3 py-1.5">
+              <div className="bg-secondary flex flex-1 items-center gap-2 rounded-2xl px-3 py-1.5">
                 <input
                   type="text"
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyPress}
                   placeholder={`Message #${activeChannel}…`}
-                  className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+                  className="placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
                 />
-                <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="Emoji" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}>
-                  <Smile className="w-4 h-4" />
+                <button
+                  className="text-muted-foreground hover:text-foreground rounded p-1"
+                  title="Emoji (coming soon)"
+                  disabled
+                >
+                  <Smile className="h-4 w-4" />
                 </button>
               </div>
               <button
                 onClick={sendMessage}
                 disabled={!input.trim()}
                 className={cn(
-                  'p-2.5 rounded-xl transition-colors flex-shrink-0',
+                  'flex-shrink-0 rounded-xl p-2.5 transition-colors',
                   input.trim()
                     ? 'bg-primary text-primary-foreground hover:opacity-90'
                     : 'bg-secondary text-muted-foreground/40 cursor-not-allowed'
                 )}
                 title="Send"
               >
-                <Send className="w-4 h-4" />
+                <Send className="h-4 w-4" />
               </button>
             </div>
-            <div className="text-[10px] text-muted-foreground mt-1.5 px-2">
+            <div className="text-muted-foreground mt-1.5 px-2 text-[10px]">
               Press Enter to send · Shift+Enter for new line
             </div>
           </div>

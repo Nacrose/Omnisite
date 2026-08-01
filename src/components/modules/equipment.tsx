@@ -9,8 +9,19 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import {
-  Plus, Search, Truck, Fuel, Wrench, FileText, Calendar, AlertTriangle,
-  CheckCircle2, User, Phone, MapPin, ShieldCheck,
+  Plus,
+  Search,
+  Truck,
+  Fuel,
+  Wrench,
+  FileText,
+  Calendar,
+  AlertTriangle,
+  CheckCircle2,
+  User,
+  Phone,
+  MapPin,
+  ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -18,17 +29,41 @@ import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
 
 interface Equip {
-  id: string; name: string; type: string; status: 'active' | 'breakdown' | 'idle'; owned: boolean; operator?: string; licenseExp?: string;
-  chargeRate: number; fuelToday?: number; hoursToday?: number; burnRate?: number; burnNorm?: number;
+  id: string
+  name: string
+  type: string
+  status: 'active' | 'breakdown' | 'idle'
+  owned: boolean
+  operator?: string
+  licenseExp?: string
+  chargeRate: number
+  fuelToday?: number
+  hoursToday?: number
+  burnRate?: number
+  burnNorm?: number
   rental?: { vendor: string; rate: number; terms: string[] }
   docs: { name: string; type: string; exp?: string }[]
 }
 
 const EQUIP: Equip[] = [
   {
-    id: 'E-001', name: 'JCB 3DX Excavator', type: 'Excavator', status: 'active', owned: false, operator: 'Hari Bahadur', licenseExp: '2026-12-15',
-    chargeRate: 1850, fuelToday: 32, hoursToday: 8, burnRate: 4.0, burnNorm: 3.5,
-    rental: { vendor: 'Kathmandu Equipment Rental', rate: 1850, terms: ['Project pays fuel', 'Project pays consumables', 'Renter pays maintenance'] },
+    id: 'E-001',
+    name: 'JCB 3DX Excavator',
+    type: 'Excavator',
+    status: 'active',
+    owned: false,
+    operator: 'Hari Bahadur',
+    licenseExp: '2026-12-15',
+    chargeRate: 1850,
+    fuelToday: 32,
+    hoursToday: 8,
+    burnRate: 4.0,
+    burnNorm: 3.5,
+    rental: {
+      vendor: 'Kathmandu Equipment Rental',
+      rate: 1850,
+      terms: ['Project pays fuel', 'Project pays consumables', 'Renter pays maintenance'],
+    },
     docs: [
       { name: 'Rental Agreement', type: 'PDF' },
       { name: 'Blue Book', type: 'PDF', exp: '2027-03-15' },
@@ -36,23 +71,68 @@ const EQUIP: Equip[] = [
     ],
   },
   {
-    id: 'E-002', name: 'Tata 1109 Tipper', type: 'Tipper Truck', status: 'active', owned: false, operator: 'Suresh Tamang', licenseExp: '2027-02-20',
-    chargeRate: 1200, fuelToday: 18, hoursToday: 9, burnRate: 2.0, burnNorm: 2.5,
-    rental: { vendor: 'Hetauda Transport Co.', rate: 1200, terms: ['Renter pays driver salary', 'Project pays fuel', 'Renter pays major repairs'] },
-    docs: [{ name: 'Rental Agreement', type: 'PDF' }, { name: 'Blue Book', type: 'PDF', exp: '2026-09-30' }],
+    id: 'E-002',
+    name: 'Tata 1109 Tipper',
+    type: 'Tipper Truck',
+    status: 'active',
+    owned: false,
+    operator: 'Suresh Tamang',
+    licenseExp: '2027-02-20',
+    chargeRate: 1200,
+    fuelToday: 18,
+    hoursToday: 9,
+    burnRate: 2.0,
+    burnNorm: 2.5,
+    rental: {
+      vendor: 'Hetauda Transport Co.',
+      rate: 1200,
+      terms: ['Renter pays driver salary', 'Project pays fuel', 'Renter pays major repairs'],
+    },
+    docs: [
+      { name: 'Rental Agreement', type: 'PDF' },
+      { name: 'Blue Book', type: 'PDF', exp: '2026-09-30' },
+    ],
   },
   {
-    id: 'E-003', name: 'Concrete Mixer 0.4 cum', type: 'Mixer', status: 'active', owned: true, chargeRate: 285, fuelToday: 12, hoursToday: 6, burnRate: 2.0, burnNorm: 2.0,
+    id: 'E-003',
+    name: 'Concrete Mixer 0.4 cum',
+    type: 'Mixer',
+    status: 'active',
+    owned: true,
+    chargeRate: 285,
+    fuelToday: 12,
+    hoursToday: 6,
+    burnRate: 2.0,
+    burnNorm: 2.0,
     docs: [{ name: 'Purchase Invoice', type: 'PDF' }],
   },
   {
-    id: 'E-004', name: 'Needle Vibrator 60mm', type: 'Vibrator', status: 'idle', owned: true, chargeRate: 95,
+    id: 'E-004',
+    name: 'Needle Vibrator 60mm',
+    type: 'Vibrator',
+    status: 'idle',
+    owned: true,
+    chargeRate: 95,
     docs: [{ name: 'Purchase Invoice', type: 'PDF' }],
   },
   {
-    id: 'E-005', name: 'Batching Plant 30 cum/hr', type: 'Plant', status: 'breakdown', owned: false, operator: 'Ram Lal', licenseExp: '2026-10-12',
-    chargeRate: 4200, rental: { vendor: 'Bhotahiti Concrete', rate: 4200, terms: ['Renter pays all', 'Min maint: NPR 25,000'] },
-    docs: [{ name: 'Rental Agreement', type: 'PDF' }, { name: 'Insurance', type: 'PDF', exp: '2026-08-30' }],
+    id: 'E-005',
+    name: 'Batching Plant 30 cum/hr',
+    type: 'Plant',
+    status: 'breakdown',
+    owned: false,
+    operator: 'Ram Lal',
+    licenseExp: '2026-10-12',
+    chargeRate: 4200,
+    rental: {
+      vendor: 'Bhotahiti Concrete',
+      rate: 4200,
+      terms: ['Renter pays all', 'Min maint: NPR 25,000'],
+    },
+    docs: [
+      { name: 'Rental Agreement', type: 'PDF' },
+      { name: 'Insurance', type: 'PDF', exp: '2026-08-30' },
+    ],
   },
 ]
 
@@ -72,13 +152,20 @@ export function EquipmentModule() {
   const [equipList, setEquipList, equipLoading] = useSyncedState<Equip[]>(
     'omnisite-equipment',
     'equipment',
-    () => JSON.parse(JSON.stringify(EQUIP)),
+    () => structuredClone(EQUIP) as typeof EQUIP,
     {
-      fieldMap: { chargeRate: 'charge_rate', fuelToday: 'fuel_today', hoursToday: 'hours_today', burnRate: 'burn_rate', burnNorm: 'burn_norm', licenseExp: 'license_expiry' },
+      fieldMap: {
+        chargeRate: 'charge_rate',
+        fuelToday: 'fuel_today',
+        hoursToday: 'hours_today',
+        burnRate: 'burn_rate',
+        burnNorm: 'burn_norm',
+        licenseExp: 'license_expiry',
+      },
       primaryKey: 'id',
     }
   )
-  const selected = equipList.find(e => e.id === selectedId) ?? equipList[0]
+  const selected = equipList.find((e) => e.id === selectedId) ?? equipList[0]
   // Only bill active equipment for hours. Idle/breakdown equipment costs 0
   // (previously defaulted to 8 hours via `|| 8`, inflating the daily cost by
   // ~NPR 34K and pushing wrong numbers to Financials ACWP).
@@ -86,30 +173,45 @@ export function EquipmentModule() {
 
   // Filter categories by the search query (matches category name OR any
   // equipment name/id/type within that category).
-  const allCategories = ['All', 'Excavator', 'Tipper Truck', 'Mixer', 'Vibrator', 'Plant', 'Compactor', 'Crane']
+  const allCategories = [
+    'All',
+    'Excavator',
+    'Tipper Truck',
+    'Mixer',
+    'Vibrator',
+    'Plant',
+    'Compactor',
+    'Crane',
+  ]
   const visibleCategories = searchQuery.trim()
-    ? allCategories.filter(cat => {
+    ? allCategories.filter((cat) => {
         if (cat === 'All') return true
         const q = searchQuery.toLowerCase()
         if (cat.toLowerCase().includes(q)) return true
-        return equipList.some(e =>
-          e.type === cat &&
-          (e.name.toLowerCase().includes(q) ||
-            e.id.toLowerCase().includes(q) ||
-            e.type.toLowerCase().includes(q)))
+        return equipList.some(
+          (e) =>
+            e.type === cat &&
+            (e.name.toLowerCase().includes(q) ||
+              e.id.toLowerCase().includes(q) ||
+              e.type.toLowerCase().includes(q))
+        )
       })
     : allCategories
 
   const selectCategory = (cat: string) => {
     setSelectedCategory(cat)
     if (cat !== 'All') {
-      const firstInCat = equipList.find(e => e.type === cat)
+      const firstInCat = equipList.find((e) => e.type === cat)
       if (firstInCat) setSelectedId(firstInCat.id)
     }
   }
 
   if (equipLoading) {
-    return <div className="h-full flex items-center justify-center"><LoadingState label="Loading equipment…" /></div>
+    return (
+      <div className="flex h-full items-center justify-center">
+        <LoadingState label="Loading equipment…" />
+      </div>
+    )
   }
 
   return (
@@ -117,29 +219,55 @@ export function EquipmentModule() {
       leftPane={
         <>
           <PaneHeader title="Fleet Categories">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
           </PaneHeader>
           <PaneBody className="py-2">
-            <div className="px-3 mb-2">
+            <div className="mb-2 px-3">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Search fleet…" className="h-8 pl-7 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                <Input
+                  placeholder="Search fleet…"
+                  className="h-8 pl-7 text-xs"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
             </div>
-            {visibleCategories.map(cat => {
-              const count = cat === 'All' ? equipList.length : equipList.filter(e => e.type === cat).length
+            {visibleCategories.map((cat) => {
+              const count =
+                cat === 'All' ? equipList.length : equipList.filter((e) => e.type === cat).length
               return (
-                <button key={cat} onClick={() => selectCategory(cat)} className={cn('w-full flex items-center justify-between px-3 py-1.5 text-xs', selectedCategory === cat ? 'bg-accent border-l-2 border-l-primary' : 'hover:bg-accent/50 border-l-2 border-transparent')}>
-                  <span className="flex items-center gap-2"><Truck className="w-3 h-3 text-muted-foreground" />{cat}</span>
-                  <Badge variant="secondary" className="text-[9px] h-4 px-1">{count}</Badge>
+                <button
+                  key={cat}
+                  onClick={() => selectCategory(cat)}
+                  className={cn(
+                    'flex w-full items-center justify-between px-3 py-1.5 text-xs',
+                    selectedCategory === cat
+                      ? 'bg-accent border-l-primary border-l-2'
+                      : 'hover:bg-accent/50 border-l-2 border-transparent'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Truck className="text-muted-foreground h-3 w-3" />
+                    {cat}
+                  </span>
+                  <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+                    {count}
+                  </Badge>
                 </button>
               )
             })}
           </PaneBody>
-          <div className="border-t border-[var(--pane-divider)] p-3 text-xs space-y-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Today&apos;s Fleet Cost</div>
+          <div className="space-y-1 border-t border-[var(--pane-divider)] p-3 text-xs">
+            <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+              Today&apos;s Fleet Cost
+            </div>
             <div className="text-lg font-bold">NPR {totalCost.toLocaleString()}</div>
-            <div className="text-[10px] text-muted-foreground">Auto-pushed to Financials (ACWP)</div>
+            <div className="text-muted-foreground text-[10px]">
+              Auto-pushed to Financials (ACWP)
+            </div>
           </div>
         </>
       }
@@ -156,54 +284,91 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
     <>
       <PaneHeader title={`Equipment Inspector · ${equip.id}`} />
       <PaneBody>
-        <div className="p-4 border-b border-[var(--pane-divider)]">
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="text-[10px]">{equip.type}</Badge>
-            <Badge variant="secondary" className={cn('text-[10px]', equip.status === 'active' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', equip.status === 'breakdown' && 'bg-red-500/15 text-red-700 dark:text-red-300')}>{equip.status}</Badge>
-            <Badge variant="secondary" className="text-[10px]">{equip.owned ? 'Owned' : 'Rental'}</Badge>
+        <div className="border-b border-[var(--pane-divider)] p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px]">
+              {equip.type}
+            </Badge>
+            <Badge
+              variant="secondary"
+              className={cn(
+                'text-[10px]',
+                equip.status === 'active' &&
+                  'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+                equip.status === 'breakdown' && 'bg-red-500/15 text-red-700 dark:text-red-300'
+              )}
+            >
+              {equip.status}
+            </Badge>
+            <Badge variant="secondary" className="text-[10px]">
+              {equip.owned ? 'Owned' : 'Rental'}
+            </Badge>
           </div>
           <div className="text-sm font-semibold">{equip.name}</div>
         </div>
 
         <Tabs defaultValue="ops">
           <div className="px-3 pt-2">
-            <TabsList className="grid grid-cols-3 h-8 w-full text-xs">
-              <TabsTrigger value="ops" className="text-[11px]">Operations</TabsTrigger>
-              <TabsTrigger value="rental" className="text-[11px]">Rental Terms</TabsTrigger>
-              <TabsTrigger value="docs" className="text-[11px]">Documents</TabsTrigger>
+            <TabsList className="grid h-8 w-full grid-cols-3 text-xs">
+              <TabsTrigger value="ops" className="text-[11px]">
+                Operations
+              </TabsTrigger>
+              <TabsTrigger value="rental" className="text-[11px]">
+                Rental Terms
+              </TabsTrigger>
+              <TabsTrigger value="docs" className="text-[11px]">
+                Documents
+              </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="ops" className="mt-0 px-4 py-3 space-y-3 text-xs">
+          <TabsContent value="ops" className="mt-0 space-y-3 px-4 py-3 text-xs">
             <div className="grid grid-cols-2 gap-2">
-              <div className="p-2.5 rounded-md border border-[var(--pane-divider)]">
-                <div className="text-[10px] text-muted-foreground">Project Charge Rate</div>
-                <div className="text-base font-bold mt-0.5">NPR {equip.chargeRate.toLocaleString()}<span className="text-xs font-normal text-muted-foreground">/day</span></div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Applied to project (even owned)</div>
+              <div className="rounded-md border border-[var(--pane-divider)] p-2.5">
+                <div className="text-muted-foreground text-[10px]">Project Charge Rate</div>
+                <div className="mt-0.5 text-base font-bold">
+                  NPR {equip.chargeRate.toLocaleString()}
+                  <span className="text-muted-foreground text-xs font-normal">/day</span>
+                </div>
+                <div className="text-muted-foreground mt-0.5 text-[10px]">
+                  Applied to project (even owned)
+                </div>
               </div>
-              <div className="p-2.5 rounded-md border border-[var(--pane-divider)]">
-                <div className="text-[10px] text-muted-foreground">Today&apos;s cost</div>
-                <div className="text-base font-bold mt-0.5">NPR {(equip.chargeRate * effectiveHours(equip)).toLocaleString()}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{effectiveHours(equip)}h × NPR {equip.chargeRate}/day</div>
+              <div className="rounded-md border border-[var(--pane-divider)] p-2.5">
+                <div className="text-muted-foreground text-[10px]">Today&apos;s cost</div>
+                <div className="mt-0.5 text-base font-bold">
+                  NPR {(equip.chargeRate * effectiveHours(equip)).toLocaleString()}
+                </div>
+                <div className="text-muted-foreground mt-0.5 text-[10px]">
+                  {effectiveHours(equip)}h × NPR {equip.chargeRate}/day
+                </div>
               </div>
             </div>
 
             {equip.fuelToday && (
               <>
                 <Separator />
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fuel Tracking</div>
+                <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Fuel Tracking
+                </div>
                 <div className="space-y-1.5">
                   <Row label="Fuel issued today" value={`${equip.fuelToday} l`} />
                   <Row label="Hours operated" value={`${equip.hoursToday} h`} />
-                  <Row label="Burn rate" value={`${equip.burnRate} l/hr`} className={burnAlert ? 'text-red-500 font-bold' : ''} />
+                  <Row
+                    label="Burn rate"
+                    value={`${equip.burnRate} l/hr`}
+                    className={burnAlert ? 'font-bold text-red-500' : ''}
+                  />
                   <Row label="RA Norm" value={`${equip.burnNorm} l/hr`} muted />
                 </div>
                 {burnAlert && (
-                  <div className="p-2 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] flex items-start gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 mt-0.5" />
+                  <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-[11px]">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-red-500" />
                     <div>
                       <div className="font-medium">Burn rate above RA norm</div>
-                      <div className="text-muted-foreground">Possible fuel theft or excessive idling. Investigate operator log.</div>
+                      <div className="text-muted-foreground">
+                        Possible fuel theft or excessive idling. Investigate operator log.
+                      </div>
                     </div>
                   </div>
                 )}
@@ -211,30 +376,39 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
             )}
 
             <Separator />
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Operator</div>
+            <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+              Operator
+            </div>
             {equip.operator ? (
-              <div className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)]">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-xs font-semibold">{equip.operator.charAt(0)}</div>
-                <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-xs font-semibold text-white">
+                  {equip.operator.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
                   <div className="font-medium">{equip.operator}</div>
-                  <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    <ShieldCheck className="w-2.5 h-2.5" />License expires {equip.licenseExp}
+                  <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
+                    <ShieldCheck className="h-2.5 w-2.5" />
+                    License expires {equip.licenseExp}
                   </div>
                 </div>
               </div>
-            ) : <div className="text-muted-foreground">No operator assigned</div>}
+            ) : (
+              <div className="text-muted-foreground">No operator assigned</div>
+            )}
           </TabsContent>
 
-          <TabsContent value="rental" className="mt-0 px-4 py-3 space-y-3 text-xs">
+          <TabsContent value="rental" className="mt-0 space-y-3 px-4 py-3 text-xs">
             {equip.rental ? (
               <>
-                <div className="p-2.5 rounded-md border border-[var(--pane-divider)]">
-                  <div className="text-[10px] text-muted-foreground">Vendor</div>
+                <div className="rounded-md border border-[var(--pane-divider)] p-2.5">
+                  <div className="text-muted-foreground text-[10px]">Vendor</div>
                   <div className="font-medium">{equip.rental.vendor}</div>
-                  <div className="text-[10px] text-muted-foreground mt-1">Rental rate</div>
+                  <div className="text-muted-foreground mt-1 text-[10px]">Rental rate</div>
                   <div className="font-mono">NPR {equip.rental.rate.toLocaleString()}/day</div>
                 </div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Rental Terms Matrix</div>
+                <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Rental Terms Matrix
+                </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {[
                     'Project pays Driver Salary',
@@ -244,7 +418,7 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
                     'Project pays Housing',
                     'Project pays Routine Maint',
                     'Project pays Major Repairs',
-                  ].map(term => {
+                  ].map((term) => {
                     // Match the FULL phrase (payer + item), not just the first
                     // word of the item. The old matcher stripped "project pays "
                     // and matched only the first word, so "Project pays Driver
@@ -252,44 +426,72 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
                     const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
                     const normalizeTerm = (s: string) =>
                       normalize(s).replace('driver salary', 'driver')
-                    const checked = (equip.rental?.terms || []).some(t =>
-                      normalizeTerm(t) === normalizeTerm(term)
+                    const checked = (equip.rental?.terms || []).some(
+                      (t) => normalizeTerm(t) === normalizeTerm(term)
                     )
                     return (
-                      <label key={term} className="flex items-center gap-2 p-1.5 rounded border border-[var(--pane-divider)]">
+                      <label
+                        key={term}
+                        className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5"
+                      >
                         <Checkbox checked={checked} />
                         <span className="text-[10px]">{term}</span>
                       </label>
                     )
                   })}
                 </div>
-                <div className="p-2 rounded-md bg-secondary/40">
-                  <label className="text-[10px] text-muted-foreground">Min maintenance threshold</label>
-                  <Input className="h-7 mt-1 text-xs" defaultValue="NPR 25,000" />
+                <div className="bg-secondary/40 rounded-md p-2">
+                  <label className="text-muted-foreground text-[10px]">
+                    Min maintenance threshold
+                  </label>
+                  <Input className="mt-1 h-7 text-xs" defaultValue="NPR 25,000" />
                 </div>
               </>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Truck className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <div className="text-muted-foreground py-8 text-center">
+                <Truck className="mx-auto mb-2 h-8 w-8 opacity-30" />
                 <div className="font-medium">Owned equipment</div>
-                <div className="text-[10px] mt-1">No rental terms. Project charge rate tracks true depreciation cost.</div>
+                <div className="mt-1 text-[10px]">
+                  No rental terms. Project charge rate tracks true depreciation cost.
+                </div>
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="docs" className="mt-0 px-4 py-3 space-y-2 text-xs">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Document Vault</div>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Plus className="w-3 h-3" />Upload</Button>
+          <TabsContent value="docs" className="mt-0 space-y-2 px-4 py-3 text-xs">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                Document Vault
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 text-xs"
+                disabled
+                title="Coming soon"
+              >
+                <Plus className="h-3 w-3" />
+                Upload
+              </Button>
             </div>
             {equip.docs.map((d, i) => (
-              <div key={i} className="flex items-center gap-2 p-2 rounded border border-[var(--pane-divider)] hover:bg-accent/30 cursor-pointer">
-                <FileText className="w-4 h-4 text-muted-foreground" />
-                <div className="flex-1 min-w-0">
+              <div
+                key={i}
+                className="hover:bg-accent/30 flex cursor-pointer items-center gap-2 rounded border border-[var(--pane-divider)] p-2"
+              >
+                <FileText className="text-muted-foreground h-4 w-4" />
+                <div className="min-w-0 flex-1">
                   <div className="truncate">{d.name}</div>
-                  {d.exp && <div className="text-[10px] text-amber-600 flex items-center gap-1"><Calendar className="w-2.5 h-2.5" />Expires {d.exp}</div>}
+                  {d.exp && (
+                    <div className="flex items-center gap-1 text-[10px] text-amber-600">
+                      <Calendar className="h-2.5 w-2.5" />
+                      Expires {d.exp}
+                    </div>
+                  )}
                 </div>
-                <Badge variant="outline" className="text-[9px]">{d.type}</Badge>
+                <Badge variant="outline" className="text-[9px]">
+                  {d.type}
+                </Badge>
               </div>
             ))}
           </TabsContent>
@@ -299,7 +501,17 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
   )
 }
 
-function Row({ label, value, muted, className }: { label: string; value: string; muted?: boolean; className?: string }) {
+function Row({
+  label,
+  value,
+  muted,
+  className,
+}: {
+  label: string
+  value: string
+  muted?: boolean
+  className?: string
+}) {
   return (
     <div className="flex justify-between">
       <span className={cn(muted && 'text-muted-foreground')}>{label}</span>

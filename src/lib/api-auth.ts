@@ -106,10 +106,7 @@ export async function requireAuth(req: NextRequest): Promise<{
  *   const roleError = requireRole(user, 'boq_items')  // write access
  *   if (roleError) return roleError
  */
-export function requireRole(
-  user: AuthenticatedUser | null,
-  table: string,
-): NextResponse | null {
+export function requireRole(user: AuthenticatedUser | null, table: string): NextResponse | null {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -117,6 +114,22 @@ export function requireRole(
   // Skip role enforcement only in true demo mode (no Supabase configured),
   // where there is no database to enforce RLS against.
   if (!isServerSupabaseConfigured()) return null
+
+  // Defense-in-depth: even when OMNISITE_DEMO_MODE=true allows requireAuth()
+  // to return a demo user, block writes to sensitive tables if the user has
+  // no real access token. This prevents a demo user from mutating a real
+  // Supabase database when both demo mode AND Supabase are configured
+  // (e.g., a staging environment). RLS would also reject these, but this
+  // makes the guard explicit and fails fast with a clear error.
+  if (!user.accessToken) {
+    return NextResponse.json(
+      {
+        error:
+          'Forbidden — demo users cannot write to the database. Sign in with a real account to make changes.',
+      },
+      { status: 403 }
+    )
+  }
 
   const allowedRoles = TABLE_WRITE_ROLES[table]
   if (!allowedRoles) {

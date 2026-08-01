@@ -1,5 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import { validateBody, boqItemSchema } from '@/lib/validation'
+import type { AuthenticatedUser } from '@/lib/api-auth'
+
+// ─── requireRole: demo-mode defense-in-depth ──────────────────────────────
+
+// Mock the server-side supabase module so isServerSupabaseConfigured()
+// returns true (simulating staging: Supabase IS configured AND demo mode
+// is on). This is the scenario the defense-in-depth guard protects against.
+vi.mock('@/lib/supabase-server', () => ({
+  supabase: {},
+  isServerSupabaseConfigured: () => true,
+  createUserClient: () => ({}),
+}))
 
 // ─── Validation Tests ───────────────────────────────────────────────────────
 
@@ -30,7 +42,11 @@ describe('Input validation (zod schemas)', () => {
 
   it('rejects negative qty', () => {
     const invalid = {
-      id: '1.1.1', code: '1.1.1', description: 'Test', qty: -5, rate: 100,
+      id: '1.1.1',
+      code: '1.1.1',
+      description: 'Test',
+      qty: -5,
+      rate: 100,
     }
     const { data, error } = validateBody(boqItemSchema, invalid)
     expect(error).not.toBeNull()
@@ -39,7 +55,10 @@ describe('Input validation (zod schemas)', () => {
 
   it('rejects invalid type enum', () => {
     const invalid = {
-      id: '1.1.1', code: '1.1.1', description: 'Test', type: 'InvalidType',
+      id: '1.1.1',
+      code: '1.1.1',
+      description: 'Test',
+      type: 'InvalidType',
     }
     const { data, error } = validateBody(boqItemSchema, invalid)
     expect(error).not.toBeNull()
@@ -47,7 +66,10 @@ describe('Input validation (zod schemas)', () => {
 
   it('rejects invalid UUID for project_id', () => {
     const invalid = {
-      id: '1.1.1', code: '1.1.1', description: 'Test', project_id: 'not-a-uuid',
+      id: '1.1.1',
+      code: '1.1.1',
+      description: 'Test',
+      project_id: 'not-a-uuid',
     }
     const { data, error } = validateBody(boqItemSchema, invalid)
     expect(error).not.toBeNull()
@@ -55,7 +77,9 @@ describe('Input validation (zod schemas)', () => {
 
   it('applies defaults for optional fields', () => {
     const minimal = {
-      id: '1.1.1', code: '1.1.1', description: 'Test',
+      id: '1.1.1',
+      code: '1.1.1',
+      description: 'Test',
     }
     const { data, error } = validateBody(boqItemSchema, minimal)
     expect(error).toBeNull()
@@ -94,5 +118,57 @@ describe('Rate limiter', () => {
     } as unknown as import('next/server').NextRequest
     const result = await checkRateLimit(mockReq, 'test-user-1')
     expect(result).toBeNull() // null = allowed
+  })
+})
+
+// ─── requireRole: demo-mode defense-in-depth ──────────────────────────────
+
+describe('requireRole — demo-mode defense-in-depth', () => {
+  it('blocks demo users (empty accessToken) from writing when Supabase is configured', async () => {
+    const { requireRole } = await import('@/lib/api-auth')
+    const demoUser: AuthenticatedUser = {
+      id: 'demo-user',
+      email: 'demo@omnisite',
+      role: 'PM',
+      accessToken: '', // empty = demo user
+    }
+    const result = requireRole(demoUser, 'boq_items')
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe(403)
+    const body = await result!.json()
+    expect(body.error).toContain('demo users cannot write')
+  })
+
+  it('allows real users (non-empty accessToken) with the correct role', async () => {
+    const { requireRole } = await import('@/lib/api-auth')
+    const realUser: AuthenticatedUser = {
+      id: 'real-user-id',
+      email: 'pm@omnisite.com',
+      role: 'PM',
+      accessToken: 'real-jwt-token',
+    }
+    const result = requireRole(realUser, 'boq_items')
+    expect(result).toBeNull() // null = allowed
+  })
+
+  it('blocks real users with the wrong role', async () => {
+    const { requireRole } = await import('@/lib/api-auth')
+    const foreman: AuthenticatedUser = {
+      id: 'foreman-id',
+      email: 'foreman@omnisite.com',
+      role: 'FOREMAN',
+      accessToken: 'real-jwt-token',
+    }
+    // FOREMAN is not in TABLE_WRITE_ROLES['cbs_nodes'] (only PM is)
+    const result = requireRole(foreman, 'cbs_nodes')
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe(403)
+  })
+
+  it('returns 401 when user is null', async () => {
+    const { requireRole } = await import('@/lib/api-auth')
+    const result = requireRole(null, 'boq_items')
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe(401)
   })
 })

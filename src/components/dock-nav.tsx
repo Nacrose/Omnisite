@@ -1,13 +1,21 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion'
 import { MODULES, useApp, ModuleId } from '@/lib/app-store'
 import { ModuleIcon } from '@/components/module-icon'
 import { cn } from '@/lib/utils'
 import { Building2, Search, Plus } from 'lucide-react'
 
-const MODULE_GROUPS = ['Overview', 'Pre-Construction', 'Site Execution', 'Project Controls', 'Documents', 'Resources']
+const MODULE_GROUPS = [
+  'Overview',
+  'Pre-Construction',
+  'Site Execution',
+  'Project Controls',
+  'Documents',
+  'Resources',
+]
 
 interface DockItem {
   id: ModuleId
@@ -18,8 +26,13 @@ interface DockItem {
 }
 
 export function DockNav() {
-  const { activeModule, setActiveModule, setCommandOpen, setQuickAddOpen } = useApp()
+  const { activeModule, setCommandOpen, setQuickAddOpen } = useApp()
+  const router = useRouter()
   const [isVisible, setIsVisible] = useState(true)
+
+  // Navigate to the module's URL route. The layout's URL→store sync will
+  // update activeModule when the route changes.
+  const navigateToModule = (id: ModuleId) => router.push(`/${id}`)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dockRef = useRef<HTMLDivElement>(null)
 
@@ -65,31 +78,36 @@ export function DockNav() {
   }, [])
 
   // Group modules by their group
-  const grouped = MODULE_GROUPS.map(group => ({
+  const grouped = MODULE_GROUPS.map((group) => ({
     group,
-    items: MODULES.filter(m => m.group === group),
-  })).filter(g => g.items.length > 0)
+    items: MODULES.filter((m) => m.group === group),
+  })).filter((g) => g.items.length > 0)
 
   return (
     <>
       {/* ─── Mobile dock: fixed bottom bar, always visible, no animation ─── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 pane border-t border-[var(--pane-divider)]">
-        <div className="flex items-center justify-around px-2 py-1.5" style={{ paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom))' }}>
-          {grouped.map(g => g.items.map(item => (
-            <MobileDockIcon
-              key={item.id}
-              item={item}
-              isActive={activeModule === item.id}
-              onClick={() => setActiveModule(item.id)}
-            />
-          )))}
+      <div className="pane fixed right-0 bottom-0 left-0 z-50 border-t border-[var(--pane-divider)] md:hidden">
+        <div
+          className="flex items-center justify-around px-2 py-1.5"
+          style={{ paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom))' }}
+        >
+          {grouped.map((g) =>
+            g.items.map((item) => (
+              <MobileDockIcon
+                key={item.id}
+                item={item}
+                isActive={activeModule === item.id}
+                onClick={() => navigateToModule(item.id)}
+              />
+            ))
+          )}
         </div>
       </div>
 
       {/* ─── Desktop dock: auto-hide with magnification ─── */}
       {/* Invisible hover trigger zone — desktop only */}
       <div
-        className="fixed bottom-0 left-0 right-0 h-20 z-40 hidden md:block"
+        className="fixed right-0 bottom-0 left-0 z-40 hidden h-20 md:block"
         onMouseEnter={() => setIsVisible(true)}
       />
 
@@ -102,7 +120,7 @@ export function DockNav() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30, mass: 0.5 }}
-            className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-1rem)]"
+            className="fixed bottom-6 left-1/2 z-50 hidden max-w-[calc(100vw-1rem)] -translate-x-1/2 md:flex"
             onMouseLeave={() => {
               const isMobile = window.matchMedia('(max-width: 767px)').matches
               if (!isMobile) {
@@ -110,18 +128,19 @@ export function DockNav() {
               }
             }}
           >
-            <div className="flex items-end gap-1 px-2 py-2 rounded-2xl pane border border-[var(--pane-divider)] shadow-2xl vibrancy overflow-x-auto dock-scroll"
+            <div
+              className="pane vibrancy dock-scroll flex items-end gap-1 overflow-x-auto rounded-2xl border border-[var(--pane-divider)] px-2 py-2 shadow-2xl"
               style={{ backdropFilter: 'saturate(180%) blur(30px)' }}
             >
               {/* Brand — hidden on mobile to save space */}
-              <div className="hidden md:flex items-center gap-2 px-3 py-1 mr-1 border-r border-[var(--pane-divider)] flex-shrink-0">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent-foreground)] flex items-center justify-center shadow-sm">
-                  <Building2 className="w-4 h-4 text-white" strokeWidth={2.2} />
+              <div className="mr-1 hidden flex-shrink-0 items-center gap-2 border-r border-[var(--pane-divider)] px-3 py-1 md:flex">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent-foreground)] shadow-sm">
+                  <Building2 className="h-4 w-4 text-white" strokeWidth={2.2} />
                 </div>
               </div>
 
               {/* Quick action buttons — hidden on mobile */}
-              <div className="hidden md:flex items-end gap-1 flex-shrink-0">
+              <div className="hidden flex-shrink-0 items-end gap-1 md:flex">
                 <DockActionButton
                   icon={Search}
                   label="Search (⌘K)"
@@ -136,18 +155,20 @@ export function DockNav() {
               </div>
 
               {/* Divider — hidden on mobile */}
-              <div className="hidden md:block w-px h-10 bg-[var(--pane-divider)] mx-1 flex-shrink-0" />
+              <div className="mx-1 hidden h-10 w-px flex-shrink-0 bg-[var(--pane-divider)] md:block" />
 
               {/* Module groups with dividers between groups */}
               {grouped.map((g, gi) => (
-                <div key={g.group} className="flex items-end gap-0.5 flex-shrink-0">
-                  {gi > 0 && <div className="hidden md:block w-px h-8 bg-[var(--pane-divider)] mx-0.5" />}
+                <div key={g.group} className="flex flex-shrink-0 items-end gap-0.5">
+                  {gi > 0 && (
+                    <div className="mx-0.5 hidden h-8 w-px bg-[var(--pane-divider)] md:block" />
+                  )}
                   {g.items.map((item) => (
                     <DockIcon
                       key={item.id}
                       item={item}
                       isActive={activeModule === item.id}
-                      onClick={() => setActiveModule(item.id)}
+                      onClick={() => navigateToModule(item.id)}
                     />
                   ))}
                 </div>
@@ -162,7 +183,11 @@ export function DockNav() {
 
 // ─── Individual dock icon with magnification ─────────────────────────────────
 
-function DockIcon({ item, isActive, onClick }: {
+function DockIcon({
+  item,
+  isActive,
+  onClick,
+}: {
   item: DockItem
   isActive: boolean
   onClick: () => void
@@ -208,17 +233,22 @@ function DockIcon({ item, isActive, onClick }: {
         onClick={onClick}
         style={{ width: size, height: size }}
         className={cn(
-          'hidden md:flex relative flex-col items-center justify-end rounded-xl transition-colors flex-shrink-0',
+          'relative hidden flex-shrink-0 flex-col items-center justify-end rounded-xl transition-colors md:flex',
           isActive
             ? 'bg-primary text-primary-foreground'
-            : 'bg-secondary/40 hover:bg-accent text-foreground',
+            : 'bg-secondary/40 hover:bg-accent text-foreground'
         )}
         title={item.name}
       >
-        <motion.div style={{ width: size, height: size }} className="flex items-center justify-center">
-          <ModuleIcon name={item.icon} className="w-1/2 h-1/2" />
+        <motion.div
+          style={{ width: size, height: size }}
+          className="flex items-center justify-center"
+        >
+          <ModuleIcon name={item.icon} className="h-1/2 w-1/2" />
         </motion.div>
-        {isActive && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />}
+        {isActive && (
+          <div className="bg-primary absolute -bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full" />
+        )}
         <DockLabel item={item} show={hovered} />
       </motion.button>
 
@@ -226,15 +256,15 @@ function DockIcon({ item, isActive, onClick }: {
       <button
         onClick={onClick}
         className={cn(
-          'md:hidden w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors',
-          isActive
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-secondary/40 text-foreground',
+          'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors md:hidden',
+          isActive ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-foreground'
         )}
         title={item.name}
       >
-        <ModuleIcon name={item.icon} className="w-5 h-5" />
-        {isActive && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />}
+        <ModuleIcon name={item.icon} className="h-5 w-5" />
+        {isActive && (
+          <div className="bg-primary absolute -bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full" />
+        )}
       </button>
     </>
   )
@@ -244,7 +274,7 @@ function DockIcon({ item, isActive, onClick }: {
 
 function DockLabel({ item, show }: { item: DockItem; show: boolean }) {
   return (
-    <div className="absolute bottom-full mb-2 pointer-events-none">
+    <div className="pointer-events-none absolute bottom-full mb-2">
       <AnimatePresence>
         {show && (
           <motion.div
@@ -252,10 +282,10 @@ function DockLabel({ item, show }: { item: DockItem; show: boolean }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 5, scale: 0.9 }}
             transition={{ duration: 0.15 }}
-            className="px-2.5 py-1 rounded-lg pane border border-[var(--pane-divider)] shadow-lg whitespace-nowrap"
+            className="pane rounded-lg border border-[var(--pane-divider)] px-2.5 py-1 whitespace-nowrap shadow-lg"
           >
             <div className="text-[11px] font-medium">{item.name}</div>
-            <div className="text-[9px] text-muted-foreground">{item.group}</div>
+            <div className="text-muted-foreground text-[9px]">{item.group}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -265,7 +295,12 @@ function DockLabel({ item, show }: { item: DockItem; show: boolean }) {
 
 // ─── Quick action button (Search, Quick Add) ─────────────────────────────────
 
-function DockActionButton({ icon: Icon, label, onClick, highlight }: {
+function DockActionButton({
+  icon: Icon,
+  label,
+  onClick,
+  highlight,
+}: {
   icon: typeof Search
   label: string
   onClick: () => void
@@ -276,20 +311,24 @@ function DockActionButton({ icon: Icon, label, onClick, highlight }: {
       onClick={onClick}
       title={label}
       className={cn(
-        'w-9 h-9 rounded-xl flex items-center justify-center transition-colors flex-shrink-0',
+        'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
         highlight
           ? 'bg-primary text-primary-foreground hover:opacity-90'
-          : 'bg-secondary/40 hover:bg-accent text-foreground',
+          : 'bg-secondary/40 hover:bg-accent text-foreground'
       )}
     >
-      <Icon className="w-4 h-4" />
+      <Icon className="h-4 w-4" />
     </button>
   )
 }
 
 // ─── Mobile dock icon — compact, always visible ──────────────────────────────
 
-function MobileDockIcon({ item, isActive, onClick }: {
+function MobileDockIcon({
+  item,
+  isActive,
+  onClick,
+}: {
   item: DockItem
   isActive: boolean
   onClick: () => void
@@ -298,17 +337,21 @@ function MobileDockIcon({ item, isActive, onClick }: {
     <button
       onClick={onClick}
       className={cn(
-        'flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-1 rounded-lg transition-colors',
-        isActive ? 'text-primary' : 'text-muted-foreground',
+        'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1 transition-colors',
+        isActive ? 'text-primary' : 'text-muted-foreground'
       )}
     >
-      <div className={cn(
-        'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
-        isActive ? 'bg-primary/15' : '',
-      )}>
-        <ModuleIcon name={item.icon} className="w-4 h-4" />
+      <div
+        className={cn(
+          'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
+          isActive ? 'bg-primary/15' : ''
+        )}
+      >
+        <ModuleIcon name={item.icon} className="h-4 w-4" />
       </div>
-      <span className="text-[8px] font-medium truncate w-full text-center leading-tight">{item.shortName}</span>
+      <span className="w-full truncate text-center text-[8px] leading-tight font-medium">
+        {item.shortName}
+      </span>
     </button>
   )
 }

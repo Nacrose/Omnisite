@@ -9,34 +9,110 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import {
-  Plus, Save, FolderOpen,
-  Zap, Edit3, AlertTriangle, CheckCircle2, TrendingUp,
-  History, Link2, Layers,
+  Plus,
+  Save,
+  FolderOpen,
+  Zap,
+  Edit3,
+  AlertTriangle,
+  CheckCircle2,
+  TrendingUp,
+  History,
+  Link2,
+  Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { BoqItem } from './types'
 
 interface RaRow {
-  code: string; name: string; uom: string; qty: number; rate: number; source: string;
+  code: string
+  name: string
+  uom: string
+  qty: number
+  rate: number
+  source: string
 }
 
 const INITIAL_MATERIALS: RaRow[] = [
-  { code: 'M-CEM-OPC', name: 'Cement OPC 53 Grade (Udaipur)', uom: 'Bag', qty: 4.5, rate: 920, source: 'Project Rate Library' },
-  { code: 'M-SAND-R', name: 'River Sand (Trishuli)', uom: 'cum', qty: 0.45, rate: 3850, source: 'Project Rate Library' },
-  { code: 'M-AGG-20', name: 'Coarse Aggregate 20mm', uom: 'cum', qty: 0.9, rate: 2950, source: 'Project Rate Library' },
-  { code: 'M-WAT', name: 'Water (tanker)', uom: 'ltr', qty: 180, rate: 0.45, source: 'Project Rate Library' },
+  {
+    code: 'M-CEM-OPC',
+    name: 'Cement OPC 53 Grade (Udaipur)',
+    uom: 'Bag',
+    qty: 4.5,
+    rate: 920,
+    source: 'Project Rate Library',
+  },
+  {
+    code: 'M-SAND-R',
+    name: 'River Sand (Trishuli)',
+    uom: 'cum',
+    qty: 0.45,
+    rate: 3850,
+    source: 'Project Rate Library',
+  },
+  {
+    code: 'M-AGG-20',
+    name: 'Coarse Aggregate 20mm',
+    uom: 'cum',
+    qty: 0.9,
+    rate: 2950,
+    source: 'Project Rate Library',
+  },
+  {
+    code: 'M-WAT',
+    name: 'Water (tanker)',
+    uom: 'ltr',
+    qty: 180,
+    rate: 0.45,
+    source: 'Project Rate Library',
+  },
 ]
 
 const INITIAL_LABOUR: RaRow[] = [
-  { code: 'L-MASN', name: 'Mason (Skilled Cat. I)', uom: 'day', qty: 0.6, rate: 1450, source: 'DoR Norm 2075' },
-  { code: 'L-HEL', name: 'Mazdoor (Unskilled)', uom: 'day', qty: 1.4, rate: 950, source: 'DoR Norm 2075' },
-  { code: 'L-MIX', name: 'Mixer Operator', uom: 'day', qty: 0.2, rate: 1200, source: 'DoR Norm 2075' },
+  {
+    code: 'L-MASN',
+    name: 'Mason (Skilled Cat. I)',
+    uom: 'day',
+    qty: 0.6,
+    rate: 1450,
+    source: 'DoR Norm 2075',
+  },
+  {
+    code: 'L-HEL',
+    name: 'Mazdoor (Unskilled)',
+    uom: 'day',
+    qty: 1.4,
+    rate: 950,
+    source: 'DoR Norm 2075',
+  },
+  {
+    code: 'L-MIX',
+    name: 'Mixer Operator',
+    uom: 'day',
+    qty: 0.2,
+    rate: 1200,
+    source: 'DoR Norm 2075',
+  },
 ]
 
 const INITIAL_EQUIPMENT: RaRow[] = [
-  { code: 'E-MIX', name: 'Concrete Mixer 0.4 cum', uom: 'hr', qty: 1.8, rate: 285, source: 'Equipment Master' },
-  { code: 'E-VIB', name: 'Needle Vibrator 60mm', uom: 'hr', qty: 1.2, rate: 95, source: 'Equipment Master' },
+  {
+    code: 'E-MIX',
+    name: 'Concrete Mixer 0.4 cum',
+    uom: 'hr',
+    qty: 1.8,
+    rate: 285,
+    source: 'Equipment Master',
+  },
+  {
+    code: 'E-VIB',
+    name: 'Needle Vibrator 60mm',
+    uom: 'hr',
+    qty: 1.2,
+    rate: 95,
+    source: 'Equipment Master',
+  },
 ]
 
 export function RaInspector({ item }: { item: BoqItem }) {
@@ -62,9 +138,9 @@ export function RaInspector({ item }: { item: BoqItem }) {
     setter: React.Dispatch<React.SetStateAction<RaRow[]>>,
     index: number,
     field: 'qty' | 'rate',
-    value: number,
+    value: number
   ) => {
-    setter(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r))
+    setter((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)))
   }
 
   // Recompute on every render — pure function of state
@@ -74,10 +150,10 @@ export function RaInspector({ item }: { item: BoqItem }) {
   const equipCost = equipment.reduce((s, r) => s + r.qty * r.rate, 0)
 
   const pctCostBase =
-    (pctCosts.labour.on ? labourCost * pctCosts.labour.pct / 100 : 0) +
-    (pctCosts.material.on ? materialCost * pctCosts.material.pct / 100 : 0) +
-    (pctCosts.equipment.on ? equipCost * pctCosts.equipment.pct / 100 : 0) +
-    (pctCosts.tp.on ? directCost * pctCosts.tp.pct / 100 : 0)
+    (pctCosts.labour.on ? (labourCost * pctCosts.labour.pct) / 100 : 0) +
+    (pctCosts.material.on ? (materialCost * pctCosts.material.pct) / 100 : 0) +
+    (pctCosts.equipment.on ? (equipCost * pctCosts.equipment.pct) / 100 : 0) +
+    (pctCosts.tp.on ? (directCost * pctCosts.tp.pct) / 100 : 0)
 
   const opBase = (opOnDirect ? directCost : 0) + (opOnPct ? pctCostBase : 0)
   const overheadAmount = opBase * (opPct / 100)
@@ -89,17 +165,22 @@ export function RaInspector({ item }: { item: BoqItem }) {
   const marginPct = contractRate > 0 ? (margin / contractRate) * 100 : 0
   // Visual-bar widths — also guarded against 0 / negative contractRate.
   const costBarPct = contractRate > 0 ? Math.min(100, (totalCost / contractRate) * 100) : 0
-  const marginBarPct = contractRate > 0 ? Math.max(0, Math.min(100, (margin / contractRate) * 100)) : 0
+  const marginBarPct =
+    contractRate > 0 ? Math.max(0, Math.min(100, (margin / contractRate) * 100)) : 0
 
   return (
     <>
       <PaneHeader title={`RA Inspector · ${item.code}`} />
       <PaneBody>
-        <div className="p-4 border-b border-[var(--pane-divider)]">
-          <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Item</div>
-          <div className="text-sm font-semibold mt-1 leading-snug">{item.desc}</div>
-          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-            <span>{item.qty.toLocaleString()} {item.uom}</span>
+        <div className="border-b border-[var(--pane-divider)] p-4">
+          <div className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+            Item
+          </div>
+          <div className="mt-1 text-sm leading-snug font-semibold">{item.desc}</div>
+          <div className="text-muted-foreground mt-2 flex items-center gap-3 text-xs">
+            <span>
+              {item.qty.toLocaleString()} {item.uom}
+            </span>
             <span>·</span>
             <span>Rate: NPR {item.rate.toLocaleString()}</span>
           </div>
@@ -107,68 +188,116 @@ export function RaInspector({ item }: { item: BoqItem }) {
 
         <Tabs defaultValue="builder" className="w-full">
           <div className="px-3 pt-2">
-            <TabsList className="grid grid-cols-3 h-8 text-xs">
-              <TabsTrigger value="builder" className="text-xs">RA Builder</TabsTrigger>
-              <TabsTrigger value="trace" className="text-xs">Traceability</TabsTrigger>
-              <TabsTrigger value="audit" className="text-xs">Audit Log</TabsTrigger>
+            <TabsList className="grid h-8 grid-cols-3 text-xs">
+              <TabsTrigger value="builder" className="text-xs">
+                RA Builder
+              </TabsTrigger>
+              <TabsTrigger value="trace" className="text-xs">
+                Traceability
+              </TabsTrigger>
+              <TabsTrigger value="audit" className="text-xs">
+                Audit Log
+              </TabsTrigger>
             </TabsList>
           </div>
 
           <TabsContent value="builder" className="mt-0">
-            <RaSection title="Materials" icon={<Layers className="w-3.5 h-3.5" />} rows={materials} onUpdate={(i, f, v) => updateRow(setMaterials, i, f, v)} />
-            <RaSection title="Labour" icon={<Layers className="w-3.5 h-3.5" />} rows={labour} onUpdate={(i, f, v) => updateRow(setLabour, i, f, v)} />
-            <RaSection title="Equipment" icon={<Layers className="w-3.5 h-3.5" />} rows={equipment} onUpdate={(i, f, v) => updateRow(setEquipment, i, f, v)} />
+            <RaSection
+              title="Materials"
+              icon={<Layers className="h-3.5 w-3.5" />}
+              rows={materials}
+              onUpdate={(i, f, v) => updateRow(setMaterials, i, f, v)}
+            />
+            <RaSection
+              title="Labour"
+              icon={<Layers className="h-3.5 w-3.5" />}
+              rows={labour}
+              onUpdate={(i, f, v) => updateRow(setLabour, i, f, v)}
+            />
+            <RaSection
+              title="Equipment"
+              icon={<Layers className="h-3.5 w-3.5" />}
+              rows={equipment}
+              onUpdate={(i, f, v) => updateRow(setEquipment, i, f, v)}
+            />
 
             {/* % COSTS */}
-            <div className="px-4 py-3 border-y border-[var(--pane-divider)]">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">% Costs (Indirect)</div>
-                <Button variant="ghost" size="sm" className="h-6 text-xs"><Plus className="w-3 h-3" /></Button>
+            <div className="border-y border-[var(--pane-divider)] px-4 py-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                  % Costs (Indirect)
+                </div>
+                <Button variant="ghost" size="sm" className="h-6 text-xs">
+                  <Plus className="h-3 w-3" />
+                </Button>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+                <label className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2">
                   <Checkbox
                     checked={pctCosts.labour.on}
-                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, labour: { ...s.labour, on: !!v } }))}
+                    onCheckedChange={(v) =>
+                      setPctCosts((s) => ({ ...s, labour: { ...s.labour, on: !!v } }))
+                    }
                   />
                   <span className="flex-1">% of Labour</span>
                   <Input
                     className="h-6 w-12 text-xs"
                     type="number"
                     value={pctCosts.labour.pct}
-                    onChange={(e) => setPctCosts(s => ({ ...s, labour: { ...s.labour, pct: parseFloat(e.target.value) || 0 } }))}
+                    onChange={(e) =>
+                      setPctCosts((s) => ({
+                        ...s,
+                        labour: { ...s.labour, pct: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
                   />
                 </label>
-                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+                <label className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2">
                   <Checkbox
                     checked={pctCosts.material.on}
-                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, material: { ...s.material, on: !!v } }))}
+                    onCheckedChange={(v) =>
+                      setPctCosts((s) => ({ ...s, material: { ...s.material, on: !!v } }))
+                    }
                   />
                   <span className="flex-1">% of Material</span>
                   <Input
                     className="h-6 w-12 text-xs"
                     type="number"
                     value={pctCosts.material.pct}
-                    onChange={(e) => setPctCosts(s => ({ ...s, material: { ...s.material, pct: parseFloat(e.target.value) || 0 } }))}
+                    onChange={(e) =>
+                      setPctCosts((s) => ({
+                        ...s,
+                        material: { ...s.material, pct: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
                   />
                 </label>
-                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+                <label className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2">
                   <Checkbox
                     checked={pctCosts.equipment.on}
-                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, equipment: { ...s.equipment, on: !!v } }))}
+                    onCheckedChange={(v) =>
+                      setPctCosts((s) => ({ ...s, equipment: { ...s.equipment, on: !!v } }))
+                    }
                   />
                   <span className="flex-1">% of Equipment</span>
                   <Input
                     className="h-6 w-12 text-xs"
                     type="number"
                     value={pctCosts.equipment.pct}
-                    onChange={(e) => setPctCosts(s => ({ ...s, equipment: { ...s.equipment, pct: parseFloat(e.target.value) || 0 } }))}
+                    onChange={(e) =>
+                      setPctCosts((s) => ({
+                        ...s,
+                        equipment: { ...s.equipment, pct: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
                   />
                 </label>
-                <label className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)]">
+                <label className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2">
                   <Checkbox
                     checked={pctCosts.tp.on}
-                    onCheckedChange={(v) => setPctCosts(s => ({ ...s, tp: { ...s.tp, on: !!v } }))}
+                    onCheckedChange={(v) =>
+                      setPctCosts((s) => ({ ...s, tp: { ...s.tp, on: !!v } }))
+                    }
                   />
                   <span className="flex-1">T&P Charges</span>
                   <Input
@@ -176,34 +305,35 @@ export function RaInspector({ item }: { item: BoqItem }) {
                     type="number"
                     placeholder="—"
                     value={pctCosts.tp.pct || ''}
-                    onChange={(e) => setPctCosts(s => ({ ...s, tp: { ...s.tp, pct: parseFloat(e.target.value) || 0 } }))}
+                    onChange={(e) =>
+                      setPctCosts((s) => ({
+                        ...s,
+                        tp: { ...s.tp, pct: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
                   />
                 </label>
               </div>
             </div>
 
             {/* O&P */}
-            <div className="px-4 py-3 border-b border-[var(--pane-divider)]">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Overhead & Profit (cumulative)</div>
+            <div className="border-b border-[var(--pane-divider)] px-4 py-3">
+              <div className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+                Overhead & Profit (cumulative)
+              </div>
               <div className="space-y-2 text-xs">
                 <label className="flex items-center gap-2">
-                  <Checkbox
-                    checked={opOnDirect}
-                    onCheckedChange={(v) => setOpOnDirect(!!v)}
-                  />
+                  <Checkbox checked={opOnDirect} onCheckedChange={(v) => setOpOnDirect(!!v)} />
                   <span className="flex-1">On Direct Cost</span>
                   <span className="font-mono">NPR {directCost.toFixed(0)}</span>
                 </label>
                 <label className="flex items-center gap-2">
-                  <Checkbox
-                    checked={opOnPct}
-                    onCheckedChange={(v) => setOpOnPct(!!v)}
-                  />
+                  <Checkbox checked={opOnPct} onCheckedChange={(v) => setOpOnPct(!!v)} />
                   <span className="flex-1">On Prior % Costs</span>
                   <span className="font-mono">NPR {pctCostBase.toFixed(0)}</span>
                 </label>
-                <div className="flex items-center gap-2 pl-6 pt-1">
-                  <span className="flex-1 text-muted-foreground">O&P %</span>
+                <div className="flex items-center gap-2 pt-1 pl-6">
+                  <span className="text-muted-foreground flex-1">O&P %</span>
                   <Input
                     className="h-6 w-16 text-xs"
                     type="number"
@@ -212,18 +342,22 @@ export function RaInspector({ item }: { item: BoqItem }) {
                   />
                   <span className="text-muted-foreground">%</span>
                 </div>
-                <div className="flex justify-between pt-1 border-t border-[var(--pane-divider)]">
+                <div className="flex justify-between border-t border-[var(--pane-divider)] pt-1">
                   <span className="font-medium">O&P Amount</span>
-                  <span className="font-mono font-semibold tabular-nums">NPR {overheadAmount.toFixed(0)}</span>
+                  <span className="font-mono font-semibold tabular-nums">
+                    NPR {overheadAmount.toFixed(0)}
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Financial Summary */}
-            <div className="px-4 py-3 bg-secondary/30">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+            <div className="bg-secondary/30 px-4 py-3">
+              <div className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
                 Financial Summary & Margin
-                <span className="text-[10px] font-normal text-primary/70 normal-case tracking-normal">· recalculates live</span>
+                <span className="text-primary/70 text-[10px] font-normal tracking-normal normal-case">
+                  · recalculates live
+                </span>
               </div>
               <div className="space-y-1.5 text-xs">
                 <Row label="Direct Cost" value={`NPR ${directCost.toFixed(0)}`} />
@@ -231,39 +365,58 @@ export function RaInspector({ item }: { item: BoqItem }) {
                 <Row label="O&P" value={`NPR ${overheadAmount.toFixed(0)}`} muted />
                 <Separator className="my-2" />
                 <Row label="Total RA Cost" value={`NPR ${totalCost.toFixed(0)}`} bold />
-                <Row label="Contract BOQ Rate" value={`NPR ${contractRate.toLocaleString()}`} bold />
+                <Row
+                  label="Contract BOQ Rate"
+                  value={`NPR ${contractRate.toLocaleString()}`}
+                  bold
+                />
                 <Separator className="my-2" />
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <TrendingUp className={cn('w-3.5 h-3.5', margin >= 0 ? 'delta-up' : 'delta-down')} />
+                    <TrendingUp
+                      className={cn('h-3.5 w-3.5', margin >= 0 ? 'delta-up' : 'delta-down')}
+                    />
                     Actual Gross Margin
                   </span>
-                  <span className={cn('font-mono font-bold tabular-nums', margin >= 0 ? 'delta-up' : 'delta-down')}>
-                    {marginPct >= 0 ? '+' : ''}{marginPct.toFixed(1)}%
+                  <span
+                    className={cn(
+                      'font-mono font-bold tabular-nums',
+                      margin >= 0 ? 'delta-up' : 'delta-down'
+                    )}
+                  >
+                    {marginPct >= 0 ? '+' : ''}
+                    {marginPct.toFixed(1)}%
                   </span>
                 </div>
-                <div className="text-[10px] text-muted-foreground pl-5">
-                  Margin per {item.uom}: NPR <span className="font-mono tabular-nums">{margin.toFixed(0)}</span> · No double-count of RA O&P
+                <div className="text-muted-foreground pl-5 text-[10px]">
+                  Margin per {item.uom}: NPR{' '}
+                  <span className="font-mono tabular-nums">{margin.toFixed(0)}</span> · No
+                  double-count of RA O&P
                 </div>
                 {/* Visual margin bar */}
-                <div className="mt-2 pt-2 border-t border-[var(--pane-divider)]">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                <div className="mt-2 border-t border-[var(--pane-divider)] pt-2">
+                  <div className="text-muted-foreground mb-1 flex items-center justify-between text-[10px]">
                     <span>Cost</span>
                     <span>Margin</span>
                   </div>
-                  <div className="h-2 rounded-full overflow-hidden flex bg-secondary">
+                  <div className="bg-secondary flex h-2 overflow-hidden rounded-full">
                     <div
                       className="bg-amber-500/70 transition-all duration-300"
                       style={{ width: `${costBarPct}%` }}
                     />
                     <div
-                      className={cn('transition-all duration-300', margin >= 0 ? 'bg-emerald-500/70' : 'bg-red-500/70')}
+                      className={cn(
+                        'transition-all duration-300',
+                        margin >= 0 ? 'bg-emerald-500/70' : 'bg-red-500/70'
+                      )}
                       style={{ width: `${marginBarPct}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-[10px] mt-1">
+                  <div className="mt-1 flex justify-between text-[10px]">
                     <span className="font-mono text-amber-600">NPR {totalCost.toFixed(0)}</span>
-                    <span className={cn('font-mono', margin >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+                    <span
+                      className={cn('font-mono', margin >= 0 ? 'text-emerald-600' : 'text-red-600')}
+                    >
                       {margin >= 0 ? '+' : ''}NPR {margin.toFixed(0)}
                     </span>
                   </div>
@@ -272,90 +425,186 @@ export function RaInspector({ item }: { item: BoqItem }) {
             </div>
           </TabsContent>
 
-          <TabsContent value="trace" className="mt-0 px-4 py-3 space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Traceability Matrix</div>
-            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="Schedule Task" value="T-104 · Foundation PCC" status="linked" />
-            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="Purchase Order" value="PO-2410-018 · Cement 1,200 bags" status="linked" />
-            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="DSR Actual Qty" value="142.5 / 145 cum (98.3%)" status="progress" />
-            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="GRN Receipts" value="4 GRNs · NPR 1,384,500" status="linked" />
-            <TraceRow icon={<Link2 className="w-3.5 h-3.5" />} label="Running Account" value="RA Bill #4 · claimed 142.5 cum" status="linked" />
-            <TraceRow icon={<AlertTriangle className="w-3.5 h-3.5" />} label="NCR Holds" value="NCR-034 · 0 billable" status="blocked" />
+          <TabsContent value="trace" className="mt-0 space-y-3 px-4 py-3">
+            <div className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+              Traceability Matrix
+            </div>
+            <TraceRow
+              icon={<Link2 className="h-3.5 w-3.5" />}
+              label="Schedule Task"
+              value="T-104 · Foundation PCC"
+              status="linked"
+            />
+            <TraceRow
+              icon={<Link2 className="h-3.5 w-3.5" />}
+              label="Purchase Order"
+              value="PO-2410-018 · Cement 1,200 bags"
+              status="linked"
+            />
+            <TraceRow
+              icon={<Link2 className="h-3.5 w-3.5" />}
+              label="DSR Actual Qty"
+              value="142.5 / 145 cum (98.3%)"
+              status="progress"
+            />
+            <TraceRow
+              icon={<Link2 className="h-3.5 w-3.5" />}
+              label="GRN Receipts"
+              value="4 GRNs · NPR 1,384,500"
+              status="linked"
+            />
+            <TraceRow
+              icon={<Link2 className="h-3.5 w-3.5" />}
+              label="Running Account"
+              value="RA Bill #4 · claimed 142.5 cum"
+              status="linked"
+            />
+            <TraceRow
+              icon={<AlertTriangle className="h-3.5 w-3.5" />}
+              label="NCR Holds"
+              value="NCR-034 · 0 billable"
+              status="blocked"
+            />
           </TabsContent>
 
-          <TabsContent value="audit" className="mt-0 px-4 py-3 space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-              <History className="w-3.5 h-3.5" />Audit Log
+          <TabsContent value="audit" className="mt-0 space-y-3 px-4 py-3">
+            <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
+              <History className="h-3.5 w-3.5" />
+              Audit Log
             </div>
-            <AuditRow who="Arjun S." action="Updated cement rate from NPR 895 → NPR 920" when="2 hrs ago" />
-            <AuditRow who="Bikash R." action="Adjusted mazdoor coefficient 1.6 → 1.4" when="Yesterday 16:42" />
+            <AuditRow
+              who="Arjun S."
+              action="Updated cement rate from NPR 895 → NPR 920"
+              when="2 hrs ago"
+            />
+            <AuditRow
+              who="Bikash R."
+              action="Adjusted mazdoor coefficient 1.6 → 1.4"
+              when="Yesterday 16:42"
+            />
             <AuditRow who="System" action="Preset loaded: PCC-M15-Standard" when="3 days ago" />
             <AuditRow who="Arjun S." action="Created RA from blank template" when="1 week ago" />
           </TabsContent>
         </Tabs>
 
         {/* Preset bar */}
-        <div className="border-t border-[var(--pane-divider)] p-3 flex items-center gap-2 bg-secondary/20">
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><FolderOpen className="w-3.5 h-3.5" />Load Preset</Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><Save className="w-3.5 h-3.5" />Save Preset</Button>
+        <div className="bg-secondary/20 flex items-center gap-2 border-t border-[var(--pane-divider)] p-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            disabled
+            title="Coming soon"
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            Load Preset
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            disabled
+            title="Coming soon"
+          >
+            <Save className="h-3.5 w-3.5" />
+            Save Preset
+          </Button>
           <div className="flex-1" />
-          <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })}><CheckCircle2 className="w-3.5 h-3.5" />Save RA</Button>
+          <Button size="sm" className="h-7 gap-1.5 text-xs" disabled title="Coming soon">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Save RA
+          </Button>
         </div>
       </PaneBody>
     </>
   )
 }
 
-function RaSection({ title, icon, rows, onUpdate }: { title: string; icon: React.ReactNode; rows: RaRow[]; onUpdate: (index: number, field: 'qty' | 'rate', value: number) => void }) {
+function RaSection({
+  title,
+  icon,
+  rows,
+  onUpdate,
+}: {
+  title: string
+  icon: React.ReactNode
+  rows: RaRow[]
+  onUpdate: (index: number, field: 'qty' | 'rate', value: number) => void
+}) {
   const sectionTotal = rows.reduce((s, r) => s + r.qty * r.rate, 0)
   return (
-    <div className="px-4 py-3 border-b border-[var(--pane-divider)]">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">{icon}{title}</div>
-        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1"><Plus className="w-3 h-3" />Add</Button>
+    <div className="border-b border-[var(--pane-divider)] px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
+          {icon}
+          {title}
+        </div>
+        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs">
+          <Plus className="h-3 w-3" />
+          Add
+        </Button>
       </div>
       <div className="space-y-1.5">
         {rows.map((r, i) => (
-          <div key={i} className="grid grid-cols-12 gap-1.5 items-center text-xs p-1.5 rounded hover:bg-accent/40">
+          <div
+            key={i}
+            className="hover:bg-accent/40 grid grid-cols-12 items-center gap-1.5 rounded p-1.5 text-xs"
+          >
             <div className="col-span-7">
-              <div className="font-medium truncate">{r.name}</div>
-              <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <div className="truncate font-medium">{r.name}</div>
+              <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
                 <span className="font-mono">{r.code}</span>
                 <span>·</span>
                 <span>{r.source}</span>
               </div>
             </div>
             <Input
-              className="col-span-2 h-6 text-xs px-1"
+              className="col-span-2 h-6 px-1 text-xs"
               type="number"
               value={r.qty}
               onChange={(e) => onUpdate(i, 'qty', parseFloat(e.target.value) || 0)}
             />
             <div className="col-span-3 flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">{r.uom}</span>
-              <div className="flex-1 flex items-center gap-0.5">
+              <span className="text-muted-foreground text-[10px]">{r.uom}</span>
+              <div className="flex flex-1 items-center gap-0.5">
                 <Input
-                  className="h-6 text-xs px-1 flex-1 font-mono"
+                  className="h-6 flex-1 px-1 font-mono text-xs"
                   type="number"
                   value={r.rate}
                   onChange={(e) => onUpdate(i, 'rate', parseFloat(e.target.value) || 0)}
                 />
-                <button className="p-0.5 hover:bg-accent rounded" title="Auto-calc from primary UOM">
-                  <Zap className="w-3 h-3 text-amber-500" />
+                <button
+                  className="hover:bg-accent rounded p-0.5"
+                  title="Auto-calc from primary UOM"
+                >
+                  <Zap className="h-3 w-3 text-amber-500" />
                 </button>
               </div>
             </div>
           </div>
         ))}
       </div>
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--pane-divider)] text-xs">
+      <div className="mt-2 flex items-center justify-between border-t border-[var(--pane-divider)] pt-2 text-xs">
         <span className="text-muted-foreground">Section subtotal ({rows.length} resources)</span>
-        <span className="font-mono font-semibold">NPR {sectionTotal.toFixed(0)}/{rows[0]?.uom || 'unit'}</span>
+        <span className="font-mono font-semibold">
+          NPR {sectionTotal.toFixed(0)}/{rows[0]?.uom || 'unit'}
+        </span>
       </div>
     </div>
   )
 }
 
-function Row({ label, value, muted, bold }: { label: string; value: string; muted?: boolean; bold?: boolean }) {
+function Row({
+  label,
+  value,
+  muted,
+  bold,
+}: {
+  label: string
+  value: string
+  muted?: boolean
+  bold?: boolean
+}) {
   return (
     <div className="flex justify-between">
       <span className={cn(muted && 'text-muted-foreground', bold && 'font-semibold')}>{label}</span>
@@ -364,17 +613,29 @@ function Row({ label, value, muted, bold }: { label: string; value: string; mute
   )
 }
 
-function TraceRow({ icon, label, value, status }: { icon: React.ReactNode; label: string; value: string; status: 'linked' | 'progress' | 'blocked' }) {
+function TraceRow({
+  icon,
+  label,
+  value,
+  status,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  status: 'linked' | 'progress' | 'blocked'
+}) {
   return (
-    <div className="flex items-center gap-2 p-2 rounded-md border border-[var(--pane-divider)] text-xs">
+    <div className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2 text-xs">
       <span className="text-muted-foreground">{icon}</span>
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-muted-foreground">{label}</div>
         <div className="truncate">{value}</div>
       </div>
-      {status === 'linked' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
-      {status === 'progress' && <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-500 border-t-transparent" />}
-      {status === 'blocked' && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
+      {status === 'linked' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
+      {status === 'progress' && (
+        <div className="h-3.5 w-3.5 rounded-full border-2 border-amber-500 border-t-transparent" />
+      )}
+      {status === 'blocked' && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
     </div>
   )
 }
@@ -382,12 +643,15 @@ function TraceRow({ icon, label, value, status }: { icon: React.ReactNode; label
 function AuditRow({ who, action, when }: { who: string; action: string; when: string }) {
   return (
     <div className="flex gap-2.5 text-xs">
-      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex-shrink-0 flex items-center justify-center text-white text-[10px] font-semibold">
+      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-[10px] font-semibold text-white">
         {who.charAt(0)}
       </div>
       <div className="flex-1">
-        <div><span className="font-medium">{who}</span> <span className="text-muted-foreground">{action}</span></div>
-        <div className="text-[10px] text-muted-foreground">{when}</div>
+        <div>
+          <span className="font-medium">{who}</span>{' '}
+          <span className="text-muted-foreground">{action}</span>
+        </div>
+        <div className="text-muted-foreground text-[10px]">{when}</div>
       </div>
     </div>
   )
@@ -398,13 +662,15 @@ export function NonPricedInspector({ item }: { item: BoqItem }) {
     <>
       <PaneHeader title={`Inspector · ${item.code}`} />
       <PaneBody>
-        <div className="p-4 border-b border-[var(--pane-divider)]">
-          <Badge variant="secondary" className="text-xs">{item.type}</Badge>
-          <div className="text-sm font-semibold mt-2 leading-snug">{item.desc}</div>
+        <div className="border-b border-[var(--pane-divider)] p-4">
+          <Badge variant="secondary" className="text-xs">
+            {item.type}
+          </Badge>
+          <div className="mt-2 text-sm leading-snug font-semibold">{item.desc}</div>
         </div>
-        <div className="p-4 text-center text-xs text-muted-foreground">
-          <Edit3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          <div className="font-medium text-foreground">{item.type} item</div>
+        <div className="text-muted-foreground p-4 text-center text-xs">
+          <Edit3 className="mx-auto mb-2 h-8 w-8 opacity-30" />
+          <div className="text-foreground font-medium">{item.type} item</div>
           <p className="mt-1 leading-relaxed">
             {item.type === 'Provisional Sum'
               ? 'Lump-sum provision. Rate Analysis is hidden — amount is governed by the Engineer per Clause 13.5 of FIDIC Red Book.'

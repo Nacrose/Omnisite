@@ -3,12 +3,7 @@ import type React from 'react'
 import { produce } from 'immer'
 import { undoableToast } from '@/components/ui/confirm-dialog'
 import { BOQ_DATA, type BoqItem } from './types'
-import {
-  flattenTree,
-  rebuildTreeFromRows,
-  findItemAndParent,
-  updateLevels,
-} from '@/lib/tree-utils'
+import { flattenTree, rebuildTreeFromRows, findItemAndParent, updateLevels } from '@/lib/tree-utils'
 
 // Deep-clone helper using immer (replaces deepClone())
 const deepClone = <T>(obj: T): T => produce(obj, () => {})
@@ -31,6 +26,10 @@ function normalizeBoqRow(row: Record<string, unknown>): BoqItem {
     rate: Number(row.rate) || 0,
     hasRA: Boolean(row.hasRA ?? row.has_ra),
     level: Number(row.level) || 0,
+    // Preserve parentId (with snake_case fallback) so rebuildTreeFromRows can
+    // re-attach children after a flatten→rebuild round-trip. Without this,
+    // every row would become a root after the first edit.
+    parentId: (row.parentId ?? row.parent_id ?? undefined) as string | undefined,
   }
 }
 
@@ -43,11 +42,15 @@ function normalizeBoqRow(row: Record<string, unknown>): BoqItem {
  */
 export function rebuildBoqTree(rows: BoqItem[] | null | undefined): BoqItem[] {
   if (!rows || rows.length === 0) return deepClone(BOQ_DATA)
-  const hasChildren = rows.some((r) => Array.isArray((r as BoqItem).children) && (r as BoqItem).children!.length > 0)
+  const hasChildren = rows.some(
+    (r) => Array.isArray((r as BoqItem).children) && (r as BoqItem).children!.length > 0
+  )
   if (hasChildren) return rows
   // Normalize DB column names → app fields, then rebuild the tree using the
   // shared tree-utils helper.
-  const normalized = (rows as unknown as Record<string, unknown>[]).map(normalizeBoqRow) as unknown as Record<string, any>[]
+  const normalized = (rows as unknown as Record<string, unknown>[]).map(
+    normalizeBoqRow
+  ) as unknown as Record<string, any>[]
   const tree = rebuildTreeFromRows(normalized, 'id', 'parentId')
   return tree.length > 0 ? (tree as unknown as BoqItem[]) : deepClone(BOQ_DATA)
 }
@@ -94,15 +97,12 @@ export interface BoqHandlerCtx {
  * updates so the side effects don't run inside the setBoqRows updater
  * (which would double-fire under StrictMode).
  */
-export function commitBoqData(
-  updater: (prev: BoqItem[]) => BoqItem[],
-  ctx: BoqHandlerCtx,
-): void {
+export function commitBoqData(updater: (prev: BoqItem[]) => BoqItem[], ctx: BoqHandlerCtx): void {
   // Capture the current tree for the undo stack BEFORE applying the updater.
   const currentTree = ctx.boqData
-  ctx.setUndoStack(u => [...u, deepClone(currentTree)])
+  ctx.setUndoStack((u) => [...u, deepClone(currentTree)])
   ctx.setRedoStack([])
-  ctx.setBoqRows(prevRows => {
+  ctx.setBoqRows((prevRows) => {
     // Rebuild the tree from the previous flat rows, apply the updater,
     // then flatten the result for storage.
     const prevTree = rebuildBoqTree(prevRows)
@@ -118,8 +118,8 @@ export function undo(ctx: BoqHandlerCtx): void {
   // the updater so they don't double-fire under StrictMode.
   const snapshot = ctx.undoStack[ctx.undoStack.length - 1]
   const currentTree = ctx.boqData
-  ctx.setUndoStack(u => u.slice(0, -1))
-  ctx.setRedoStack(r => [...r, deepClone(currentTree)])
+  ctx.setUndoStack((u) => u.slice(0, -1))
+  ctx.setRedoStack((r) => [...r, deepClone(currentTree)])
   ctx.setBoqRows(flattenBoqTree(snapshot) as unknown as BoqItem[])
   toast.success('Undo', { description: `Reverted (${ctx.undoStack.length - 1} actions left)` })
 }
@@ -128,8 +128,8 @@ export function redo(ctx: BoqHandlerCtx): void {
   if (ctx.redoStack.length === 0) return
   const snapshot = ctx.redoStack[ctx.redoStack.length - 1]
   const currentTree = ctx.boqData
-  ctx.setRedoStack(r => r.slice(0, -1))
-  ctx.setUndoStack(u => [...u, deepClone(currentTree)])
+  ctx.setRedoStack((r) => r.slice(0, -1))
+  ctx.setUndoStack((u) => [...u, deepClone(currentTree)])
   ctx.setBoqRows(flattenBoqTree(snapshot) as unknown as BoqItem[])
   toast.success('Redo', { description: `${ctx.redoStack.length - 1} actions left` })
 }
@@ -139,98 +139,118 @@ export function updateItem(
   id: string,
   field: 'qty' | 'rate',
   value: number,
-  ctx: BoqHandlerCtx,
+  ctx: BoqHandlerCtx
 ): void {
-  commitBoqData(prev => produce(prev, draft => {
-    const walk = (items: BoqItem[]): boolean => {
-      for (const it of items) {
-        if (it.id === id) {
-          it[field] = Math.max(0, value)
-          return true
+  commitBoqData(
+    (prev) =>
+      produce(prev, (draft) => {
+        const walk = (items: BoqItem[]): boolean => {
+          for (const it of items) {
+            if (it.id === id) {
+              it[field] = Math.max(0, value)
+              return true
+            }
+            if (it.children && walk(it.children)) return true
+          }
+          return false
         }
-        if (it.children && walk(it.children)) return true
-      }
-      return false
-    }
-    walk(draft as BoqItem[])
-  }), ctx)
+        walk(draft as BoqItem[])
+      }),
+    ctx
+  )
 }
 
 /** Duplicate an item — inserts a copy immediately below the original. */
 export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
-  commitBoqData(prev => produce(prev, draft => {
-    const walk = (items: BoqItem[]): boolean => {
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i]
-        if (it.id === id) {
-          // Deep-clone the matched item (with its subtree) and stamp a new
-          // id/code/desc, then splice it in immediately after the original.
-          const copy = produce(it, d => {
-            d.id = `${it.id}-copy-${Date.now().toString(36)}`
-            d.code = `${it.code}-copy`
-            d.desc = `${it.desc} (Copy)`
-          }) as BoqItem
-          items.splice(i + 1, 0, copy)
-          return true
+  commitBoqData(
+    (prev) =>
+      produce(prev, (draft) => {
+        const walk = (items: BoqItem[]): boolean => {
+          for (let i = 0; i < items.length; i++) {
+            const it = items[i]
+            if (it.id === id) {
+              // Deep-clone the matched item (with its subtree) and stamp a new
+              // id/code/desc, then splice it in immediately after the original.
+              const copy = produce(it, (d) => {
+                d.id = `${it.id}-copy-${Date.now().toString(36)}`
+                d.code = `${it.code}-copy`
+                d.desc = `${it.desc} (Copy)`
+              }) as BoqItem
+              items.splice(i + 1, 0, copy)
+              return true
+            }
+            if (it.children && walk(it.children)) return true
+          }
+          return false
         }
-        if (it.children && walk(it.children)) return true
-      }
-      return false
-    }
-    walk(draft as BoqItem[])
-  }), ctx)
+        walk(draft as BoqItem[])
+      }),
+    ctx
+  )
   toast.success('Item duplicated', { description: `Copy created below ${id}` })
 }
 
 /** Delete an item (and its subtree). Shows an undoable toast. */
 export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
-  const item = ctx.allFlat.find(i => i.id === id)
-  commitBoqData(prev => produce(prev, draft => {
-    // Walk in reverse so splicing doesn't shift the indices we haven't
-    // visited yet.
-    const walk = (items: BoqItem[]): void => {
-      for (let i = items.length - 1; i >= 0; i--) {
-        const it = items[i]
-        if (it.id === id) {
-          items.splice(i, 1)
-        } else if (it.children) {
-          walk(it.children)
+  const item = ctx.allFlat.find((i) => i.id === id)
+  commitBoqData(
+    (prev) =>
+      produce(prev, (draft) => {
+        // Walk in reverse so splicing doesn't shift the indices we haven't
+        // visited yet.
+        const walk = (items: BoqItem[]): void => {
+          for (let i = items.length - 1; i >= 0; i--) {
+            const it = items[i]
+            if (it.id === id) {
+              items.splice(i, 1)
+            } else if (it.children) {
+              walk(it.children)
+            }
+          }
         }
-      }
-    }
-    walk(draft as BoqItem[])
-  }), ctx)
-  undoableToast('Item deleted', `${item?.code || id} removed from BOQ. Click Undo to restore.`, () => ctx.undoRef.current())
+        walk(draft as BoqItem[])
+      }),
+    ctx
+  )
+  undoableToast(
+    'Item deleted',
+    `${item?.code || id} removed from BOQ. Click Undo to restore.`,
+    () => ctx.undoRef.current()
+  )
 }
 
 /** Add a new child item under the given parent. Auto-expands the parent
  *  and selects the new item. */
 export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
   const newId = `${parentId}.${Date.now().toString(36)}`
-  commitBoqData(prev => produce(prev, draft => {
-    const walk = (items: BoqItem[]): boolean => {
-      for (const it of items) {
-        if (it.id === parentId) {
-          if (!it.children) it.children = []
-          it.children.push({
-            id: newId,
-            code: `${it.code}.new`,
-            desc: 'New BOQ item',
-            type: 'Priced',
-            qty: 0,
-            uom: 'cum',
-            rate: 0,
-            level: it.level + 1,
-          })
-          return true
+  commitBoqData(
+    (prev) =>
+      produce(prev, (draft) => {
+        const walk = (items: BoqItem[]): boolean => {
+          for (const it of items) {
+            if (it.id === parentId) {
+              if (!it.children) it.children = []
+              it.children.push({
+                id: newId,
+                code: `${it.code}.new`,
+                desc: 'New BOQ item',
+                type: 'Priced',
+                qty: 0,
+                uom: 'cum',
+                rate: 0,
+                level: it.level + 1,
+              })
+              return true
+            }
+            if (it.children && walk(it.children)) return true
+          }
+          return false
         }
-        if (it.children && walk(it.children)) return true
-      }
-      return false
-    }
-    walk(draft as BoqItem[])
-  }), ctx)
-  ctx.setExpandedArr(prev => prev.includes(parentId) ? prev : [...prev, parentId])
+        walk(draft as BoqItem[])
+      }),
+    ctx
+  )
+  ctx.setExpandedArr((prev) => (prev.includes(parentId) ? prev : [...prev, parentId]))
   ctx.setSelectedId(newId)
   toast.success('Child item added', { description: `New item under ${parentId}` })
 }
@@ -242,25 +262,29 @@ export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
  * target heading. Rejects no-op drops (drop on self) and cycle-creating
  * drops (drop into own subtree).
  */
-export function reparentItem(
-  draggedId: string,
-  targetHeadingId: string,
-  ctx: BoqHandlerCtx,
-): void {
+export function reparentItem(draggedId: string, targetHeadingId: string, ctx: BoqHandlerCtx): void {
   if (draggedId === targetHeadingId) return // can't drop on self
 
   // Find the dragged item — primarily for the cycle check below.
-  const dragInfo = findItemAndParent(ctx.boqData as unknown as Record<string, any>[], draggedId, 'id')
+  const dragInfo = findItemAndParent(
+    ctx.boqData as unknown as Record<string, any>[],
+    draggedId,
+    'id'
+  )
   if (!dragInfo) return
 
   // Cycle check: is targetHeadingId a descendant of draggedId?
-  const isDescendant = (items: BoqItem[] | undefined, ancestorId: string, targetId: string): boolean => {
+  const isDescendant = (
+    items: BoqItem[] | undefined,
+    ancestorId: string,
+    targetId: string
+  ): boolean => {
     if (!items) return false
     for (const it of items) {
       if (it.id === ancestorId) {
         const checkSubtree = (node: BoqItem): boolean => {
           if (node.id === targetId) return true
-          return node.children?.some(c => checkSubtree(c)) || false
+          return node.children?.some((c) => checkSubtree(c)) || false
         }
         if (checkSubtree(it)) return true
       }
@@ -273,13 +297,13 @@ export function reparentItem(
     return
   }
 
-  commitBoqData(prev => {
-    return produce(prev, draft => {
+  commitBoqData((prev) => {
+    return produce(prev, (draft) => {
       let movedItem: BoqItem | null = null
 
       // Step 1: Remove the dragged item from its current location
       const removeFromTree = (items: BoqItem[]): BoqItem[] => {
-        return items.filter(it => {
+        return items.filter((it) => {
           if (it.id === draggedId) {
             movedItem = it
             return false
@@ -292,9 +316,16 @@ export function reparentItem(
 
       // Step 2: Find target heading and add the moved item
       if (movedItem) {
-        const target = findItemAndParent(cleaned as unknown as Record<string, any>[], targetHeadingId, 'id')
+        const target = findItemAndParent(
+          cleaned as unknown as Record<string, any>[],
+          targetHeadingId,
+          'id'
+        )
         const targetLevel = target?.depth ?? 0
-        movedItem = updateLevels(movedItem as unknown as Record<string, any>, targetLevel + 1) as unknown as BoqItem
+        movedItem = updateLevels(
+          movedItem as unknown as Record<string, any>,
+          targetLevel + 1
+        ) as unknown as BoqItem
         const addToTarget = (items: BoqItem[]): boolean => {
           for (const it of items) {
             if (it.id === targetHeadingId) {
@@ -312,15 +343,96 @@ export function reparentItem(
   }, ctx)
 
   // Auto-expand the target heading
-  ctx.setExpandedArr(prev => prev.includes(targetHeadingId) ? prev : [...prev, targetHeadingId])
+  ctx.setExpandedArr((prev) => (prev.includes(targetHeadingId) ? prev : [...prev, targetHeadingId]))
   ctx.setSelectedId(draggedId)
-  const draggedCode = ctx.allFlat.find(i => i.id === draggedId)?.code ?? draggedId
+  const draggedCode = ctx.allFlat.find((i) => i.id === draggedId)?.code ?? draggedId
   toast.success('Item reparented', {
     description: `${draggedCode} moved under ${targetHeadingId}`,
   })
 }
 
-/** Placeholder for the RA export feature — shows a "not yet built" toast. */
-export function exportRa(_id: string): void {
-  toast.info('Not yet implemented', { description: 'This feature is planned but not yet built.' })
+/**
+ * Export a Rate Analysis sheet for a BOQ item as a CSV file (DoR format).
+ *
+ * Generates a CSV with the item's code/desc/UOM as a header, followed by
+ * the standard material / labour / equipment resource rows with their
+ * default coefficients, and a computed direct cost + margins section.
+ *
+ * The CSV is downloaded as `RA-<code>.csv` in the browser. The caller passes
+ * the BoqItem (looked up from allFlat) so we can include its metadata.
+ */
+export function exportRa(item: BoqItem | undefined): void {
+  if (!item) {
+    toast.error('Cannot export RA', { description: 'No item selected.' })
+    return
+  }
+
+  // Standard DoR resource rows (mirrors the INITIAL_* constants in ra-inspector).
+  // Kept here so the export works even without the RA inspector mounted.
+  const materials = [
+    { code: 'M-CEM-OPC', name: 'Cement OPC 53 Grade (Udaipur)', uom: 'Bag', qty: 4.5, rate: 920 },
+    { code: 'M-SAND-R', name: 'River Sand (Trishuli)', uom: 'cum', qty: 0.45, rate: 3850 },
+    { code: 'M-AGG-20', name: 'Coarse Aggregate 20mm', uom: 'cum', qty: 0.9, rate: 2950 },
+    { code: 'M-WAT', name: 'Water (tanker)', uom: 'ltr', qty: 180, rate: 0.45 },
+  ]
+  const labour = [
+    { code: 'L-MASN', name: 'Mason (Skilled Cat. I)', uom: 'day', qty: 0.6, rate: 1450 },
+    { code: 'L-HEL', name: 'Mazdoor (Unskilled)', uom: 'day', qty: 1.4, rate: 950 },
+    { code: 'L-MIX', name: 'Mixer Operator', uom: 'day', qty: 0.2, rate: 1200 },
+  ]
+  const equipment = [
+    { code: 'E-MIX', name: 'Concrete Mixer 0.4 cum', uom: 'hr', qty: 1.8, rate: 285 },
+    { code: 'E-VIB', name: 'Needle Vibrator 60mm', uom: 'hr', qty: 1.2, rate: 95 },
+  ]
+
+  const esc = (v: string | number) => {
+    const s = String(v)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+
+  const lines: string[] = []
+  lines.push(['Code', 'Description', 'UOM', 'Qty', 'Rate'].map(esc).join(','))
+  lines.push([item.code, item.desc, item.uom, item.qty, item.rate].map(esc).join(','))
+  lines.push('')
+  lines.push('Section,Code,Name,UOM,Qty,Rate,Amount')
+  const writeSection = (section: string, rows: typeof materials) => {
+    for (const r of rows) {
+      const amount = (r.qty * r.rate).toFixed(2)
+      lines.push([section, r.code, r.name, r.uom, r.qty, r.rate, amount].map(esc).join(','))
+    }
+  }
+  writeSection('Material', materials)
+  writeSection('Labour', labour)
+  writeSection('Equipment', equipment)
+
+  const directCost = [...materials, ...labour, ...equipment].reduce((s, r) => s + r.qty * r.rate, 0)
+  const pctAdd = directCost * 0.075 // 2.5+1.5+3.5% on direct
+  const opCost = (directCost + pctAdd) * 0.15
+  const totalCost = directCost + pctAdd + opCost
+  const contractRate = item.rate
+  const margin = contractRate - totalCost
+  const marginPct = contractRate > 0 ? (margin / contractRate) * 100 : 0
+
+  lines.push('')
+  lines.push('Summary,Value')
+  lines.push(`Direct Cost,${directCost.toFixed(2)}`)
+  lines.push(`Percentage Additions (7.5%),${pctAdd.toFixed(2)}`)
+  lines.push(`Overhead (15%),${opCost.toFixed(2)}`)
+  lines.push(`Total Cost,${totalCost.toFixed(2)}`)
+  lines.push(`Contract Rate,${contractRate.toFixed(2)}`)
+  lines.push(`Margin,${margin.toFixed(2)}`)
+  lines.push(`Margin %,${marginPct.toFixed(2)}`)
+
+  const csv = lines.join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `RA-${item.code.replace(/\./g, '-')}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  toast.success('RA exported', { description: `RA-${item.code}.csv downloaded` })
 }
