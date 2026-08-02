@@ -35,7 +35,18 @@ interface RaRow {
   source: string
 }
 
-const INITIAL_MATERIALS: RaRow[] = [
+// NOTE: The INITIAL_* constants below are kept ONLY as a reference template
+// (e.g. for a future "Load PCC Template" button). They are NOT used as the
+// default state of new items — every BOQ item starts with an EMPTY RA so the
+// user fills in their own resource rows. Previously every Priced item got
+// the same cement/sand/aggregate breakdown, which was misleading.
+const INITIAL_MATERIALS: RaRow[] = []
+const INITIAL_LABOUR: RaRow[] = []
+const INITIAL_EQUIPMENT: RaRow[] = []
+
+// PCC reference template (DoR M15 default coefficients). Exported so a future
+// "Load PCC Template" button can call this; not used as the default state.
+export const PCC_TEMPLATE_MATERIALS: RaRow[] = [
   {
     code: 'M-CEM-OPC',
     name: 'Cement OPC 53 Grade (Udaipur)',
@@ -70,7 +81,7 @@ const INITIAL_MATERIALS: RaRow[] = [
   },
 ]
 
-const INITIAL_LABOUR: RaRow[] = [
+export const PCC_TEMPLATE_LABOUR: RaRow[] = [
   {
     code: 'L-MASN',
     name: 'Mason (Skilled Cat. I)',
@@ -97,7 +108,7 @@ const INITIAL_LABOUR: RaRow[] = [
   },
 ]
 
-const INITIAL_EQUIPMENT: RaRow[] = [
+export const PCC_TEMPLATE_EQUIPMENT: RaRow[] = [
   {
     code: 'E-MIX',
     name: 'Concrete Mixer 0.4 cum',
@@ -129,6 +140,15 @@ export function RaInspector({
    */
   onUpdateLocation?: (locationId: string | null) => void
 }) {
+  // NOTE: RA state (materials/labour/equipment/pctCosts) is local useState
+  // seeded from hardcoded constants. It is NOT persisted — switching BOQ
+  // items or reloading discards all edits. This is a known limitation.
+  // The state is also NOT scoped per BOQ item: there is one set of arrays
+  // shared across every item the user inspects, so editing resources on
+  // item A and then selecting item B shows item A's resource rows. The
+  // fix requires persisting the RA rows to the boq_items table (or a
+  // side table keyed by item id) and keying the local state by item.id.
+
   // Local copy of the linked location — the parent owns the source of truth
   // (boqRows via useSyncedState), but the inspector mirrors the selection
   // locally so the UI reflects the change immediately on re-render.
@@ -251,18 +271,21 @@ export function RaInspector({
               title="Materials"
               icon={<Layers className="h-3.5 w-3.5" />}
               rows={materials}
+              itemUom={item.uom}
               onUpdate={(i, f, v) => updateRow(setMaterials, i, f, v)}
             />
             <RaSection
               title="Labour"
               icon={<Layers className="h-3.5 w-3.5" />}
               rows={labour}
+              itemUom={item.uom}
               onUpdate={(i, f, v) => updateRow(setLabour, i, f, v)}
             />
             <RaSection
               title="Equipment"
               icon={<Layers className="h-3.5 w-3.5" />}
               rows={equipment}
+              itemUom={item.uom}
               onUpdate={(i, f, v) => updateRow(setEquipment, i, f, v)}
             />
 
@@ -272,7 +295,16 @@ export function RaInspector({
                 <div className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                   % Costs (Indirect)
                 </div>
-                <Button variant="ghost" size="sm" className="h-6 text-xs">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={() =>
+                    toast.info('Add indirect cost row coming soon', {
+                      description: 'Custom % cost rows will be configurable in a future update.',
+                    })
+                  }
+                >
                   <Plus className="h-3 w-3" />
                 </Button>
               </div>
@@ -553,8 +585,9 @@ export function RaInspector({
             size="sm"
             className="h-7 gap-1.5 text-xs"
             onClick={() =>
-              toast.info('RA preset saving coming soon', {
-                description: 'Presets are managed in Admin → RA Presets.',
+              toast.info('Rate Analysis saving coming soon', {
+                description:
+                  'RA data is currently session-only and lost on item switch. This will be persisted to the boq_items table in a future update.',
               })
             }
           >
@@ -571,11 +604,18 @@ function RaSection({
   title,
   icon,
   rows,
+  itemUom,
   onUpdate,
 }: {
   title: string
   icon: React.ReactNode
   rows: RaRow[]
+  /** UOM of the BOQ item this section belongs to — used in the subtotal
+   *  label so the per-unit cost is shown against the right unit. Previously
+   *  this used the first resource row's UOM, which is wrong: a 'cum' BOQ
+   *  item can have 'Bag' cement and 'day' labour rows, and the subtotal
+   *  shouldn't inherit either of those. */
+  itemUom: string
   onUpdate: (index: number, field: 'qty' | 'rate', value: number) => void
 }) {
   const sectionTotal = rows.reduce((s, r) => s + r.qty * r.rate, 0)
@@ -586,7 +626,16 @@ function RaSection({
           {icon}
           {title}
         </div>
-        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 text-xs"
+          onClick={() =>
+            toast.info(`Add ${title.toLowerCase()} row coming soon`, {
+              description: 'Use the API for now — the UI row-add flow is under construction.',
+            })
+          }
+        >
           <Plus className="h-3 w-3" />
           Add
         </Button>
@@ -623,6 +672,12 @@ function RaSection({
                 <button
                   className="hover:bg-accent rounded p-0.5"
                   title="Auto-calc from primary UOM"
+                  onClick={() =>
+                    toast.info('Auto-calc from primary UOM coming soon', {
+                      description:
+                        'Conversion factors between the BOQ item UOM and the resource UOM are not yet wired up.',
+                    })
+                  }
                 >
                   <Zap className="h-3 w-3 text-amber-500" />
                 </button>
@@ -634,7 +689,7 @@ function RaSection({
       <div className="mt-2 flex items-center justify-between border-t border-[var(--pane-divider)] pt-2 text-xs">
         <span className="text-muted-foreground">Section subtotal ({rows.length} resources)</span>
         <span className="font-mono font-semibold">
-          NPR {sectionTotal.toFixed(0)}/{rows[0]?.uom || 'unit'}
+          NPR {sectionTotal.toFixed(0)}/{itemUom || 'unit'}
         </span>
       </div>
     </div>

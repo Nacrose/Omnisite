@@ -171,12 +171,27 @@ export function BoqModule() {
     return filterTree(boqData)
   }, [boqData, searchQuery])
 
-  const selectedLeaf = allFlat.find((i) => i.id === selectedId) ?? allFlat[2]
+  // Fallback when nothing is selected: pick the first non-Heading item so
+  // the inspector has something to render. Falls back to allFlat[0] (which
+  // may be a Heading) only if there are no non-Heading items at all — this
+  // is a degenerate empty-BOQ case and the inspector will show the
+  // NonPricedInspector branch for it.
+  const selectedLeaf =
+    allFlat.find((i) => i.id === selectedId) ??
+    allFlat.find((i) => i.type !== 'Heading') ??
+    allFlat[0]
 
-  // Live contract total — sum of qty × rate for all non-heading items.
+  // Live contract total — sum of qty × rate for LEAF non-heading items
+  // only. Including parent items in the sum would double-count: a Priced
+  // item with children would contribute both itself AND its children's
+  // qty×rate. Leaves are items with no children (headings are also
+  // excluded since they don't carry a rate).
   // Memoized on allFlat so it doesn't recompute on unrelated re-renders.
   const contractTotal = useMemo(
-    () => allFlat.filter((i) => i.type !== 'Heading').reduce((sum, i) => sum + i.qty * i.rate, 0),
+    () =>
+      allFlat
+        .filter((i) => i.type !== 'Heading' && (!i.children || i.children.length === 0))
+        .reduce((sum, i) => sum + i.qty * i.rate, 0),
     [allFlat]
   )
 

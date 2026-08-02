@@ -10,6 +10,8 @@ vi.mock('sonner', () => ({
   },
 }))
 
+import { toast } from 'sonner'
+
 // Mock undoableToast — it calls into sonner + Radix Dialog at runtime, which
 // we don't need to exercise for the undo/redo stack logic.
 vi.mock('@/components/ui/confirm-dialog', () => ({
@@ -308,9 +310,30 @@ describe('BOQ handlers — duplicateItem', () => {
     // Copy is at index 1 (immediately after the original).
     const copy = foundationChildren[1]
     expect(copy.id).toMatch(/^1\.1\.1-copy-/)
-    expect(copy.code).toBe('1.1.1-copy')
+    // Code is now suffixed with a short Date.now() token so successive
+    // duplicates of the same item don't collide.
+    expect(copy.code).toMatch(/^1\.1\.1-copy-/)
     expect(copy.desc).toContain('(Copy)')
     expect(copy.qty).toBe(1240) // deep-cloned content
+  })
+
+  it('produces unique codes when the same item is duplicated twice', () => {
+    const state = freshState()
+    const ctx = makeCtx(state)
+
+    duplicateItem('1.1.1', ctx)
+    // Force a different Date.now() so the suffix differs. (Real-world usage
+    // can't duplicate in the same millisecond via a UI click, but two
+    // programmatic calls in the same test tick can.)
+    vi.spyOn(Date, 'now').mockReturnValueOnce(0)
+    duplicateItem('1.1.1', ctx)
+
+    const foundationChildren = ctx.boqData[0].children![0].children!
+    // Two copies now exist (positions 1 and 2).
+    const copy1 = foundationChildren[1]
+    const copy2 = foundationChildren[2]
+    expect(copy1.id).not.toBe(copy2.id)
+    expect(copy1.code).not.toBe(copy2.code)
   })
 })
 
@@ -327,26 +350,100 @@ describe('BOQ handlers — addChildItem', () => {
     expect(foundation.children).toHaveLength(5) // 4 original + 1 new
     const newChild = foundation.children![4]
     expect(newChild.id).toMatch(/^1\.1\./)
-    expect(newChild.code).toBe('1.1.new')
+    // Sibling codes are renumbered parent.1, parent.2, … so the 5th child
+    // under '1.1' gets the code '1.1.5' (was previously the collision-prone
+    // '1.1.new' placeholder).
+    expect(newChild.code).toBe('1.1.5')
+    // Earlier siblings keep their codes too (renumber is consistent).
+    expect(foundation.children![0].code).toBe('1.1.1')
+    expect(foundation.children![3].code).toBe('1.1.4')
     expect(newChild.level).toBe(2)
     expect(state.expanded).toContain('1.1')
     expect(state.selectedId).toBe(newChild.id)
   })
+
+  it('rejects adding a child under a non-Heading item (no double-counting)', () => {
+    const state = freshState()
+    const ctx = makeCtx(state)
+    const rowsBefore = state.rows
+
+    // '1.1.1' is a Priced item (not a Heading) — guard must refuse.
+    addChildItem('1.1.1', ctx)
+
+    // No commit happened — rows ref unchanged.
+    expect(state.rows).toBe(rowsBefore)
+    expect(state.undoStack).toHaveLength(0)
+    // toast.error was called (mocked at top of file).
+    expect(toast.error).toHaveBeenCalled()
+  })
 })
 
 describe('BOQ handlers — deleteItem', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // deleteItem now prompts for confirmation when the item has descendants.
+    // jsdom doesn't implement window.confirm, so stub it to return true (user
+    // confirms) by default. Tests that want to exercise the cancel branch
+    // override this per-test.
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true)
+    )
+  })
 
   it('removes the item and its subtree from the tree', () => {
     const state = freshState()
     const ctx = makeCtx(state)
 
-    // Delete '1.1' (Foundation Works, which has 4 children).
+    // Delete '1.1' (Foundation Works, which has 4 children). confirm() is
+    // stubbed to true so the delete proceeds.
     deleteItem('1.1', ctx)
 
     const root1 = ctx.boqData.find((i) => i.id === '1')!
     expect(root1.children).toHaveLength(1) // only '1.2 Substructure' remains
     expect(root1.children![0].id).toBe('1.2')
+  })
+
+  it('prompts for confirmation when the item has descendants', () => {
+    const state = freshState()
+    const ctx = makeCtx(state)
+
+    // '1.1' has 4 descendants — confirm must be called with a description
+    // that mentions the descendant count.
+    deleteItem('1.1', ctx)
+
+    expect(global.confirm).toHaveBeenCalledTimes(1)
+    const promptText = (global.confirm as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(promptText).toContain('1.1')
+    expect(promptText).toContain('descendant')
+  })
+
+  it('does NOT prompt for confirmation when deleting a leaf item', () => {
+    const state = freshState()
+    const ctx = makeCtx(state)
+
+    // '1.1.1' is a leaf Priced item with no children.
+    deleteItem('1.1.1', ctx)
+
+    expect(global.confirm).not.toHaveBeenCalled()
+    const foundation = ctx.boqData[0].children![0]
+    expect(foundation.children).toHaveLength(3) // 4 - 1
+  })
+
+  it('aborts the delete when the user cancels the confirmation', () => {
+    const state = freshState()
+    const ctx = makeCtx(state)
+    const rowsBefore = state.rows
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => false)
+    )
+
+    deleteItem('1.1', ctx)
+
+    // No commit, no undo entry, tree unchanged.
+    expect(state.rows).toBe(rowsBefore)
+    expect(state.undoStack).toHaveLength(0)
   })
 })
 

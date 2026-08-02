@@ -246,7 +246,7 @@ function BoqRow({
           ) : (
             <input
               type="number"
-              value={item.qty || ''}
+              value={item.qty ?? ''}
               onChange={(e) => onUpdateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
               onFocus={() => onSetEditing({ id: item.id, field: 'qty' })}
               onBlur={() => onSetEditing(null)}
@@ -284,7 +284,7 @@ function BoqRow({
           ) : (
             <input
               type="number"
-              value={item.rate || ''}
+              value={item.rate ?? ''}
               onChange={(e) => onUpdateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
               onFocus={() => onSetEditing({ id: item.id, field: 'rate' })}
               onBlur={() => onSetEditing(null)}
@@ -307,7 +307,16 @@ function BoqRow({
           )}
           style={cw.amount ? { width: `${cw.amount}px` } : undefined}
         >
-          {item.qty * item.rate > 0 ? (item.qty * item.rate).toLocaleString() : '—'}
+          {/* Amount cell — distinguishes "explicitly zero" (qty or rate is 0)
+              from "missing" (NaN / undefined, which is theoretical here since
+              qty/rate are typed `number`). Showing 0 as `0` (rather than `—`)
+              makes a freshly added zero-qty item look intentional rather than
+              unloaded. */}
+          {(() => {
+            const amount = item.qty * item.rate
+            if (amount == null || Number.isNaN(amount)) return '—'
+            return amount === 0 ? '0' : amount.toLocaleString()
+          })()}
         </div>
       )}
       {vis('type') && (

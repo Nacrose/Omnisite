@@ -72,6 +72,23 @@ export function flattenBoqTree(items: BoqItem[], parentId: string | null = null)
   ) as unknown as BoqItem[]
 }
 
+/**
+ * Renumber sibling codes as `<parentCode>.1`, `<parentCode>.2`, … recursively
+ * down the subtree. Used by `addChildItem` and `reparentItem` so codes stay
+ * consistent with tree structure after additions/removals/moves.
+ *
+ * `parentCode` is `null` for root-level siblings (codes become `1`, `2`, …).
+ */
+function recomputeSiblingCodes(items: BoqItem[], parentCode: string | null): void {
+  items.forEach((it, idx) => {
+    const prefix = parentCode ? `${parentCode}.` : ''
+    it.code = `${prefix}${idx + 1}`
+    if (it.children && it.children.length > 0) {
+      recomputeSiblingCodes(it.children, it.code)
+    }
+  })
+}
+
 // ─── Handler context ──────────────────────────────────────────────────────
 //
 // Plain functions (not hooks) that operate on the BOQ tree. Each takes a
@@ -107,6 +124,13 @@ export interface BoqHandlerCtx {
  * (which would double-fire under StrictMode).
  */
 export function commitBoqData(updater: (prev: BoqItem[]) => BoqItem[], ctx: BoqHandlerCtx): void {
+  // NOTE: ctx.boqData is read from the render closure, not a functional update.
+  // This is safe as long as commitBoqData is not called twice in the same tick
+  // (current usage guarantees this). If that invariant is ever broken — e.g.
+  // a future batch action calls commitBoqData in a loop — the undo stack would
+  // capture the same pre-mutation snapshot multiple times and the second call
+  // would mutate an already-mutated tree.
+  //
   // Capture the current tree for the undo stack BEFORE applying the updater.
   const currentTree = ctx.boqData
   ctx.setUndoStack((u) => [...u, deepClone(currentTree)])
@@ -184,7 +208,11 @@ export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
               // can collide if two duplicates are created in the same ms.
               const copy = produce(it, (d) => {
                 d.id = `${it.id}-copy-${crypto.randomUUID()}`
-                d.code = `${it.code}-copy`
+                // Append a short Date.now() suffix so the code stays unique
+                // even when the same item is duplicated twice in the same
+                // second. The previous `-copy` suffix collided: a second
+                // duplicate of the same item produced an identical code.
+                d.code = `${it.code}-copy-${Date.now().toString(36).slice(-4)}`
                 d.desc = `${it.desc} (Copy)`
               }) as BoqItem
               items.splice(i + 1, 0, copy)
@@ -201,9 +229,24 @@ export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
   toast.success('Item duplicated', { description: `Copy created below ${id}` })
 }
 
-/** Delete an item (and its subtree). Shows an undoable toast. */
+/** Delete an item (and its subtree). Shows an undoable toast.
+ *
+ *  When the item has children, prompt for confirmation first — undoing a
+ *  cascading delete is possible but confusing (the toast undoes the entire
+ *  subtree at once), and a heading typically carries many descendants that
+ *  the user might not intend to lose. */
 export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
   const item = ctx.allFlat.find((i) => i.id === id)
+  // Confirm before cascading — counts descendants recursively so the user
+  // sees the true blast radius (not just direct children).
+  if (item?.children && item.children.length > 0) {
+    const countDescendants = (nodes: BoqItem[] | undefined): number =>
+      nodes?.reduce((sum, n) => sum + 1 + countDescendants(n.children), 0) ?? 0
+    const descCount = countDescendants(item.children)
+    if (!confirm(`Delete "${item.code} — ${item.desc}" and its ${descCount} descendant item(s)?`)) {
+      return
+    }
+  }
   commitBoqData(
     (prev) =>
       produce(prev, (draft) => {
@@ -231,8 +274,26 @@ export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
 }
 
 /** Add a new child item under the given parent. Auto-expands the parent
- *  and selects the new item. */
+ *  and selects the new item.
+ *
+ *  Only Heading items may have children — allowing children under Priced /
+ *  Provisional Sum / Daywork items would double-count them in the contract
+ *  total (parents and their children would both contribute qty × rate). */
 export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
+  // Guard: refuse to add children under non-Heading items. This prevents
+  // the double-counting bug where a Priced parent + its child Priced rows
+  // would both be summed into the contract total.
+  const parentItem = ctx.allFlat.find((i) => i.id === parentId)
+  if (!parentItem) {
+    toast.error('Cannot add child item', { description: 'Parent item not found.' })
+    return
+  }
+  if (parentItem.type !== 'Heading') {
+    toast.error('Children can only be added under Heading items', {
+      description: `${parentItem.code} is a ${parentItem.type} item.`,
+    })
+    return
+  }
   // crypto.randomUUID() is collision-free across rapid successive calls,
   // whereas Date.now() can return the same ms when addChildItem is invoked
   // twice in quick succession (e.g. user double-clicking the menu item).
@@ -246,7 +307,10 @@ export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
               if (!it.children) it.children = []
               it.children.push({
                 id: newId,
-                code: `${it.code}.new`,
+                // Placeholder code — renumbered below by recomputeSiblingCodes
+                // so the new child gets `parent.N` where N is its 1-indexed
+                // position among its siblings.
+                code: `${it.code}.${it.children.length + 1}`,
                 desc: 'New BOQ item',
                 type: 'Priced',
                 qty: 0,
@@ -254,6 +318,10 @@ export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
                 rate: 0,
                 level: it.level + 1,
               })
+              // Renumber all sibling codes as parent.1, parent.2, ... so
+              // additions/removals keep codes consistent with tree structure.
+              // Mirrors the same pattern used by reparentItem.
+              recomputeSiblingCodes(it.children, it.code)
               return true
             }
             if (it.children && walk(it.children)) return true
@@ -357,15 +425,9 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
         // the new parent. Codes follow the parent.code + '.' + N pattern
         // (1-indexed), so adding/removing a child renumbers all siblings.
         // This keeps codes consistent with the tree structure after reparent.
-        const recomputeSiblingCodes = (items: BoqItem[], parentCode: string | null): void => {
-          items.forEach((it, idx) => {
-            const prefix = parentCode ? `${parentCode}.` : ''
-            it.code = `${prefix}${idx + 1}`
-            if (it.children && it.children.length > 0) {
-              recomputeSiblingCodes(it.children, it.code)
-            }
-          })
-        }
+        //
+        // `recomputeSiblingCodes` is defined at module scope so addChildItem
+        // can reuse the exact same renumbering logic.
 
         // Recompute codes for the target parent's entire children list
         // (now including the newly-added movedItem).
@@ -409,8 +471,16 @@ export function exportRa(item: BoqItem | undefined): void {
     return
   }
 
-  // Standard DoR resource rows (mirrors the INITIAL_* constants in ra-inspector).
-  // Kept here so the export works even without the RA inspector mounted.
+  // NOTE: exportRa uses DoR default PCC coefficients (the cement/sand/
+  //  aggregate/labour/equipment constants below). These do NOT reflect the
+  //  RA Inspector's user-editable resource rows — the inspector now seeds
+  //  each item with an EMPTY resource list and the user adds their own. The
+  //  export and the inspector will diverge until exportRa is wired to read
+  //  from the inspector's state (or from a persisted RA column on boq_items).
+  //
+  //  Standard DoR resource rows (mirrors the INITIAL_* constants in
+  //  ra-inspector). Kept here so the export works even without the RA
+  //  inspector mounted.
   const materials = [
     { code: 'M-CEM-OPC', name: 'Cement OPC 53 Grade (Udaipur)', uom: 'Bag', qty: 4.5, rate: 920 },
     { code: 'M-SAND-R', name: 'River Sand (Trishuli)', uom: 'cum', qty: 0.45, rate: 3850 },
