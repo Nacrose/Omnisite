@@ -1,18 +1,41 @@
 /**
  * Critical Path Method (CPM) implementation.
- * Calculates earliest start, earliest finish, latest start, latest finish,
- * total float, and identifies critical path tasks.
  *
- * Based on standard CPM algorithm:
- * 1. Forward pass: ES = max(EF of predecessors), EF = ES + duration
- * 2. Backward pass: LF = min(LS of successors), LS = LF - duration
+ * Supports all 4 dependency link types:
+ *   - FS (Finish-to-Start): successor starts after predecessor finishes
+ *   - SS (Start-to-Start):  successor starts after predecessor starts
+ *   - FF (Finish-to-Finish): successor finishes after predecessor finishes
+ *   - SF (Start-to-Finish):  successor finishes after predecessor starts
+ *
+ * Lag (in days, can be negative for lead/acceleration) is applied per link.
+ *
+ * Algorithm:
+ * 1. Forward pass: compute ES and EF based on dependency types + lag
+ * 2. Backward pass: compute LS and LF based on successor constraints
  * 3. Float = LS - ES (if 0, task is critical)
  */
+
+export type LinkType = 'FS' | 'SS' | 'FF' | 'SF'
+
+export interface CpmDependency {
+  /** Predecessor task ID. */
+  predecessorId: string
+  /** Link type (default: FS). */
+  linkType?: LinkType
+  /** Lag in days (can be negative for lead). */
+  lag?: number
+}
 
 export interface CpmTask {
   id: string
   duration: number // in days (0 for milestones)
-  predecessors: string[] // task IDs that must finish before this one starts
+  /**
+   * Predecessor task IDs (FS-only, backward compat).
+   * If you need SS/FF/SF links or lag, use `dependencies` instead.
+   */
+  predecessors?: string[]
+  /** Full dependency links with type + lag. Takes precedence over `predecessors`. */
+  dependencies?: CpmDependency[]
 }
 
 export interface CpmResult {
@@ -30,10 +53,70 @@ export interface CpmOutput {
   projectDuration: number // total project duration in days
 }
 
+/**
+ * Compute the earliest start of a successor given a predecessor's
+ * computed ES/EF and the dependency link type + lag.
+ *
+ * Returns the minimum ES constraint imposed by this single link.
+ */
+function computeLinkConstraint(
+  linkType: LinkType,
+  lag: number,
+  predES: number,
+  predEF: number
+): number {
+  switch (linkType) {
+    case 'FS':
+      // Successor can start after predecessor finishes + lag
+      return predEF + lag
+    case 'SS':
+      // Successor can start after predecessor starts + lag
+      return predES + lag
+    case 'FF':
+      // Successor finishes after predecessor finishes + lag
+      // ES_succ = constraint - duration_succ (handled by caller: returns the
+      // finish constraint; caller converts to start by subtracting duration)
+      // We return the EF constraint here; caller will subtract duration.
+      return predEF + lag // This is the EF constraint, not ES
+    case 'SF':
+      // Successor finishes after predecessor starts + lag
+      // Similarly, this is an EF constraint.
+      return predES + lag // EF constraint
+    default:
+      return predEF + lag // default to FS
+  }
+}
+
+/**
+ * Check if a link type produces a finish constraint (FF, SF) rather than
+ * a start constraint (FS, SS).
+ */
+function isFinishConstraint(linkType: LinkType): boolean {
+  return linkType === 'FF' || linkType === 'SF'
+}
+
 export function calculateCpm(tasks: CpmTask[]): CpmOutput {
   const taskMap = new Map<string, CpmTask>()
   for (const t of tasks) {
     taskMap.set(t.id, t)
+  }
+
+  // Normalize dependencies: merge `predecessors` (FS-only) and `dependencies`
+  const normalizedDeps = new Map<string, CpmDependency[]>()
+  for (const t of tasks) {
+    const deps: CpmDependency[] = []
+    if (t.dependencies && t.dependencies.length > 0) {
+      deps.push(...t.dependencies)
+    }
+    if (t.predecessors && t.predecessors.length > 0) {
+      for (const predId of t.predecessors) {
+        // Don't duplicate if already in dependencies
+        if (!deps.some((d) => d.predecessorId === predId)) {
+          deps.push({ predecessorId: predId, linkType: 'FS', lag: 0 })
+        }
+      }
+    }
+    normalizedDeps.set(t.id, deps)
   }
 
   // Topological sort (Kahn's algorithm)
@@ -43,9 +126,13 @@ export function calculateCpm(tasks: CpmTask[]): CpmOutput {
   for (const t of tasks) {
     if (!inDegree.has(t.id)) inDegree.set(t.id, 0)
     if (!adjList.has(t.id)) adjList.set(t.id, [])
-    for (const pred of t.predecessors) {
-      if (!adjList.has(pred)) adjList.set(pred, [])
-      adjList.get(pred)!.push(t.id)
+  }
+
+  for (const t of tasks) {
+    const deps = normalizedDeps.get(t.id) || []
+    for (const dep of deps) {
+      if (!adjList.has(dep.predecessorId)) adjList.set(dep.predecessorId, [])
+      adjList.get(dep.predecessorId)!.push(t.id)
       inDegree.set(t.id, (inDegree.get(t.id) || 0) + 1)
     }
   }
@@ -65,18 +152,47 @@ export function calculateCpm(tasks: CpmTask[]): CpmOutput {
     }
   }
 
-  // Forward pass: calculate ES and EF
+  // Forward pass: calculate ES and EF using dependency types + lag
   const es = new Map<string, number>() // earliest start
   const ef = new Map<string, number>() // earliest finish
 
   for (const id of sorted) {
     const task = taskMap.get(id)!
-    let maxPredEF = 0
-    for (const pred of task.predecessors) {
-      maxPredEF = Math.max(maxPredEF, ef.get(pred) || 0)
+    const deps = normalizedDeps.get(id) || []
+
+    let maxStartConstraint = 0
+    let maxFinishConstraint = 0
+    let hasFinishConstraint = false
+
+    for (const dep of deps) {
+      const predES = es.get(dep.predecessorId) || 0
+      const predEF = ef.get(dep.predecessorId) || 0
+      const linkType = dep.linkType || 'FS'
+      const lag = dep.lag || 0
+
+      if (isFinishConstraint(linkType)) {
+        // FF or SF: produces a finish constraint
+        const finishConstraint = computeLinkConstraint(linkType, lag, predES, predEF)
+        maxFinishConstraint = Math.max(maxFinishConstraint, finishConstraint)
+        hasFinishConstraint = true
+      } else {
+        // FS or SS: produces a start constraint
+        const startConstraint = computeLinkConstraint(linkType, lag, predES, predEF)
+        maxStartConstraint = Math.max(maxStartConstraint, startConstraint)
+      }
     }
-    es.set(id, maxPredEF)
-    ef.set(id, maxPredEF + task.duration)
+
+    // ES = max of all start constraints
+    let taskES = maxStartConstraint
+
+    // If there are finish constraints (FF/SF), convert to start:
+    // EF >= finishConstraint → ES >= finishConstraint - duration
+    if (hasFinishConstraint) {
+      taskES = Math.max(taskES, maxFinishConstraint - task.duration)
+    }
+
+    es.set(id, taskES)
+    ef.set(id, taskES + task.duration)
   }
 
   // Project duration = max EF
@@ -86,20 +202,73 @@ export function calculateCpm(tasks: CpmTask[]): CpmOutput {
   const ls = new Map<string, number>() // latest start
   const lf = new Map<string, number>() // latest finish
 
-  // Process in reverse topological order
+  // Build reverse adjacency: for each task, who are its successors and
+  // what link type connects them?
+  const successorLinks = new Map<
+    string,
+    { successorId: string; linkType: LinkType; lag: number }[]
+  >()
+  for (const t of tasks) {
+    const deps = normalizedDeps.get(t.id) || []
+    for (const dep of deps) {
+      if (!successorLinks.has(dep.predecessorId)) {
+        successorLinks.set(dep.predecessorId, [])
+      }
+      successorLinks.get(dep.predecessorId)!.push({
+        successorId: t.id,
+        linkType: dep.linkType || 'FS',
+        lag: dep.lag || 0,
+      })
+    }
+  }
+
   for (let i = sorted.length - 1; i >= 0; i--) {
     const id = sorted[i]
     const task = taskMap.get(id)!
 
-    // Find successors
-    const successors = tasks.filter((t) => t.predecessors.includes(id))
-    let minSuccLS = projectDuration
-    for (const succ of successors) {
-      minSuccLS = Math.min(minSuccLS, ls.get(succ.id) ?? projectDuration)
+    const links = successorLinks.get(id) || []
+    let minFinishConstraint = projectDuration
+    let minStartConstraint = projectDuration
+    let hasStartConstraint = false
+
+    for (const link of links) {
+      const succLS = ls.get(link.successorId) ?? projectDuration
+      const succLF = lf.get(link.successorId) ?? projectDuration
+      const lag = link.lag
+
+      switch (link.linkType) {
+        case 'FS':
+          // LF_pred <= LS_succ - lag
+          minFinishConstraint = Math.min(minFinishConstraint, succLS - lag)
+          break
+        case 'SS':
+          // LS_pred <= LS_succ - lag
+          minStartConstraint = Math.min(minStartConstraint, succLS - lag)
+          hasStartConstraint = true
+          break
+        case 'FF':
+          // LF_pred <= LF_succ - lag
+          minFinishConstraint = Math.min(minFinishConstraint, succLF - lag)
+          break
+        case 'SF':
+          // LS_pred <= LF_succ - lag
+          minStartConstraint = Math.min(minStartConstraint, succLF - lag)
+          hasStartConstraint = true
+          break
+      }
     }
 
-    lf.set(id, minSuccLS)
-    ls.set(id, minSuccLS - task.duration)
+    // LF = min of all finish constraints
+    let taskLF = minFinishConstraint
+
+    // If there are start constraints (SS/SF), convert to finish:
+    // LS <= startConstraint → LF <= startConstraint + duration
+    if (hasStartConstraint) {
+      taskLF = Math.min(taskLF, minStartConstraint + task.duration)
+    }
+
+    lf.set(id, taskLF)
+    ls.set(id, taskLF - task.duration)
   }
 
   // Calculate float and critical path

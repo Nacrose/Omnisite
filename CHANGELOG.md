@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - URL-based routing — every module has a shareable deep link
 - Rate limiting via Upstash Redis
 - CSP with per-request nonce (no `unsafe-inline`)
-- 77 vitest tests + 4 Playwright e2e tests
+- 277 vitest tests + 4 Playwright e2e tests
 - CI pipeline: lint + tsc + test + audit + build + size-check + e2e
 - Prettier + husky + lint-staged pre-commit hook
 

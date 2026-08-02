@@ -109,7 +109,7 @@ Site teams work on hardcopy in the field. When they return to the office, engine
 - **Charts:** Recharts
 - **Icons:** Lucide React
 - **Animations:** Framer Motion
-- **Testing:** Vitest (269 tests) + Playwright E2E
+- **Testing:** Vitest (277 tests) + Playwright E2E
 - **CI:** GitHub Actions (lint + tsc + test + audit + build + size-check + e2e)
 
 ---

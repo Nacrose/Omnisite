@@ -45,6 +45,9 @@ export interface Grn {
   poQty: number
   grnQty: number
   invoiceQty: number
+  /** Unit rate as per the PO (the agreed rate). */
+  poRate?: number
+  /** Unit rate as per the invoice (what the vendor is actually charging). */
   rate: number
   payStatus: 'Cleared' | 'Hold' | 'Partial Hold' | 'Awaiting GRN'
   /** Material code delivered — used to increment StockItem.onHand on GRN. */

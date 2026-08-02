@@ -97,8 +97,12 @@ export function GrnCenterView({
   grns: Grn[]
   onToggleApproval: (poId: string) => void
 }) {
-  // 3-way match check: PO qty === GRN qty === Invoice qty
-  const isMatched = (g: Grn) => g.poQty === g.grnQty && g.grnQty === g.invoiceQty
+  // 3-way match: PO qty === GRN qty === Invoice qty AND PO rate === Invoice rate
+  // Checks BOTH quantity and rate — a wrong unit rate on the invoice is the
+  // exact thing 3-way match exists to catch (overcharging via rate inflation
+  // at correct quantity).
+  const isMatched = (g: Grn) =>
+    g.poQty === g.grnQty && g.grnQty === g.invoiceQty && g.poRate === g.rate
   const lockedAmount = grns
     .filter((g) => !isMatched(g) && g.grnQty > 0)
     .reduce((sum, g) => sum + g.invoiceQty * g.rate, 0)
@@ -123,9 +127,9 @@ export function GrnCenterView({
     <PaneBody className="p-4">
       <div className="rounded-lg border border-[var(--pane-divider)]">
         <div className="bg-secondary/30 text-muted-foreground flex items-center justify-between border-b border-[var(--pane-divider)] px-3 py-2 text-xs font-semibold tracking-wider uppercase">
-          <span>3-Way Match · PO vs GRN vs Invoice</span>
+          <span>3-Way Match · PO vs GRN vs Invoice (qty + rate)</span>
           <span className="text-[10px] font-normal normal-case">
-            Click ✓ to approve — locked if mismatch
+            Click ✓ to approve — locked if qty or rate mismatch
           </span>
         </div>
         <StickyTableShell minWidth={820}>
@@ -193,7 +197,13 @@ export function GrnCenterView({
                               : 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25'
                             : 'bg-secondary text-muted-foreground/40 cursor-not-allowed'
                         )}
-                        title={matched ? 'Toggle payment approval' : 'Locked — 3-way match fails'}
+                        title={
+                          matched
+                            ? 'Toggle payment approval'
+                            : g.poRate !== undefined && g.poRate !== g.rate
+                              ? `Locked — rate mismatch: PO rate ${g.poRate} vs invoice rate ${g.rate}`
+                              : 'Locked — quantity mismatch: PO qty ≠ GRN qty ≠ Invoice qty'
+                        }
                       >
                         {matched ? (g.payStatus === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
                       </button>
