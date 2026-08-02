@@ -41,8 +41,8 @@ export interface Rfi {
   scheduleImpact?: string
   severity: 'low' | 'medium' | 'high'
   /** Optional FK to project_locations.id — where the question physically
-   *  applies (e.g. "Pier 3"). Stored in local state for now; the DB column
-   *  will land in a follow-up migration. */
+   *  applies (e.g. "Pier 3"). Persisted to the `location_id` column
+   *  (added in migration 12). */
   locationId?: string
 }
 

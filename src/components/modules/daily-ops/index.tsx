@@ -36,11 +36,14 @@ export function DailyOpsModule() {
   // and other tabs didn't see them in realtime. The `fieldMap` maps the
   // camelCase boolean flags on the client type (`hasRfi`, `hasPhotos`)
   // to the snake_case DB columns (`has_rfi`, `has_photos`).
-  const [dsrEntries, , dsrLoading] = useSyncedState<DsrEntry[]>(
+  const [dsrEntries, setDsrEntries, dsrLoading] = useSyncedState<DsrEntry[]>(
     'omnisite-dsr-entries',
     'dsr_entries',
     () => structuredClone(DSR_ENTRIES) as typeof DSR_ENTRIES,
-    { fieldMap: { hasRfi: 'has_rfi', hasPhotos: 'has_photos' }, primaryKey: 'id' }
+    {
+      fieldMap: { hasRfi: 'has_rfi', hasPhotos: 'has_photos', locationId: 'location_id' },
+      primaryKey: 'id',
+    }
   )
   // Date for the DSR — defaults to the date of the first seed entry (today in
   // demo data). Users can navigate to previous/next days. Entries are filtered
@@ -210,7 +213,22 @@ export function DailyOpsModule() {
               <DailySiteLogView date={selectedDate} />
             )
           }
-          rightPane={<DsrInspector entry={selected} />}
+          rightPane={
+            <DsrInspector
+              entry={selected}
+              onUpdateLocation={(locId) => {
+                // Propagate the location link into the synced dsrEntries
+                // store so it persists to Supabase (location_id column added
+                // in migration 12) and is visible to other modules. Without
+                // this the inspector only fired a toast and never persisted.
+                setDsrEntries((prev) =>
+                  prev.map((d) =>
+                    d.id === selected.id ? { ...d, locationId: locId ?? undefined } : d
+                  )
+                )
+              }}
+            />
+          }
           leftPaneWidth="280px"
           rightPaneWidth="380px"
         />

@@ -43,7 +43,22 @@ export function SchedulerModule() {
       fieldMap: {
         start: 'start_week',
         duration: 'duration',
-        baseline: 'baseline_finish',
+        // NOTE: `baseline` (a `[start, finish]` tuple) is intentionally NOT
+        // in the fieldMap. The tasks table has no `baseline` JSONB column —
+        // it has two separate INTEGER columns `baseline_start` and
+        // `baseline_finish` (migration 00000000000000). The previous
+        // `baseline: 'baseline_finish'` mapping wrote a JSON-stringified
+        // array into an INTEGER column, which PostgREST rejected (or
+        // silently zeroed) so baselines never round-tripped.
+        //
+        // The split-on-write / reconstruct-on-read logic now lives in
+        // `toDb` / `fromDb` inside use-synced-state.ts (special-cased on
+        // the `baseline` array key, since only the tasks table has these
+        // columns). The explicit no-op mappings below for baselineStart /
+        // baselineFinish are listed for clarity so future contributors
+        // don't accidentally re-add `baseline` to the fieldMap.
+        baselineStart: 'baseline_start',
+        baselineFinish: 'baseline_finish',
         constraints: 'constraints',
         parentId: 'parent_id',
         // Explicit no-op mapping so the dependencies JSON string survives
@@ -53,6 +68,10 @@ export function SchedulerModule() {
         // extended to accept `dependencies`) would still receive the field,
         // but the round-trip is now end-to-end explicit.
         dependencies: 'dependencies',
+        // location_id column added in migration 12 — round-trips the
+        // work-face link so it persists across reloads and is visible to
+        // other modules.
+        locationId: 'location_id',
       },
       primaryKey: 'id',
     }
@@ -524,7 +543,33 @@ export function SchedulerModule() {
             />
           </>
         }
-        rightPane={<TaskInspector task={selectedTask} onUpdateDuration={updateTaskDuration} />}
+        rightPane={
+          <TaskInspector
+            task={selectedTask}
+            onUpdateDuration={updateTaskDuration}
+            onUpdateLocation={(locId) => {
+              // Propagate the location link into the synced tasks store so
+              // it persists to Supabase (location_id column added in
+              // migration 12) and is visible to other modules. Without this
+              // the inspector only kept the link in local state. The task
+              // tree is mutated via produce so nested children are updated
+              // immutably too.
+              setTasks((prev) =>
+                produce(prev, (draft) => {
+                  const walk = (items: Task[]) => {
+                    for (const t of items) {
+                      if (t.id === selectedTask.id) {
+                        t.locationId = locId ?? undefined
+                      }
+                      if (t.children) walk(t.children)
+                    }
+                  }
+                  walk(draft)
+                })
+              )
+            }}
+          />
+        }
         leftPaneWidth="320px"
         rightPaneWidth="380px"
       />

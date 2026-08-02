@@ -23,7 +23,19 @@ interface StoredPhoto {
   path?: string
 }
 
-export function DsrInspector({ entry }: { entry: DsrEntry }) {
+export function DsrInspector({
+  entry,
+  onUpdateLocation,
+}: {
+  entry: DsrEntry
+  /**
+   * Fired when the user picks (or clears) a work location in the
+   * LocationPicker. The parent uses this to mutate its synced dsrEntries
+   * state so the link persists to Supabase and is visible across modules —
+   * the inspector can't do that itself because it only owns the entry prop.
+   */
+  onUpdateLocation?: (locationId: string | null) => void
+}) {
   // Material variance reconciliation only applies to concrete-pouring
   // activities. Cement/sand/aggregate coefficients (4.5 bags/cum, 0.45
   // cum/cum, 0.9 cum/cum) are meaningful for PCC/RCC/concrete work but
@@ -225,8 +237,12 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
             <LocationPicker
               value={entry.locationId}
               onChange={(locationId) => {
-                // Note: locationId stored in local state; will persist to DB
-                // once a migration adds location_id column to dsr_entries.
+                // Propagate to the parent so the synced dsrEntries store is
+                // mutated — the location_id column added in migration 12 is
+                // then persisted to Supabase and visible to other modules.
+                // Without this, the link lived only in this inspector's
+                // toast notification and was lost immediately.
+                onUpdateLocation?.(locationId)
                 toast.success('Location linked to DSR entry', {
                   description: locationId
                     ? `Linked ${entry.id} → ${locationId}`

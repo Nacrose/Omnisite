@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useId } from 'react'
 import { MapPin, ChevronDown, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
 import { INITIAL_LOCATIONS } from '@/data/seed/vendors'
 import type { ProjectLocation } from '@/lib/types/vendor'
 
@@ -27,9 +27,13 @@ interface LocationPickerProps {
 /**
  * Reusable location picker dropdown.
  *
- * Reads the project locations list from the same persisted store the Admin
- * → Locations tab writes to (`omnisite-admin-locations`), so pickers in other
- * modules always see the same set the admin is editing — no separate sync.
+ * Reads the project locations list from the same Supabase `project_locations`
+ * table (with localStorage fallback) the Admin → Locations tab writes to
+ * (`useSyncedState('omnisite-admin-locations', 'project_locations', …)`),
+ * so pickers in other modules always see the same set the admin is editing —
+ * no separate sync, and edits in one tab propagate to the others via the
+ * realtime channel. The `fieldMap` mirrors the one in the Admin → Locations
+ * view so the camelCase app fields round-trip to the snake_case DB columns.
  *
  * Locations are grouped by their `group` field (Bridge Structure, Approach
  * Road, Site Campus, …). Each option shows the location name plus its
@@ -48,9 +52,18 @@ export function LocationPicker({
   disabled = false,
 }: LocationPickerProps) {
   const [open, setOpen] = useState(false)
-  const [locations] = usePersistentState<ProjectLocation[]>(
+  const [locations] = useSyncedState<ProjectLocation[]>(
     'omnisite-admin-locations',
-    INITIAL_LOCATIONS
+    'project_locations',
+    () => INITIAL_LOCATIONS,
+    {
+      fieldMap: {
+        group: 'group_name',
+        assignedScId: 'assigned_vendor_id',
+        sortOrder: 'sort_order',
+      },
+      primaryKey: 'id',
+    }
   )
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)

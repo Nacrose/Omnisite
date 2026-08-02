@@ -20,6 +20,10 @@ export const boqItemSchema = z.object({
   sort_order: z.number().int().default(0),
   children: z.string().optional(), // serialized JSON
   baseline: z.string().optional(), // serialized JSON
+  // location_id column added in migration 12 — nullable FK to
+  // project_locations(id). Without this entry Zod would strip the field on
+  // POST and the BOQ item's work-face link would silently disappear.
+  location_id: z.string().nullable().optional(),
 })
 
 // Tasks
@@ -46,6 +50,10 @@ export const taskSchema = z.object({
   // CPM re-calculation produced a flat (no-predecessor) network after
   // every reload.
   dependencies: z.string().optional(),
+  // location_id column added in migration 12 — nullable FK to
+  // project_locations(id). Without this entry Zod would strip the field
+  // on POST and the task's work-face link would silently disappear.
+  location_id: z.string().nullable().optional(),
 })
 
 // Workers
@@ -118,6 +126,10 @@ export const qsItemSchema = z.object({
   // unknown fields, and the DB rejected them as missing columns).
   cap_submitted_date: z.string().nullable().optional(),
   closed_date: z.string().nullable().optional(),
+  // location_id column added in migration 12 — nullable FK to
+  // project_locations(id). Without this entry Zod would strip the field
+  // on POST and the Q&S item's work-face link would silently disappear.
+  location_id: z.string().nullable().optional(),
 })
 
 // Chat Messages
@@ -217,6 +229,10 @@ export const dsrEntrySchema = z.object({
   has_photos: z.boolean().default(false),
   remarks: z.string().optional(),
   date: z.string().optional(),
+  // location_id column added in migration 12 — nullable FK to
+  // project_locations(id). Without this entry Zod would strip the field
+  // on POST and the DSR entry's work-face link would silently disappear.
+  location_id: z.string().nullable().optional(),
 })
 
 // Requisitions
@@ -240,8 +256,18 @@ export const purchaseOrderSchema = z.object({
   date: z.string().optional(),
   value: z.number().min(0).default(0),
   status: z.string().default('Open'),
-  items: z.string().optional(), // serialized JSON
+  // `items` is an INTEGER count on the purchase_orders table, not a JSONB
+  // blob — the previous `z.string().optional()` rejected the client's
+  // numeric `items: group.itemCount` and Zod stripped the field on POST,
+  // so item counts silently zeroed out in Supabase mode.
+  items: z.number().int().default(0),
   has_grn: z.boolean().default(false),
+  // Unit rate at PO creation and ordered quantity — both NUMERIC columns on
+  // purchase_orders (migration 00000000000000). Without these schema entries
+  // Zod stripped them on POST, so the 3-way match lost its locked-rate
+  // reference and quantity reconciliation broke in Supabase mode.
+  rate: z.number().min(0).optional(),
+  po_qty: z.number().min(0).optional(),
 })
 
 // GRN (Goods Received Note) — 3-way match (PO vs GRN vs Invoice)
@@ -254,6 +280,12 @@ export const grnSchema = z.object({
   grn_qty: z.number().min(0).default(0),
   invoice_qty: z.number().min(0).default(0),
   rate: z.number().min(0).default(0),
+  // Unit rate as per the PO (the agreed rate) — added by migration
+  // 00000000000014_add_po_rate_to_grns.sql as `po_rate NUMERIC DEFAULT 0`.
+  // Without this schema entry Zod stripped `po_rate` on POST, so the 3-way
+  // match's locked-amount calc (rate variance = invoice.rate − po_rate) lost
+  // its reference and always reported zero variance in Supabase mode.
+  po_rate: z.number().min(0).optional(),
   pay_status: z.enum(['Cleared', 'Hold', 'Partial Hold', 'Awaiting GRN']).default('Awaiting GRN'),
   material_code: z.string().optional(),
   date: z.string().optional(),

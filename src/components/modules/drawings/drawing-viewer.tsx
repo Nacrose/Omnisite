@@ -138,9 +138,18 @@ export function DrawingViewer({ dwg }: DrawingViewerProps) {
   )
 
   // Filter annotations for the current page (annotations are stored per-page).
+  // NOTE: also filter by `drawingId` so annotations don't leak across
+  // drawings. The `drawing_annotations` table is project-wide (the storage
+  // key in useSyncedState is per-drawing, but in localStorage fallback mode
+  // or when the realtime subscription broadcasts a project-wide event,
+  // annotations from other drawings on the same page number would otherwise
+  // render on the wrong drawing). The drawing_id column is set on write via
+  // the MarkupOverlay's `drawingId` prop, so every annotation we read
+  // already carries the correct drawing id — this filter just enforces it
+  // on read.
   const pageAnnotations = useMemo(
-    () => annotations.filter((a) => a.pageNumber === page),
-    [annotations, page]
+    () => annotations.filter((a) => a.drawingId === dwg.id && a.pageNumber === page),
+    [annotations, page, dwg.id]
   )
 
   // Load annotations into the Fabric.js overlay whenever the drawing or page
@@ -168,16 +177,21 @@ export function DrawingViewer({ dwg }: DrawingViewerProps) {
         return
       }
 
-      // Replace all annotations for this page with the new set.
+      // Replace all annotations for this drawing + page with the new set.
       // (The original PDF file is never modified — only the JSON rows.)
-      const otherPages = annotations.filter((a) => a.pageNumber !== page)
+      // Filter on both drawingId AND pageNumber so annotations from other
+      // drawings (which can show up via the shared Supabase table) are
+      // preserved rather than wiped when this drawing saves.
+      const otherPages = annotations.filter(
+        (a) => !(a.drawingId === dwg.id && a.pageNumber === page)
+      )
       const merged = [...otherPages, ...newAnnotations]
       setAnnotations(merged)
       toast.success('Markups saved', {
         description: `${newAnnotations.length} annotation${newAnnotations.length === 1 ? '' : 's'} on page ${page}.`,
       })
     },
-    [annotations, page, setAnnotations, user]
+    [annotations, page, setAnnotations, user, dwg.id]
   )
 
   // ─── PDF canvas → overlay sizing ───────────────────────────────────────

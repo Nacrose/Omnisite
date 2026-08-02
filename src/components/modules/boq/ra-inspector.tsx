@@ -116,7 +116,19 @@ const INITIAL_EQUIPMENT: RaRow[] = [
   },
 ]
 
-export function RaInspector({ item }: { item: BoqItem }) {
+export function RaInspector({
+  item,
+  onUpdateLocation,
+}: {
+  item: BoqItem
+  /**
+   * Fired when the user picks (or clears) a work location in the
+   * LocationPicker. The parent uses this to mutate its synced boqRows state
+   * so the link persists to Supabase and is visible across modules — the
+   * inspector can't do that itself because it only owns a local mirror.
+   */
+  onUpdateLocation?: (locationId: string | null) => void
+}) {
   // Local copy of the linked location — the parent owns the source of truth
   // (boqRows via useSyncedState), but the inspector mirrors the selection
   // locally so the UI reflects the change immediately on re-render.
@@ -200,9 +212,12 @@ export function RaInspector({ item }: { item: BoqItem }) {
               value={locationId}
               onChange={(locId) => {
                 setLocationId(locId ?? undefined)
-                // Note: the locationId is stored in local state here.
-                // It will be persisted to the DB once a migration adds
-                // the location_id column to boq_items.
+                // Propagate to the parent so the synced boqRows store is
+                // mutated — the location_id column added in migration 12 is
+                // then persisted to Supabase and visible to other modules.
+                // Without this, the link lived only in this inspector's
+                // local state and was lost on remount / page reload.
+                onUpdateLocation?.(locId)
                 toast.success('Location linked to BOQ item', {
                   description: locId
                     ? `${item.code} → ${locId}`

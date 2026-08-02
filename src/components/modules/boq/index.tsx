@@ -73,7 +73,12 @@ export function BoqModule() {
     'boq_items',
     () => structuredClone(BOQ_DATA) as typeof BOQ_DATA,
     {
-      fieldMap: { desc: 'description', hasRA: 'has_ra', parentId: 'parent_id' },
+      fieldMap: {
+        desc: 'description',
+        hasRA: 'has_ra',
+        parentId: 'parent_id',
+        locationId: 'location_id',
+      },
       primaryKey: 'id',
     }
   )
@@ -561,7 +566,21 @@ export function BoqModule() {
             // key={item.id} forces RaInspector to remount when the selected
             // BOQ item changes, so its internal coefficient/row state resets
             // instead of leaking from the previous item.
-            <RaInspector key={selectedLeaf.id} item={selectedLeaf} />
+            <RaInspector
+              key={selectedLeaf.id}
+              item={selectedLeaf}
+              onUpdateLocation={(locId) => {
+                // Propagate the location link into the synced boqRows store
+                // so it persists to Supabase (location_id column added in
+                // migration 12) and is visible to other modules. Without
+                // this the inspector only kept the link in local state.
+                setBoqRows((prev) =>
+                  prev.map((r) =>
+                    r.id === selectedLeaf.id ? { ...r, locationId: locId ?? undefined } : r
+                  )
+                )
+              }}
+            />
           ) : (
             <NonPricedInspector key={selectedLeaf.id} item={selectedLeaf} />
           )

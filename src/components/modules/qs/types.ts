@@ -38,8 +38,9 @@ export interface QsItem {
   billingHold?: boolean
   cap?: QsCap
   /** Optional FK to project_locations.id — where the issue was identified.
-   *  Stored in local state for now; the DB column will land in a follow-up
-   *  migration. */
+   *  Persisted to the `location_id` column (added in migration 12) and
+   *  round-tripped via the `locationId: 'location_id'` fieldMap entry in
+   *  qs/index.tsx. */
   locationId?: string
   /** Date the NCR transitioned into "CAP Submitted" (DD Mon YYYY).
    *  Populated by the workflow advance handler; shown in the inspector's

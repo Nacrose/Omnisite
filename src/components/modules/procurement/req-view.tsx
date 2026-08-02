@@ -8,7 +8,7 @@ import { Trophy, AlertTriangle, Package, Plus, X, Search, ShoppingCart, Check } 
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useFocusTrap } from '@/lib/use-focus-trap'
-import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
 import { INITIAL_VENDORS } from '@/data/seed/vendors'
 import type { Vendor as UnifiedVendor } from '@/lib/types/vendor'
 import { ReqItem, Vendor as BidVendor } from './types'
@@ -22,8 +22,11 @@ import { ReqItem, Vendor as BidVendor } from './types'
 // Vendor picker
 // -------------
 // Clicking "Add Vendor Bid" opens a modal that lists all `category ===
-// 'supplier'` vendors from `usePersistentState('omnisite-vendors', ...)`. For
-// each supplier, the picker:
+// 'supplier'` vendors from the Supabase `vendors` table (via
+// `useSyncedState('omnisite-vendors', 'vendors', …)` — same hook + fieldMap
+// the Vendors module uses, so procurement always sees the freshest list,
+// including edits from other tabs / users in realtime). For each supplier,
+// the picker:
 //   1. Looks at their `materialsSupplied` array and tries to match one of
 //      those materials to the requisition's `item` text (bidirectional
 //      case-insensitive substring match on the material name).
@@ -212,12 +215,46 @@ function VendorBidPicker({
   onClose: () => void
   onAddBid: (vendor: BidVendor) => void
 }) {
-  // Read the unified vendors list from the same localStorage key the vendors
-  // module writes to. This is a temporary bridge — once the procurement store
-  // is API-backed, suppliers will come from a `vendors` query.
-  const [vendors] = usePersistentState<UnifiedVendor[]>(
+  // Read the unified vendors list from the same Supabase `vendors` table
+  // (with localStorage fallback) the vendors module writes to. Mirrors the
+  // exact fieldMap used by src/components/modules/vendors/index.tsx so the
+  // camelCase app fields round-trip to the snake_case DB columns on read.
+  // Without this, procurement only saw vendors cached in localStorage and
+  // missed any edits made by the Vendors module in another tab (or by
+  // another user via Supabase realtime).
+  const [vendors] = useSyncedState<UnifiedVendor[]>(
     'omnisite-vendors',
-    () => structuredClone(INITIAL_VENDORS) as UnifiedVendor[]
+    'vendors',
+    () => structuredClone(INITIAL_VENDORS) as UnifiedVendor[],
+    {
+      fieldMap: {
+        tradeName: 'trade_name',
+        vatNo: 'vat_no',
+        contactPerson: 'contact_person',
+        bankAccountName: 'bank_account_name',
+        bankAccountNo: 'bank_account_no',
+        bankName: 'bank_name',
+        bankBranch: 'bank_branch',
+        bankIfsc: 'bank_ifsc',
+        creditDays: 'credit_days',
+        advancePct: 'advance_pct',
+        retentionPct: 'retention_pct',
+        tdsSection: 'tds_section',
+        tdsRate: 'tds_rate',
+        materialsSupplied: 'materials_supplied',
+        workItems: 'work_items',
+        agreementValue: 'agreement_value',
+        advancePaid: 'advance_paid',
+        reworkCost: 'rework_cost',
+        isTunneling: 'is_tunneling',
+        materialIssues: 'material_issues',
+        materialReturns: 'material_returns',
+        customDeductibles: 'custom_deductibles',
+        assignedTasks: 'assigned_tasks',
+        ncrCount: 'ncr_count',
+      },
+      primaryKey: 'id',
+    }
   )
 
   const [query, setQuery] = useState('')
@@ -317,8 +354,8 @@ function VendorBidPicker({
 
         {/* Footer */}
         <div className="bg-secondary/20 text-muted-foreground border-t border-[var(--pane-divider)] px-4 py-2 text-[10px]">
-          {suppliers.length} suppliers in vendor list · catalog rates pulled from
-          <span className="font-mono"> omnisite-vendors</span> localStorage key
+          {suppliers.length} suppliers in vendor list · catalog rates pulled from the
+          <span className="font-mono"> vendors</span> table
         </div>
       </div>
     </div>

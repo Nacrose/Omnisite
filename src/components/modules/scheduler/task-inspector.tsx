@@ -17,9 +17,17 @@ import { INITIAL_LOCATIONS, INITIAL_VENDORS } from '@/data/seed/vendors'
 export function TaskInspector({
   task,
   onUpdateDuration,
+  onUpdateLocation,
 }: {
   task: Task
   onUpdateDuration?: (id: string, newDuration: number) => void
+  /**
+   * Fired when the user picks (or clears) a work location in the
+   * LocationPicker. The parent uses this to mutate its synced tasks state
+   * so the link persists to Supabase and is visible across modules — the
+   * inspector can't do that itself because it only owns a local mirror.
+   */
+  onUpdateLocation?: (locationId: string | null) => void
 }) {
   // Local mirror of the task's locationId so the inspector reflects the
   // selection immediately. The parent owns the source of truth (the task
@@ -72,8 +80,12 @@ export function TaskInspector({
               value={locationId}
               onChange={(locId) => {
                 setLocationId(locId ?? undefined)
-                // Note: locationId stored in local state; will persist to DB
-                // once a migration adds location_id column to tasks table.
+                // Propagate to the parent so the synced tasks store is
+                // mutated — the location_id column added in migration 12 is
+                // then persisted to Supabase and visible to other modules.
+                // Without this, the link lived only in this inspector's
+                // local state and was lost on remount / page reload.
+                onUpdateLocation?.(locId)
                 const loc = INITIAL_LOCATIONS.find((l) => l.id === locId)
                 toast.success('Location linked to task', {
                   description: loc

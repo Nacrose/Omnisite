@@ -352,24 +352,19 @@ export function ContextMenuItem({
   shortcut,
   onClick,
   danger,
-  disabled,
 }: {
   icon: React.ReactNode
   label: string
   shortcut?: string
   onClick: () => void
   danger?: boolean
-  disabled?: boolean
 }) {
   return (
     <button
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      title={disabled ? 'Coming soon' : undefined}
+      onClick={onClick}
       className={cn(
         'hover:bg-accent flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors',
-        danger && 'text-red-600 hover:bg-red-500/10 dark:text-red-400',
-        disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent'
+        danger && 'text-red-600 hover:bg-red-500/10 dark:text-red-400'
       )}
     >
       <span className={cn('text-muted-foreground', danger && 'text-red-500')}>{icon}</span>

@@ -222,6 +222,16 @@ export function useSyncedState<T>(
         }
       }
 
+      // Scheduler: reconstruct the `baseline` tuple from the two INTEGER
+      // columns `baseline_start` + `baseline_finish`. The tasks table has
+      // no `baseline` JSONB column (the tuple is split on write by `toDb`
+      // below). Safe to run unconditionally — only the tasks table defines
+      // these columns, so other tables never populate them and the check
+      // is a no-op for every other module.
+      if (row['baseline_start'] !== undefined && row['baseline_finish'] !== undefined) {
+        obj['baseline'] = [row['baseline_start'], row['baseline_finish']]
+      }
+
       return obj
     },
     [fmap]
@@ -234,16 +244,41 @@ export function useSyncedState<T>(
     (item: Record<string, unknown>): Record<string, unknown> => {
       const row: Record<string, unknown> = {}
       for (const key of Object.keys(item)) {
-        // Explicit fieldMap takes precedence
-        const dbCol = fmap[key] || camelToSnake(key)
+        const value = item[key]
 
-        // Complex fields that don't exist as DB columns — serialize as JSON
-        if (key === 'children' || key === 'baseline' || key === 'dependencies') {
-          row[dbCol] = JSON.stringify(item[key])
+        // Scheduler baseline tuple is split into the two INTEGER columns
+        // `baseline_start` + `baseline_finish` — there is no `baseline`
+        // JSONB column on the tasks table. The reverse mapping lives in
+        // `fromDb` above. This MUST run before the generic JSON-stringify
+        // branch below, otherwise the array would be serialized as a string
+        // and PostgREST would reject the unknown `baseline` column (or
+        // silently drop it, losing the data).
+        if (key === 'baseline' && Array.isArray(value) && value.length === 2) {
+          row['baseline_start'] = value[0]
+          row['baseline_finish'] = value[1]
           continue
         }
 
-        row[dbCol] = item[key]
+        // Explicit fieldMap takes precedence
+        const dbCol = fmap[key] || camelToSnake(key)
+
+        // JSON-stringify arrays and plain objects for JSONB columns.
+        // The Zod schemas declare these as z.string().optional() because
+        // PostgREST expects a JSON string for JSONB columns via the REST API.
+        // This is a universal type check (rather than a hardcoded
+        // children/baseline/dependencies allowlist) so ANY future
+        // JSONB-typed app field is handled automatically — the previous
+        // allowlist missed e.g. `vendors.allocated`, `equipment.docs`,
+        // `subcontractors.material_issues`, `vendors.materials_supplied`,
+        // etc., all of which silently lost their contents on POST.
+        if (
+          Array.isArray(value) ||
+          (typeof value === 'object' && value !== null && !(value instanceof Date))
+        ) {
+          row[dbCol] = JSON.stringify(value)
+        } else {
+          row[dbCol] = value
+        }
       }
       return row
     },
