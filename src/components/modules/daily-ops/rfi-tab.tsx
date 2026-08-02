@@ -46,8 +46,9 @@ export interface Rfi {
   locationId?: string
 }
 
-// Fixed "today" reference to avoid hydration mismatch from new Date() during render.
-const TODAY = new Date('2026-07-30T10:00:00')
+// Real current date — captured once at module load so overdue calculations
+// reflect the user's actual clock instead of a hardcoded demo date.
+const TODAY = new Date()
 
 // ─── Shared RFI store ──────────────────────────────────────────────────────
 // RFIs need to be mutable so the DSR Inspector can add new drafts that

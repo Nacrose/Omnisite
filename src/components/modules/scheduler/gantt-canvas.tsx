@@ -422,49 +422,21 @@ export function GanttCanvas({
             </div>
           </div>
 
-          {/* Resource usage panel (toggle) */}
+          {/* Resource usage panel (toggle)
+              Previously rendered fake sine waves (mason = 30 + 25 * sin(i/3),
+              maz = 50 + 30 * cos(i/4), mx = 10 + 5 * sin(i/2)) — those had no
+              basis in real data. The Task type carries `resources: string[]`
+              (role names) but no per-week hours, so we cannot honestly draw a
+              usage chart yet. Show an honest placeholder until resource
+              assignments (role → person → hours/week) are wired in. */}
           {showResources && (
             <div className="bg-secondary/20 border-t-2 border-[var(--pane-divider)]">
               <div className="text-muted-foreground px-3 py-2 text-[10px] font-semibold tracking-wider uppercase">
                 Resource Usage · Weekly hours
               </div>
-              <div className="relative h-32">
-                <div className="absolute inset-0 flex">
-                  <div className="flex w-[480px] flex-shrink-0 flex-col justify-center gap-1 border-r border-[var(--pane-divider)] px-3 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-sm bg-blue-500" /> Mason (Skilled)
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-sm bg-emerald-500" /> Mazdoor (Unskilled)
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-sm bg-amber-500" /> Mixer Operator
-                    </div>
-                  </div>
-                  <div className="relative flex-1">
-                    {Array.from({ length: TOTAL_WEEKS }).map((_, i) => {
-                      const mason = 30 + 25 * Math.sin(i / 3)
-                      const maz = 50 + 30 * Math.cos(i / 4)
-                      const mx = 10 + 5 * Math.sin(i / 2)
-                      return (
-                        <div
-                          key={i}
-                          className="group absolute bottom-0 flex flex-col items-center justify-end"
-                          style={{ left: i * WEEK_WIDTH, width: WEEK_WIDTH }}
-                        >
-                          <div
-                            className="w-full bg-blue-500/70 group-hover:bg-blue-500"
-                            style={{ height: `${mason}px` }}
-                          />
-                          <div
-                            className="w-full bg-emerald-500/70 group-hover:bg-emerald-500"
-                            style={{ height: `${maz}px` }}
-                          />
-                          <div className="w-full bg-amber-500/70" style={{ height: `${mx}px` }} />
-                        </div>
-                      )
-                    })}
-                  </div>
+              <div className="flex items-center justify-center px-4 py-8 text-center">
+                <div className="text-muted-foreground max-w-md text-[11px] leading-relaxed">
+                  Resource usage chart requires task resource assignments — not yet configured.
                 </div>
               </div>
             </div>

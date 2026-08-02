@@ -17,6 +17,13 @@ import { type BoqItem, BOQ_DATA, flatten as flattenBoq } from '@/components/modu
 import { type Task, TASKS, flattenTasks } from '@/components/modules/scheduler/types'
 import { type CbsNode, CBS } from '@/components/modules/financials/types'
 import {
+  type Po,
+  type Grn,
+  INITIAL_POS,
+  INITIAL_GRNS,
+} from '@/components/modules/procurement/types'
+import { type QsItem, INITIAL_ITEMS } from '@/components/modules/qs/types'
+import {
   Cloud,
   Users,
   Truck,
@@ -30,7 +37,7 @@ import {
   Plus,
 } from 'lucide-react'
 import { KpiStrip } from './kpi-strip'
-import { UrgentActionsQueue } from './urgent-actions'
+import { UrgentActionsQueue, type UrgentAction } from './urgent-actions'
 import { MiniGanttChart, SCurveChart, CashFlowChart, BacklogChart } from './charts'
 import { LocationStripMap } from './location-strip-map'
 
@@ -79,6 +86,57 @@ export function DashboardModule() {
     }
   )
 
+  // Procurement + Q&S data — same synced stores the Procurement / Q&S modules
+  // read from. Used to derive the urgent-actions queue (pending POs, GRNs on
+  // hold, open NCRs past their due date) so the dashboard never shows a
+  // stale fabricated list.
+  const [poRows] = useSyncedState<Po[]>(
+    'omnisite-procurement-pos',
+    'purchase_orders',
+    () => structuredClone(INITIAL_POS) as typeof INITIAL_POS,
+    {
+      fieldMap: {
+        hasGrn: 'has_grn',
+        reqId: 'req_id',
+        materialCode: 'material_code',
+        poQty: 'po_qty',
+      },
+      primaryKey: 'id',
+    }
+  )
+  const [grnRows] = useSyncedState<Grn[]>(
+    'omnisite-procurement-grns',
+    'grns',
+    () => structuredClone(INITIAL_GRNS) as typeof INITIAL_GRNS,
+    {
+      fieldMap: {
+        poId: 'po_id',
+        poQty: 'po_qty',
+        grnQty: 'grn_qty',
+        invoiceQty: 'invoice_qty',
+        payStatus: 'pay_status',
+        materialCode: 'material_code',
+      },
+      primaryKey: 'id',
+    }
+  )
+  const [qsRows] = useSyncedState<QsItem[]>(
+    'omnisite-qs-items',
+    'qs_items',
+    () => structuredClone(INITIAL_ITEMS) as typeof INITIAL_ITEMS,
+    {
+      fieldMap: {
+        linkedBoq: 'linked_boq',
+        dueDate: 'due_date',
+        billingHold: 'billing_hold',
+        locationId: 'location_id',
+        capSubmittedDate: 'cap_submitted_date',
+        closedDate: 'closed_date',
+      },
+      primaryKey: 'id',
+    }
+  )
+
   // Live KPI aggregation. Memoized on the underlying arrays so unrelated
   // re-renders (e.g. the per-second clock tick) don't re-walk every row.
   const liveKpis = useMemo(() => {
@@ -110,6 +168,104 @@ export function DashboardModule() {
       totalActual,
     }
   }, [boqRows, taskRows, cbsRows])
+
+  // Urgent actions — derived from live PO / GRN / QS / task data instead of
+  // the previously-hardcoded list (PO-2410-018, DSR #087, NCR-034, etc.).
+  //
+  // Rules:
+  //   • Pending POs → "PO {id} awaiting delivery" (severity: high)
+  //   • Open NCRs past their dueDate → "NCR {id} open" (severity: critical)
+  //   • Tasks at 0% progress past their scheduled start week → "Task {id}
+  //     stalled" (severity: high)
+  //   • GRNs whose payment is on Hold → "GRN {id} payment on hold"
+  //     (severity: medium)
+  //
+  // The "current week" for stalled-task detection mirrors the scheduler's
+  // own `todayWeek` constant (scheduler/index.tsx) so the dashboard and
+  // the Gantt canvas agree on where "today" is.
+  const urgentActions = useMemo<UrgentAction[]>(() => {
+    const actions: UrgentAction[] = []
+
+    // Pending POs — awaiting delivery / GRN.
+    for (const p of poRows) {
+      if (p.status === 'Pending') {
+        actions.push({
+          type: 'PO Approval',
+          desc: `${p.id} awaiting delivery · ${p.vendor} · NPR ${p.value.toLocaleString()}`,
+          who: p.vendor,
+          due: 'Today',
+          severity: 'high',
+          module: 'procurement',
+        })
+      }
+    }
+
+    // Open NCRs whose dueDate has passed (or has no dueDate and is open).
+    // dueDate format on QsItem is "DD Mon YYYY" (e.g. "05 Aug 2026").
+    const nowMs = Date.now()
+    for (const q of qsRows) {
+      if (q.type === 'NCR' && q.status === 'Open') {
+        const dueMs = q.dueDate ? Date.parse(q.dueDate) : NaN
+        const overdue = !Number.isNaN(dueMs) && dueMs < nowMs
+        if (overdue) {
+          actions.push({
+            type: 'NCR Hold',
+            desc: `${q.id} open — overdue (due ${q.dueDate})`,
+            who: q.assignee || 'Engineer',
+            due: `Overdue`,
+            severity: 'critical',
+            module: 'qs',
+          })
+        } else if (!q.dueDate) {
+          // Open NCR with no due date — still urgent (no SLA).
+          actions.push({
+            type: 'NCR Hold',
+            desc: `${q.id} open — no due date set`,
+            who: q.assignee || 'Engineer',
+            due: 'Open',
+            severity: 'critical',
+            module: 'qs',
+          })
+        }
+      }
+    }
+
+    // Tasks at 0% progress past their scheduled start week. The scheduler
+    // hardcodes `todayWeek = 16` (see scheduler/index.tsx) — we mirror that
+    // here so "past start week" matches what the Gantt canvas shows as
+    // TODAY. A task with progress === 0 whose `start` is before this week
+    // is genuinely stalled (it should have begun).
+    const flatTasks = flattenTasks(taskRows)
+    const SCHEDULER_TODAY_WEEK = 16
+    for (const { task } of flatTasks) {
+      if (task.type === 'Work' && task.progress === 0 && task.start < SCHEDULER_TODAY_WEEK) {
+        actions.push({
+          type: 'Task Stalled',
+          desc: `${task.id} · ${task.name} — 0% progress past start (wk ${task.start + 1})`,
+          who: 'PM',
+          due: `Start wk ${task.start + 1}`,
+          severity: 'high',
+          module: 'scheduler',
+        })
+      }
+    }
+
+    // GRNs on Hold — payment blocked.
+    for (const g of grnRows) {
+      if (g.payStatus === 'Hold' || g.payStatus === 'Partial Hold') {
+        actions.push({
+          type: 'GRN Hold',
+          desc: `${g.id} payment on hold · ${g.vendor}`,
+          who: g.vendor,
+          due: 'Review',
+          severity: 'medium',
+          module: 'procurement',
+        })
+      }
+    }
+
+    return actions
+  }, [poRows, qsRows, grnRows, taskRows])
 
   return (
     <div className="workspace-bg h-full overflow-y-auto">
@@ -209,7 +365,7 @@ export function DashboardModule() {
           <MiniGanttChart />
 
           {/* Urgent actions */}
-          <UrgentActionsQueue onNavigate={navigateToModule} />
+          <UrgentActionsQueue onNavigate={navigateToModule} urgentActions={urgentActions} />
 
           {/* S-Curve */}
           <SCurveChart />

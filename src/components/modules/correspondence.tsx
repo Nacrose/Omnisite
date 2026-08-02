@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useSyncedState } from '@/lib/use-synced-state'
 
 interface Letter {
   id: string
@@ -31,13 +32,15 @@ interface Letter {
   replyBy?: string
   replyTo?: string
   hasVariation?: boolean
+  /** Optional body text — persisted to the `letters.body` column. */
+  body?: string
 }
 
-// Fixed "today" reference to avoid hydration mismatch from new Date() during render.
-// In production this would come from the server context.
-const TODAY = new Date('2026-07-30T10:00:00')
+// Real current date — captured once at module load so overdue calculations
+// reflect the user's actual clock instead of a hardcoded demo date.
+const TODAY = new Date()
 
-const LETTERS: Letter[] = [
+const INITIAL_LETTERS: Letter[] = [
   {
     id: 'L-001',
     number: 'CL/DOR/2026-087',
@@ -104,7 +107,19 @@ export function CorrespondenceModule() {
   const [filter, setFilter] = useState<Filter>('All')
   const [selectedId, setSelectedId] = useState('L-001')
   const [searchQuery, setSearchQuery] = useState('')
-  const filteredByType = filter === 'All' ? LETTERS : LETTERS.filter((l) => l.type === filter)
+  // Letters are synced via useSyncedState so they persist to localStorage
+  // (and Supabase `letters` table when configured) and can be edited.
+  const [letters] = useSyncedState<Letter[]>('omnisite-letters', 'letters', () => INITIAL_LETTERS, {
+    fieldMap: {
+      from: 'from_party',
+      to: 'to_party',
+      replyBy: 'reply_by',
+      replyTo: 'reply_to',
+      hasVariation: 'has_variation',
+    },
+    primaryKey: 'id',
+  })
+  const filteredByType = filter === 'All' ? letters : letters.filter((l) => l.type === filter)
   const filtered = searchQuery.trim()
     ? filteredByType.filter(
         (l) =>
@@ -130,7 +145,7 @@ export function CorrespondenceModule() {
           <PaneBody className="py-2">
             {(['All', 'Incoming', 'Outgoing', 'Site Instruction'] as const).map((f) => {
               const count =
-                f === 'All' ? LETTERS.length : LETTERS.filter((l) => l.type === f).length
+                f === 'All' ? letters.length : letters.filter((l) => l.type === f).length
               return (
                 <button
                   key={f}
@@ -316,16 +331,9 @@ export function CorrespondenceModule() {
                   Letter body (preview)
                 </div>
                 <div className="bg-secondary/20 text-muted-foreground max-h-40 overflow-y-auto rounded-md border border-[var(--pane-divider)] p-3 text-[11px] leading-relaxed">
-                  Dear Sir/Madam,{'\n\n'}
-                  With reference to the above-mentioned subject, we would like to inform you that
-                  the PCC mix design (M15 grade) for the foundation works at chainage 4+200 to 4+500
-                  has been finalized as per DoR Norms 2075. The mix proportions are 1:2:4 with
-                  water-cement ratio of 0.50. Trial mix results are attached for your review and
-                  approval.{'\n\n'}
-                  Requesting your kind approval at the earliest to enable commencement of works
-                  scheduled for 02 Aug 2026.{'\n\n'}
-                  Thank you,{'\n'}
-                  Project Manager
+                  {selected.body && selected.body.trim().length > 0
+                    ? selected.body
+                    : 'No body text recorded for this letter.'}
                 </div>
               </div>
 

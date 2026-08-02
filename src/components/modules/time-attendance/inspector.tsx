@@ -188,19 +188,9 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
             <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
               Payroll Summary (this month)
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-secondary/40 rounded-md p-2">
-                <div className="text-muted-foreground text-[10px]">Days</div>
-                <div className="text-sm font-bold">22</div>
-              </div>
-              <div className="bg-secondary/40 rounded-md p-2">
-                <div className="text-muted-foreground text-[10px]">Hours</div>
-                <div className="text-sm font-bold">176</div>
-              </div>
-              <div className="bg-secondary/40 rounded-md p-2">
-                <div className="text-muted-foreground text-[10px]">Earned</div>
-                <div className="text-sm font-bold">NPR 26.4K</div>
-              </div>
+            <div className="bg-secondary/20 text-muted-foreground rounded-md border border-[var(--pane-divider)] p-3 text-[11px] leading-relaxed">
+              Payroll summary requires daily attendance history — not yet implemented. Use the
+              Payroll Export button for a CSV snapshot.
             </div>
           </div>
         </div>

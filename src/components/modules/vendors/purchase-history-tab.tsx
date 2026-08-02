@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CheckCircle2, AlertTriangle, FileText, Package, Clock, Wallet, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useSyncedState } from '@/lib/use-synced-state'
 import { INITIAL_POS, INITIAL_GRNS } from '@/data/seed/procurement'
 import type { Po, Grn } from '@/components/modules/procurement/types'
 
@@ -15,10 +16,9 @@ import type { Po, Grn } from '@/components/modules/procurement/types'
 //
 // Data source
 // -----------
-// Today this reads from INITIAL_POS / INITIAL_GRNS seed arrays. The plan is to
-// swap these for a Supabase query (`pos where vendor ilike %name%`) once the
-// procurement store is wired to the API; the component's filter / summary
-// logic stays the same.
+// Reads POs/GRNs from the shared useSyncedState stores so the same rows the
+// Procurement module writes are reflected here in real time (Supabase when
+// configured, localStorage fallback otherwise).
 //
 // Vendor-name matching
 // --------------------
@@ -82,14 +82,42 @@ export function PurchaseHistoryTab({ vendorName }: PurchaseHistoryTabProps) {
   const [poFilter, setPoFilter] = useState<PoFilter>('all')
   const [grnFilter, setGrnFilter] = useState<GrnFilter>('all')
 
-  // Filter the seed PO/GRN data by this vendor's name.
+  // Read from the SAME synced stores the Procurement module writes to, so this
+  // tab reflects live PO/GRN data instead of stale seed arrays.
+  const [pos] = useSyncedState<Po[]>(
+    'omnisite-procurement-pos',
+    'purchase_orders',
+    () => INITIAL_POS,
+    {
+      fieldMap: {
+        hasGrn: 'has_grn',
+        reqId: 'req_id',
+        materialCode: 'material_code',
+        poQty: 'po_qty',
+      },
+      primaryKey: 'id',
+    }
+  )
+  const [grns] = useSyncedState<Grn[]>('omnisite-procurement-grns', 'grns', () => INITIAL_GRNS, {
+    fieldMap: {
+      poId: 'po_id',
+      poQty: 'po_qty',
+      grnQty: 'grn_qty',
+      invoiceQty: 'invoice_qty',
+      payStatus: 'pay_status',
+      materialCode: 'material_code',
+    },
+    primaryKey: 'id',
+  })
+
+  // Filter the live PO/GRN data by this vendor's name.
   const vendorPos = useMemo(
-    () => INITIAL_POS.filter((p) => vendorMatches(p.vendor, vendorName)),
-    [vendorName]
+    () => pos.filter((p) => vendorMatches(p.vendor, vendorName)),
+    [pos, vendorName]
   )
   const vendorGrns = useMemo(
-    () => INITIAL_GRNS.filter((g) => vendorMatches(g.vendor, vendorName)),
-    [vendorName]
+    () => grns.filter((g) => vendorMatches(g.vendor, vendorName)),
+    [grns, vendorName]
   )
 
   // Summary cards
@@ -250,8 +278,8 @@ export function PurchaseHistoryTab({ vendorName }: PurchaseHistoryTabProps) {
         </div>
         <div className="text-muted-foreground mt-2 flex items-center gap-1.5 text-[10px]">
           <Clock className="h-3 w-3" />
-          GRN data is read from seed INITIAL_POS / INITIAL_GRNS — will switch to live API data once
-          the procurement store is wired.
+          PO and GRN data is read from the shared procurement store (useSyncedState) — reflects live
+          data when Supabase is configured.
         </div>
       </section>
     </div>

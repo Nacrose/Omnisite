@@ -14,7 +14,6 @@ import {
   FolderOpen,
   Zap,
   Edit3,
-  AlertTriangle,
   CheckCircle2,
   TrendingUp,
   History,
@@ -460,42 +459,26 @@ export function RaInspector({ item }: { item: BoqItem }) {
             <div className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
               Traceability Matrix
             </div>
-            <TraceRow
-              icon={<Link2 className="h-3.5 w-3.5" />}
-              label="Schedule Task"
-              value="T-104 · Foundation PCC"
-              status="linked"
-            />
-            <TraceRow
-              icon={<Link2 className="h-3.5 w-3.5" />}
-              label="Purchase Order"
-              value="PO-2410-018 · Cement 1,200 bags"
-              status="linked"
-            />
-            <TraceRow
-              icon={<Link2 className="h-3.5 w-3.5" />}
-              label="DSR Actual Qty"
-              value="142.5 / 145 cum (98.3%)"
-              status="progress"
-            />
-            <TraceRow
-              icon={<Link2 className="h-3.5 w-3.5" />}
-              label="GRN Receipts"
-              value="4 GRNs · NPR 1,384,500"
-              status="linked"
-            />
-            <TraceRow
-              icon={<Link2 className="h-3.5 w-3.5" />}
-              label="Running Account"
-              value="RA Bill #4 · claimed 142.5 cum"
-              status="linked"
-            />
-            <TraceRow
-              icon={<AlertTriangle className="h-3.5 w-3.5" />}
-              label="NCR Holds"
-              value="NCR-034 · 0 billable"
-              status="blocked"
-            />
+            {/* Honest placeholder — the real traceability rows (schedule task,
+                PO, DSR actual qty, GRN receipts, RA bill, NCR holds) are not
+                wired into the inspector yet. They require cross-module links
+                from this BOQ item to specific DSR entries, POs, GRNs, and RA
+                Bills, which the data model doesn't expose per-item today.
+
+                Showing fabricated task IDs / PO numbers / quantities here
+                would mislead users into thinking the inspector has live
+                traceability data when it doesn't. The grid context menu's
+                "View audit log" already opens the real audit trail via the
+                AuditLogViewer; this tab will be populated once the BOQ ↔
+                DSR/PO/GRN/RA foreign keys are linked per item. */}
+            <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-8 text-center">
+              <Link2 className="text-muted-foreground h-6 w-6 opacity-50" />
+              <div className="text-xs font-medium">No traceability data linked yet</div>
+              <p className="text-muted-foreground max-w-sm text-[11px] leading-relaxed">
+                Traceability data will appear here when DSR entries, POs, GRNs, and RA Bills are
+                linked to this BOQ item.
+              </p>
+            </div>
           </TabsContent>
 
           <TabsContent value="audit" className="mt-0 space-y-3 px-4 py-3">
@@ -503,18 +486,22 @@ export function RaInspector({ item }: { item: BoqItem }) {
               <History className="h-3.5 w-3.5" />
               Audit Log
             </div>
-            <AuditRow
-              who="Engr."
-              action="Updated cement rate from NPR 895 → NPR 920"
-              when="2 hrs ago"
-            />
-            <AuditRow
-              who="Bikash R."
-              action="Adjusted mazdoor coefficient 1.6 → 1.4"
-              when="Yesterday 16:42"
-            />
-            <AuditRow who="System" action="Preset loaded: PCC-M15-Standard" when="3 days ago" />
-            <AuditRow who="Engr." action="Created RA from blank template" when="1 week ago" />
+            {/* The AuditLogViewer component (used by the BOQ grid context
+                menu) opens as a modal that fetches real audit entries from
+                /api/audit-log. Embedding it inline here would require
+                restructuring it into a non-modal variant — out of scope for
+                this fix. Instead, point users to the existing affordance so
+                they get the real, server-backed audit trail rather than the
+                previously-hardcoded fake entries
+                ("Engr. Updated cement rate 895→920", etc.). */}
+            <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-8 text-center">
+              <History className="text-muted-foreground h-6 w-6 opacity-50" />
+              <div className="text-xs font-medium">Audit log opens from the grid</div>
+              <p className="text-muted-foreground max-w-sm text-[11px] leading-relaxed">
+                Right-click the BOQ item in the grid → &lsquo;View audit log&rsquo; to see the full
+                audit trail.
+              </p>
+            </div>
           </TabsContent>
         </Tabs>
 
@@ -640,50 +627,6 @@ function Row({
     <div className="flex justify-between">
       <span className={cn(muted && 'text-muted-foreground', bold && 'font-semibold')}>{label}</span>
       <span className={cn('font-mono', bold && 'font-semibold')}>{value}</span>
-    </div>
-  )
-}
-
-function TraceRow({
-  icon,
-  label,
-  value,
-  status,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  status: 'linked' | 'progress' | 'blocked'
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2 text-xs">
-      <span className="text-muted-foreground">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <div className="text-muted-foreground">{label}</div>
-        <div className="truncate">{value}</div>
-      </div>
-      {status === 'linked' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
-      {status === 'progress' && (
-        <div className="h-3.5 w-3.5 rounded-full border-2 border-amber-500 border-t-transparent" />
-      )}
-      {status === 'blocked' && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
-    </div>
-  )
-}
-
-function AuditRow({ who, action, when }: { who: string; action: string; when: string }) {
-  return (
-    <div className="flex gap-2.5 text-xs">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-[10px] font-semibold text-white">
-        {who.charAt(0)}
-      </div>
-      <div className="flex-1">
-        <div>
-          <span className="font-medium">{who}</span>{' '}
-          <span className="text-muted-foreground">{action}</span>
-        </div>
-        <div className="text-muted-foreground text-[10px]">{when}</div>
-      </div>
     </div>
   )
 }

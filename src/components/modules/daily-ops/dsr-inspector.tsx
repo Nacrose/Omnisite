@@ -36,9 +36,17 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
   // Theoretical cement consumption = 4.5 bags per cum of concrete.
   // Only computed when this is a concrete activity (see isConcreteActivity).
   const theoretical = isConcreteActivity ? entry.actual * 4.5 : 0
-  const issued = 132
-  const variance = theoretical > 0 ? ((issued - theoretical) / theoretical) * 100 : 0
-  const overVariance = isConcreteActivity && Math.abs(variance) > 5
+  // Issued cement quantity is NOT available on the DsrEntry type — there's
+  // no `materialIssues` field and no structured link from this entry to the
+  // Material Issue Notes (MINs) that procurement records. The previously
+  // hardcoded `const issued = 132` was fabricated and produced a fake
+  // variance % that misled users into thinking cement consumption was
+  // tracked per DSR entry. We honestly pass `null` and let the MaterialRow
+  // show "—" with a "not available" note.
+  const issued: number | null = null
+  const variance =
+    theoretical > 0 && issued !== null ? ((issued - theoretical) / theoretical) * 100 : 0
+  const overVariance = isConcreteActivity && issued !== null && Math.abs(variance) > 5
   // RFI draft modal state
   const [rfiModalOpen, setRfiModalOpen] = useState(false)
   const [rfiDraft, setRfiDraft] = useState({
@@ -261,13 +269,24 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
                   {(entry.actual - entry.planned).toFixed(1)} {entry.uom}
                 </span>
               </div>
+              {/* Cumulative-for-task and locked % done previously showed
+                  fabricated "87 / 145 cum (60%)" / "60% (locked)". We don't
+                  have cumulative task quantities wired into the DSR entry —
+                  that requires summing all DSR entries against the same
+                  scheduler task and comparing to the task's BOQ-allocated
+                  qty, which isn't linked per-entry yet. Show "—" instead
+                  of a fabricated number. */}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Cumulative for task</span>
-                <span className="font-mono">87 / 145 cum (60%)</span>
+                <span className="font-mono">—</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Task % done (locked)</span>
-                <span className="font-mono font-semibold">60%</span>
+                <span className="font-mono font-semibold">—</span>
+              </div>
+              <div className="text-muted-foreground mt-1 text-[10px] italic">
+                Cumulative task consumption requires a linked scheduler task &amp; BOQ allocation —
+                not configured for this entry.
               </div>
             </div>
             <Separator />
@@ -304,6 +323,12 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
                 <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
                   Theoretical vs Issued
                 </div>
+                {/* Issued (MIN) quantities for sand/aggregate are also not
+                    wired into the DSR entry — the previous hardcoded
+                    `issued={12.8}` (sand) and `issued={25.4}` (aggregate)
+                    were fabricated to match the seed MIN-0042 free-text
+                    "12.8 cum sand". We pass `null` so MaterialRow shows
+                    "—" instead of fake numbers. */}
                 <div className="space-y-2">
                   <MaterialRow
                     mat="Cement OPC 53 (Bag)"
@@ -314,16 +339,27 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
                   <MaterialRow
                     mat="River Sand (cum)"
                     theoretical={entry.actual * 0.45}
-                    issued={12.8}
+                    issued={null}
                     uom="cum"
                   />
                   <MaterialRow
                     mat="Coarse Agg. 20mm (cum)"
                     theoretical={entry.actual * 0.9}
-                    issued={25.4}
+                    issued={null}
                     uom="cum"
                   />
                 </div>
+                {/* Material consumption data is not available for this entry.
+                    When issued is null on every row, surface a single
+                    honest note instead of (or in addition to) the
+                    per-row "—" placeholders. */}
+                {issued === null && (
+                  <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-2.5 text-[11px]">
+                    Material consumption data not available for this entry. Issue materials via the
+                    Procurement → Material Issues (MIN) tab and link them to this DSR entry to
+                    populate the reconciliation.
+                  </div>
+                )}
                 {overVariance && (
                   <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[11px]">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-red-500" />
@@ -610,13 +646,20 @@ function MaterialRow({
 }: {
   mat: string
   theoretical: number
-  issued: number
+  /** Issued (MIN) quantity, or null when no material-issue data is linked
+   *  to this DSR entry. We show "—" instead of a fabricated number. */
+  issued: number | null
   uom: string
 }) {
   // Guard divide-by-zero: when theoretical is 0 (e.g. a planned-but-not-
   // started task with actual=0), variance would be Infinity/NaN.
-  const variance = theoretical > 0 ? ((issued - theoretical) / theoretical) * 100 : 0
-  const over = Math.abs(variance) > 5
+  // When issued is null (no MIN data linked), we can't compute variance.
+  const variance =
+    theoretical > 0 && issued !== null ? ((issued - theoretical) / theoretical) * 100 : 0
+  const over = issued !== null && Math.abs(variance) > 5
+  const issuedDisplay = issued === null ? '—' : `${issued.toFixed(2)} ${uom}`
+  const varianceDisplay =
+    issued === null ? '—' : `${variance >= 0 ? '+' : ''}${variance.toFixed(1)}%`
   return (
     <div
       className={cn(
@@ -628,6 +671,8 @@ function MaterialRow({
         <span className="font-medium">{mat}</span>
         {over ? (
           <AlertTriangle className="h-3 w-3 text-red-500" />
+        ) : issued === null ? (
+          <span className="text-muted-foreground text-[9px]">no MIN data</span>
         ) : (
           <CheckCircle2 className="h-3 w-3 text-emerald-500" />
         )}
@@ -641,15 +686,12 @@ function MaterialRow({
         </div>
         <div>
           <div className="text-muted-foreground">Issued (MIN)</div>
-          <div className="font-mono font-medium">
-            {issued.toFixed(2)} {uom}
-          </div>
+          <div className="font-mono font-medium">{issuedDisplay}</div>
         </div>
         <div>
           <div className="text-muted-foreground">Variance</div>
           <div className={cn('font-mono font-medium', over && 'text-red-500')}>
-            {variance >= 0 ? '+' : ''}
-            {variance.toFixed(1)}%
+            {varianceDisplay}
           </div>
         </div>
       </div>

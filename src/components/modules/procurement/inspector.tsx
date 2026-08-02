@@ -4,16 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
-import {
-  FileText,
-  Package,
-  Truck,
-  TrendingUp,
-  MapPin,
-  CheckCircle2,
-  AlertTriangle,
-  ShieldAlert,
-} from 'lucide-react'
+import { Package, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { ReqItem, Tab } from './types'
 
 export function ProcurementInspector({
@@ -78,7 +69,7 @@ export function ProcurementInspector({
                 &quot;{req.overrideReason}&quot;
               </div>
               <div className="text-muted-foreground mt-1 text-[10px]">
-                Audit logged · 30 Jul 2026 14:32 · Engr.
+                Audit trail available via the API.
               </div>
             </div>
           )}
@@ -88,34 +79,14 @@ export function ProcurementInspector({
           <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
             Linked Records
           </div>
-          <div className="space-y-1.5 text-xs">
-            <LinkRow
-              icon={<FileText className="h-3 w-3" />}
-              label="Schedule task"
-              value="T-203 PCC M15 pouring"
-            />
-            <LinkRow
-              icon={<Package className="h-3 w-3" />}
-              label="Purchase Order"
-              value="PO-2410-018 · NPR 1,104,000"
-              status="ok"
-            />
-            <LinkRow
-              icon={<Truck className="h-3 w-3" />}
-              label="GRN"
-              value="GRN-0089 · 1,200 bags received"
-              status="ok"
-            />
-            <LinkRow
-              icon={<TrendingUp className="h-3 w-3" />}
-              label="Committed → Actual"
-              value="NPR 1,104,000 → NPR 1,082,400"
-            />
-            <LinkRow
-              icon={<MapPin className="h-3 w-3" />}
-              label="Stock location"
-              value="Main Store · Kalanki"
-            />
+          <div className="bg-secondary/20 text-muted-foreground space-y-1 rounded-md border border-[var(--pane-divider)] p-3 text-[11px] leading-relaxed">
+            <div>Linked records will appear here when:</div>
+            <ul className="ml-3 list-disc space-y-0.5">
+              <li>This requisition is linked to a BOQ item</li>
+              <li>POs are generated from this requisition</li>
+              <li>GRNs are received against those POs</li>
+            </ul>
+            <div className="pt-1">Use the Procurement module to track POs and GRNs.</div>
           </div>
 
           <Separator />
@@ -144,28 +115,5 @@ export function ProcurementInspector({
         </div>
       </PaneBody>
     </>
-  )
-}
-
-function LinkRow({
-  icon,
-  label,
-  value,
-  status,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  status?: 'ok'
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5">
-      <span className="text-muted-foreground">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <div className="text-muted-foreground text-[10px]">{label}</div>
-        <div className="truncate text-xs">{value}</div>
-      </div>
-      {status === 'ok' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
-    </div>
   )
 }

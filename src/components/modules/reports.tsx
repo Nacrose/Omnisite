@@ -535,53 +535,21 @@ function SCurveWidget() {
       <div className="mb-2 text-[10px] font-semibold text-slate-700">
         S-Curve · Planned vs Earned
       </div>
-      <div className="flex h-24 items-end gap-1">
-        {Array.from({ length: 12 }).map((_, i) => {
-          const planned = 5 + i * 5
-          const earned = Math.max(0, planned - 3)
-          return (
-            <div key={i} className="flex flex-1 flex-col gap-0.5">
-              <div className="rounded-t bg-slate-300" style={{ height: `${planned * 1.0}px` }} />
-              <div className="rounded-b bg-blue-600" style={{ height: `${earned * 1.0}px` }} />
-            </div>
-          )
-        })}
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-500">
+        S-Curve data requires baseline schedule — configure in Scheduler module.
       </div>
     </div>
   )
 }
 
 function BoqTableWidget() {
-  const rows = [
-    ['1.1.1', 'Excavation in ordinary soil', '1,240', '1,240', '100'],
-    ['1.1.3', 'PCC M15 below footing', '145', '87', '60'],
-    ['2.1.1', 'Excavation for road formation', '18,500', '14,200', '77'],
-  ]
   return (
     <div>
       <div className="mb-2 text-[10px] font-semibold text-slate-700">BOQ Progress Summary</div>
-      <table className="w-full text-[10px] text-slate-700">
-        <thead className="bg-slate-50">
-          <tr>
-            <th className="p-1 text-left">Code</th>
-            <th className="p-1 text-left">Description</th>
-            <th className="p-1 text-right">Planned</th>
-            <th className="p-1 text-right">Actual</th>
-            <th className="p-1 text-right">%</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r[0]} className="border-t border-slate-100">
-              <td className="p-1 font-mono">{r[0]}</td>
-              <td className="p-1">{r[1]}</td>
-              <td className="p-1 text-right">{r[2]}</td>
-              <td className="p-1 text-right">{r[3]}</td>
-              <td className="p-1 text-right font-medium">{r[4]}%</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-500">
+        BOQ data binding coming soon — drag this widget onto the canvas and configure the data
+        source.
+      </div>
     </div>
   )
 }
@@ -608,14 +576,8 @@ function WeatherWidget() {
   return (
     <div>
       <div className="mb-2 text-[10px] font-semibold text-slate-700">Weather Log</div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[9px]">
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
-          <div key={i} className="rounded bg-slate-50 p-1">
-            <div className="font-medium">{d}</div>
-            <div className="text-slate-500">{24 + i}°</div>
-            <div className="text-slate-400">{i < 5 ? '☀' : '☂'}</div>
-          </div>
-        ))}
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-500">
+        Weather data not configured.
       </div>
     </div>
   )
