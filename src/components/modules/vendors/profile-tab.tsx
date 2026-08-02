@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,14 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import type {
-  Vendor,
-  VendorCategory,
-  VendorStatus,
-  ComplianceDoc,
-  VendorBankDetails,
-  VendorPaymentTerms,
-} from '@/lib/types/vendor'
+import type { Vendor, VendorCategory, VendorStatus, ComplianceDoc } from '@/lib/types/vendor'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -126,33 +118,7 @@ interface ProfileTabProps {
 }
 
 export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
-  // Local copies of nested objects so individual field edits don't blow away
-  // sibling fields when the parent hasn't propagated the patch yet. We patch
-  // the parent on every change, but read from the local state for the input
-  // value so typing feels responsive even if the parent's write is debounced.
-  const [bank, setBank] = useState<VendorBankDetails>(vendor.bank ?? {})
-  const [terms, setTerms] = useState<VendorPaymentTerms>(
-    vendor.paymentTerms ?? {
-      creditDays: 0,
-      advancePct: 0,
-      retentionPct: 0,
-      tdsRate: 0,
-    }
-  )
-
   const patch = (p: Partial<Vendor>) => onChange({ ...vendor, ...p })
-
-  const patchBank = (p: Partial<VendorBankDetails>) => {
-    const next = { ...bank, ...p }
-    setBank(next)
-    patch({ bank: next })
-  }
-
-  const patchTerms = (p: Partial<VendorPaymentTerms>) => {
-    const next = { ...terms, ...p }
-    setTerms(next)
-    patch({ paymentTerms: next })
-  }
 
   const patchDoc = (idx: number, p: Partial<ComplianceDoc>) => {
     const docs = vendor.docs ? vendor.docs.slice() : []
@@ -316,15 +282,15 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
             <FieldRow label="Account name">
               <Input
                 className="h-8 text-xs"
-                value={bank.accountName ?? ''}
-                onChange={(e) => patchBank({ accountName: e.target.value || undefined })}
+                value={vendor.bankAccountName ?? ''}
+                onChange={(e) => patch({ bankAccountName: e.target.value || undefined })}
               />
             </FieldRow>
             <FieldRow label="Account no.">
               <Input
                 className="h-8 font-mono text-xs"
-                value={bank.accountNo ?? ''}
-                onChange={(e) => patchBank({ accountNo: e.target.value || undefined })}
+                value={vendor.bankAccountNo ?? ''}
+                onChange={(e) => patch({ bankAccountNo: e.target.value || undefined })}
               />
             </FieldRow>
           </div>
@@ -332,22 +298,22 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
             <FieldRow label="Bank name">
               <Input
                 className="h-8 text-xs"
-                value={bank.bankName ?? ''}
-                onChange={(e) => patchBank({ bankName: e.target.value || undefined })}
+                value={vendor.bankName ?? ''}
+                onChange={(e) => patch({ bankName: e.target.value || undefined })}
               />
             </FieldRow>
             <FieldRow label="Branch">
               <Input
                 className="h-8 text-xs"
-                value={bank.branch ?? ''}
-                onChange={(e) => patchBank({ branch: e.target.value || undefined })}
+                value={vendor.bankBranch ?? ''}
+                onChange={(e) => patch({ bankBranch: e.target.value || undefined })}
               />
             </FieldRow>
             <FieldRow label="IFSC / SWIFT">
               <Input
                 className="h-8 font-mono text-xs"
-                value={bank.ifsc ?? ''}
-                onChange={(e) => patchBank({ ifsc: e.target.value || undefined })}
+                value={vendor.bankIfsc ?? ''}
+                onChange={(e) => patch({ bankIfsc: e.target.value || undefined })}
               />
             </FieldRow>
           </div>
@@ -366,8 +332,8 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                 type="number"
                 min={0}
                 className="h-8 font-mono text-xs"
-                value={terms.creditDays}
-                onChange={(e) => patchTerms({ creditDays: Number(e.target.value) || 0 })}
+                value={vendor.creditDays ?? 0}
+                onChange={(e) => patch({ creditDays: Number(e.target.value) || 0 })}
               />
             </FieldRow>
             <FieldRow label="Advance %">
@@ -377,8 +343,8 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                 max={100}
                 step={0.5}
                 className="h-8 font-mono text-xs"
-                value={terms.advancePct}
-                onChange={(e) => patchTerms({ advancePct: Number(e.target.value) || 0 })}
+                value={vendor.advancePct ?? 0}
+                onChange={(e) => patch({ advancePct: Number(e.target.value) || 0 })}
               />
             </FieldRow>
             <FieldRow label="Retention %">
@@ -388,8 +354,8 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                 max={100}
                 step={0.5}
                 className="h-8 font-mono text-xs"
-                value={terms.retentionPct}
-                onChange={(e) => patchTerms({ retentionPct: Number(e.target.value) || 0 })}
+                value={vendor.retentionPct ?? 0}
+                onChange={(e) => patch({ retentionPct: Number(e.target.value) || 0 })}
               />
             </FieldRow>
           </div>
@@ -398,8 +364,8 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
               <Input
                 className="h-8 font-mono text-xs"
                 placeholder="e.g. 194C"
-                value={terms.tdsSection ?? ''}
-                onChange={(e) => patchTerms({ tdsSection: e.target.value || undefined })}
+                value={vendor.tdsSection ?? ''}
+                onChange={(e) => patch({ tdsSection: e.target.value || undefined })}
               />
             </FieldRow>
             <FieldRow label="TDS rate %">
@@ -409,8 +375,8 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                 max={100}
                 step={0.05}
                 className="h-8 font-mono text-xs"
-                value={terms.tdsRate}
-                onChange={(e) => patchTerms({ tdsRate: Number(e.target.value) || 0 })}
+                value={vendor.tdsRate ?? 0}
+                onChange={(e) => patch({ tdsRate: Number(e.target.value) || 0 })}
               />
             </FieldRow>
           </div>

@@ -46,9 +46,8 @@ const CATEGORY_FILTERS: { id: CategoryFilter; label: string }[] = [
 // The existing Sub-BOQ / Material / Consumables / Bill / Schedule / Performance
 // tabs all take the legacy `Subcontractor` shape (items, materialIssues, etc.).
 // The unified `Vendor` record carries the same data under slightly different
-// field names (workItems vs items, paymentTerms.advancePct vs advancePct). This
-// helper bridges the two so we don't have to rewrite every tab just to support
-// the unified record.
+// field names (workItems vs items). This helper bridges the two so we don't
+// have to rewrite every tab just to support the unified record.
 //
 // Insurance / labour-licence expiries live on `docs` in the Vendor record but
 // on direct fields in the Subcontractor shape — we extract them by doc type.
@@ -63,8 +62,8 @@ function vendorToSc(v: Vendor): Subcontractor {
     scope: v.scope ?? '',
     agreementValue: v.agreementValue ?? 0,
     advancePaid: v.advancePaid ?? 0,
-    advancePct: v.paymentTerms?.advancePct ?? 0,
-    retentionPct: v.paymentTerms?.retentionPct ?? 0,
+    advancePct: v.advancePct ?? 0,
+    retentionPct: v.retentionPct ?? 0,
     reworkCost: v.reworkCost ?? 0,
     status: v.status === 'active' ? 'active' : 'closed',
     pan: v.pan ?? '',

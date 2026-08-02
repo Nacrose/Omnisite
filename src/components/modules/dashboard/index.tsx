@@ -32,6 +32,7 @@ import {
 import { KpiStrip } from './kpi-strip'
 import { UrgentActionsQueue } from './urgent-actions'
 import { MiniGanttChart, SCurveChart, CashFlowChart, BacklogChart } from './charts'
+import { LocationStripMap } from './location-strip-map'
 
 export function DashboardModule() {
   const router = useRouter()
@@ -183,6 +184,13 @@ export function DashboardModule() {
 
         {/* KPI strip */}
         <KpiStrip onNavigate={navigateToModule} />
+
+        {/* Location Activity Map — horizontal strip of all active work
+            locations with per-station counts of tasks, open NCRs, and DSR
+            entries today. Placed between the KPI strip and the main masonry
+            so the PM sees "where work is happening" before drilling into
+            the chart cards. */}
+        <LocationStripMap />
 
         {/* Main masonry */}
         <div className="grid grid-cols-12 gap-5">

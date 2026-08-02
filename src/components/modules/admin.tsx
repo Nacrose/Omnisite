@@ -5,35 +5,23 @@ import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pa
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Plus,
-  Search,
-  Users,
-  Package,
-  FileText,
-  Zap,
-  Settings as SettingsIcon,
-  MapPin,
-} from 'lucide-react'
+import { Plus, Search, Users, Package, Zap, Settings as SettingsIcon, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import {
   MATERIALS,
-  VENDORS,
   ROLES,
   INITIAL_LOCATIONS,
   INITIAL_VENDORS,
   type Cat,
   type Material,
-  type Vendor,
   type Role,
   type ProjectLocation,
 } from './admin/types'
 import { UsersView, UsersInspector } from './admin/users-tab'
 import { MaterialsView, MaterialInspector } from './admin/materials-tab'
-import { VendorsView, VendorInspector } from './admin/vendors-tab'
 import { RatesView, RateInspector } from './admin/rates-tab'
 import { PresetsView, PresetInspector } from './admin/presets-tab'
 import { LocationsView, LocationInspector } from './admin/locations-tab'
@@ -41,16 +29,15 @@ import { PRESETS } from '@/data/seed/admin'
 
 /**
  * AdminModule — thin shell that owns the active-tab state and routes
- * between the six subfile views (Users / Materials / Vendors / Rates /
- * Presets / Locations). Each tab's center-pane view + right-pane inspector
- * pair lives in its own file under './admin/'.
+ * between the five subfile views (Users / Materials / Rates / Presets /
+ * Locations). Each tab's center-pane view + right-pane inspector pair lives
+ * in its own file under './admin/'.
  */
 export function AdminModule() {
   const [cat, setCat] = useState<Cat>('users')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRole, setSelectedRole] = useState<Role>(ROLES[4])
   const [selectedMaterial, setSelectedMaterial] = useState<Material>(MATERIALS[0])
-  const [selectedVendor, setSelectedVendor] = useState<Vendor>(VENDORS[0])
 
   // Locations are a full CRUD surface, so we persist them to localStorage.
   // Synced via /api/project_locations when Supabase is configured; falls back
@@ -115,7 +102,6 @@ export function AdminModule() {
   const CATS: { id: Cat; name: string; icon: typeof Users; count: number }[] = [
     { id: 'users', name: 'User Management', icon: Users, count: totalUsers },
     { id: 'materials', name: 'Material Master', icon: Package, count: MATERIALS.length },
-    { id: 'vendors', name: 'Vendor Master', icon: FileText, count: VENDORS.length },
     { id: 'rates', name: '3-Tier Rate Library', icon: Zap, count: 3 },
     { id: 'presets', name: 'RA Preset Library', icon: SettingsIcon, count: PRESETS.length },
     { id: 'locations', name: 'Work Locations', icon: MapPin, count: locations.length },
@@ -162,13 +148,11 @@ export function AdminModule() {
                 ? 'User Management · PM-Centric'
                 : cat === 'materials'
                   ? 'Material Master · Two-tier'
-                  : cat === 'vendors'
-                    ? 'Vendor Master · AVL'
-                    : cat === 'rates'
-                      ? '3-Tier Rate Library'
-                      : cat === 'presets'
-                        ? 'RA Preset Library'
-                        : 'Work Locations · Project Areas'
+                  : cat === 'rates'
+                    ? '3-Tier Rate Library'
+                    : cat === 'presets'
+                      ? 'RA Preset Library'
+                      : 'Work Locations · Project Areas'
             }
           >
             <div className="relative w-40">
@@ -203,13 +187,6 @@ export function AdminModule() {
               searchQuery={searchQuery}
             />
           )}
-          {cat === 'vendors' && (
-            <VendorsView
-              selectedVendor={selectedVendor}
-              onSelectVendor={setSelectedVendor}
-              searchQuery={searchQuery}
-            />
-          )}
           {cat === 'rates' && <RatesView />}
           {cat === 'presets' && <PresetsView />}
           {cat === 'locations' &&
@@ -234,8 +211,6 @@ export function AdminModule() {
           <UsersInspector role={selectedRole} />
         ) : cat === 'materials' ? (
           <MaterialInspector material={selectedMaterial} />
-        ) : cat === 'vendors' ? (
-          <VendorInspector vendor={selectedVendor} />
         ) : cat === 'rates' ? (
           <RateInspector />
         ) : cat === 'presets' ? (

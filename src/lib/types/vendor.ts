@@ -114,11 +114,19 @@ export interface Vendor {
   email?: string
   address?: string
 
-  // Banking
-  bank?: VendorBankDetails
+  // Banking (flat fields — mirror the `vendors` DB columns 1-to-1)
+  bankAccountName?: string
+  bankAccountNo?: string
+  bankName?: string
+  bankBranch?: string
+  bankIfsc?: string
 
-  // Payment terms
-  paymentTerms?: VendorPaymentTerms
+  // Payment terms (flat fields — mirror the `vendors` DB columns 1-to-1)
+  creditDays?: number
+  advancePct?: number
+  retentionPct?: number
+  tdsSection?: string
+  tdsRate?: number
 
   // Compliance
   docs?: ComplianceDoc[]
