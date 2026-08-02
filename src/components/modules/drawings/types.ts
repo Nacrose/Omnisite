@@ -66,8 +66,6 @@ export interface Dwg {
   sourceFileUrl?: string
   /** File size in bytes (surfaced in the download card). */
   fileSize?: number
-  /** Optional project_locations FK (work-face tie). */
-  locationId?: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

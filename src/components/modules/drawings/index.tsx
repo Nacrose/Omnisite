@@ -160,6 +160,38 @@ export function DrawingsModule() {
     )
   }
 
+  // Guard against an empty drawings store (e.g. fresh install with no seed
+  // data, or all drawings deleted). Without this, `selected` is undefined
+  // and `<DrawingInspector key={selected.id} dwg={selected} />` below would
+  // crash dereferencing it. Placed AFTER all hooks have been called so we
+  // don't violate rules-of-hooks.
+  if (!selected) {
+    return (
+      <Workspace3Pane
+        leftPane={
+          <>
+            <PaneHeader title="Disciplines" />
+            <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+              No items to display
+            </PaneBody>
+          </>
+        }
+        centerPane={
+          <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+            No items to display
+          </PaneBody>
+        }
+        rightPane={
+          <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+            No items to display
+          </PaneBody>
+        }
+        leftPaneWidth="220px"
+        rightPaneWidth="480px"
+      />
+    )
+  }
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     // Always reset the input value so the same file can be picked again later.

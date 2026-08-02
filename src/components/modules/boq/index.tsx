@@ -274,6 +274,29 @@ export function BoqModule() {
     )
   }
 
+  // Guard against an empty BOQ store (e.g. fresh install with no seed data,
+  // or all items deleted). Without this, `selectedLeaf` is undefined (the
+  // `allFlat[2]` fallback returns undefined when allFlat is empty) and the
+  // rightPane below would crash on `selectedLeaf.type`. Placed AFTER all
+  // hooks have been called so we don't violate rules-of-hooks.
+  if (!selectedLeaf) {
+    return (
+      <Workspace3Pane
+        centerPane={
+          <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+            No items to display
+          </PaneBody>
+        }
+        rightPane={
+          <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+            No items to display
+          </PaneBody>
+        }
+        rightPaneWidth="380px"
+      />
+    )
+  }
+
   return (
     <>
       <Workspace3Pane

@@ -31,7 +31,9 @@ export interface Task {
   resources: string[]
   critical?: boolean
   constraints?: string
+  // No DB column — seed-only fields, not persisted in Supabase mode
   boqAllocated?: number
+  // No DB column — seed-only fields, not persisted in Supabase mode
   boqTotal?: number
   children?: Task[]
   /**

@@ -112,6 +112,43 @@ export function DailyOpsModule() {
     )
   }
 
+  // Guard against an empty DSR store (e.g. fresh install with no seed data,
+  // or all entries deleted). Without this, `selected` is undefined and
+  // `<DsrInspector entry={selected} … />` below would crash dereferencing
+  // `entry.id` / `entry.task`. Placed AFTER all hooks have been called so
+  // we don't violate rules-of-hooks.
+  if (!selected) {
+    return (
+      <div className="flex h-full w-full flex-col overflow-hidden">
+        {headerStrip}
+        <div className="min-h-0 flex-1">
+          <Workspace2Pane
+            leftPane={
+              <>
+                <PaneHeader title="Site Execution" />
+                <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+                  No items to display
+                </PaneBody>
+              </>
+            }
+            centerPane={
+              <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+                No items to display
+              </PaneBody>
+            }
+            rightPane={
+              <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+                No items to display
+              </PaneBody>
+            }
+            leftPaneWidth="280px"
+            rightPaneWidth="380px"
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       {headerStrip}

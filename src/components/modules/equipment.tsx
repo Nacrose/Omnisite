@@ -209,6 +209,33 @@ export function EquipmentModule() {
     )
   }
 
+  // Guard against an empty equipment list (e.g. fresh install with no seed
+  // data, or all equipment deleted). Without this, `selected` is undefined
+  // and `<EquipmentInspector equip={selected} />` below would crash
+  // dereferencing `equip.id` / `equip.type`. Placed AFTER all hooks have
+  // been called so we don't violate rules-of-hooks.
+  if (!selected) {
+    return (
+      <Workspace2Pane
+        leftPane={
+          <>
+            <PaneHeader title="Fleet Categories" />
+            <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+              No items to display
+            </PaneBody>
+          </>
+        }
+        rightPane={
+          <PaneBody className="text-muted-foreground flex items-center justify-center text-sm">
+            No items to display
+          </PaneBody>
+        }
+        leftPaneWidth="240px"
+        rightPaneWidth="380px"
+      />
+    )
+  }
+
   return (
     <Workspace2Pane
       leftPane={

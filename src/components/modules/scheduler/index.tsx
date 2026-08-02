@@ -20,6 +20,18 @@ import { calculateCpm, type CpmTask } from '@/lib/cpm'
 import { levelResources } from './leveling'
 import { useMemo } from 'react'
 import { produce } from 'immer'
+import { flattenTree, rebuildTreeFromRows } from '@/lib/tree-utils'
+
+/**
+ * Flatten a Task tree for DB storage. Strips `children` and sets `parentId`
+ * on each row. Mirrors the BOQ module's `flattenBoqTree` — the scheduler
+ * persists flat rows to the `tasks` table (with `parent_id` FK) and rebuilds
+ * the tree on load, so child tasks round-trip through Supabase instead of
+ * being silently dropped by useSyncedState's top-level-only upsert.
+ */
+function flattenTaskTree(items: Task[], parentId: string | null = null): Task[] {
+  return flattenTree(items as unknown as Record<string, unknown>[], parentId) as unknown as Task[]
+}
 
 // TODO: replace with real project epoch once project settings exist.
 // For now, use a fixed epoch so the TODAY line is deterministic and moves
@@ -100,6 +112,53 @@ export function SchedulerModule() {
   // Convert expanded array to Set for O(1) lookups
   const expanded = new Set(expandedArr)
 
+  // Rebuild the task tree from the flat rows in `tasks`.
+  //
+  // `useSyncedState` stores flat rows (one row per task, parent_id FK) and
+  // only upserts top-level items in the array. Without this rebuild, every
+  // reload would lose the parent/child nesting and `flattenTasks` / CPM /
+  // the Gantt would see a flat list at depth 0. Mirrors the BOQ module's
+  // `rebuildBoqTree(boqRows)`.
+  //
+  // Memoized on `tasks` so the tree isn't rebuilt on every render — only
+  // when the underlying flat rows actually change. If `tasks` already
+  // contains nested children (e.g. seed data or in-memory state before the
+  // first save), `rebuildTreeFromRows` returns it as-is.
+  const taskTree = useMemo(
+    () =>
+      rebuildTreeFromRows(
+        tasks as unknown as Record<string, unknown>[],
+        'id',
+        'parentId'
+      ) as unknown as Task[],
+    [tasks]
+  )
+
+  /**
+   * Commit a new task-tree state. Flattens the tree before calling setTasks
+   * so child rows are persisted to the DB (useSyncedState only upserts
+   * top-level items in the array — without flattening, child tasks would
+   * never be written to Supabase and would disappear on reload).
+   *
+   * The updater receives the current tree (rebuilt from the flat rows in
+   * state) and must return the next tree. Mirrors the BOQ module's
+   * `commitBoqData`.
+   */
+  const commitTasks = (updater: (prevTree: Task[]) => Task[]): void => {
+    setTasks((prevFlat) => {
+      const prevTree =
+        prevFlat && prevFlat.length > 0
+          ? (rebuildTreeFromRows(
+              prevFlat as unknown as Record<string, unknown>[],
+              'id',
+              'parentId'
+            ) as unknown as Task[])
+          : []
+      const nextTree = updater(prevTree)
+      return flattenTaskTree(nextTree)
+    })
+  }
+
   // Real CPM calculation — compute critical path from task dependencies.
   // Each task's `dependencies` array (TaskDependency[]) is resolved into the
   // flat predecessor ID list that calculateCpm expects. FS/SS/FF/SF link
@@ -107,7 +166,7 @@ export function SchedulerModule() {
   // scheduling semantics (start-to-start vs finish-to-start) but the critical
   // path identification is the same: a task is critical if its float is 0.
   const cpmResult = useMemo(() => {
-    const flat = flattenTasks(tasks)
+    const flat = flattenTasks(taskTree)
     const cpmTasks: CpmTask[] = flat.map(({ task }) => ({
       id: task.id,
       duration: task.duration,
@@ -119,11 +178,11 @@ export function SchedulerModule() {
     } catch {
       return null
     }
-  }, [tasks])
+  }, [taskTree])
 
   // Apply CPM critical path to tasks (override the decorative boolean)
   const tasksWithCpm = useMemo(() => {
-    if (!cpmResult) return tasks
+    if (!cpmResult) return taskTree
     const updateTasks = (items: Task[]): Task[] => {
       return items.map((t) => {
         const cpmData = cpmResult.results[t.id]
@@ -135,8 +194,8 @@ export function SchedulerModule() {
         return updated
       })
     }
-    return updateTasks(tasks)
-  }, [tasks, cpmResult])
+    return updateTasks(taskTree)
+  }, [taskTree, cpmResult])
   // Add Task modal state
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK)
@@ -165,7 +224,7 @@ export function SchedulerModule() {
 
   // Update a task's start date when dragged
   const updateTaskStart = (id: string, newStart: number) => {
-    setTasks((prev) =>
+    commitTasks((prev) =>
       produce(prev, (draft) => {
         const walk = (items: Task[]) => {
           for (const t of items) {
@@ -184,7 +243,7 @@ export function SchedulerModule() {
 
   // Update a task's duration when resized
   const updateTaskDuration = (id: string, newDuration: number) => {
-    setTasks((prev) =>
+    commitTasks((prev) =>
       produce(prev, (draft) => {
         const walk = (items: Task[]) => {
           for (const t of items) {
@@ -220,7 +279,7 @@ export function SchedulerModule() {
       critical: newTask.critical,
       constraints: newTask.constraints,
     }
-    setTasks((prev) => [...prev, task])
+    commitTasks((prev) => [...prev, task])
     setSelectedId(newId)
     setAddTaskOpen(false)
     setNewTask(EMPTY_NEW_TASK)
@@ -339,13 +398,13 @@ export function SchedulerModule() {
     setDragging({ id: t.id, startX: e.clientX, originalDuration: t.duration, mode: 'resize' })
   }
 
-  // Keep a ref to the latest tasks so the drag-end breach detector reads
-  // post-drag values instead of the stale closure value captured when the
-  // `dragging` effect was set up.
-  const tasksRef = useRef(tasks)
+  // Keep a ref to the latest task tree so the drag-end breach detector
+  // reads post-drag values instead of the stale closure value captured
+  // when the `dragging` effect was set up.
+  const tasksRef = useRef(taskTree)
   useEffect(() => {
-    tasksRef.current = tasks
-  }, [tasks])
+    tasksRef.current = taskTree
+  }, [taskTree])
 
   useEffect(() => {
     if (!dragging) return
@@ -503,15 +562,18 @@ export function SchedulerModule() {
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => {
-                  const result = levelResources(tasks)
+                  const result = levelResources(taskTree)
                   if (result.shifts.length === 0) {
                     toast.success('Resources already level', {
                       description: `Peak load: ${result.peakLoadBefore} resource units/week`,
                     })
                     return
                   }
+                  // Snapshot the flat rows BEFORE applying leveling so the
+                  // undoableToast can restore them. `tasks` is the flat list
+                  // (DB shape), so restoring it directly is correct.
                   const prevTasks = tasks
-                  setTasks(result.leveledTasks)
+                  commitTasks(() => result.leveledTasks)
                   toast.success('Resources leveled', {
                     description: `${result.shifts.length} task${result.shifts.length === 1 ? '' : 's'} shifted · peak ${result.peakLoadBefore} → ${result.peakLoadAfter}`,
                   })
@@ -565,7 +627,11 @@ export function SchedulerModule() {
               // the inspector only kept the link in local state. The task
               // tree is mutated via produce so nested children are updated
               // immutably too.
-              setTasks((prev) =>
+              //
+              // Uses commitTasks (not setTasks directly) so the tree is
+              // flattened before persisting — otherwise children would be
+              // dropped by useSyncedState's top-level-only upsert.
+              commitTasks((prev) =>
                 produce(prev, (draft) => {
                   const walk = (items: Task[]) => {
                     for (const t of items) {

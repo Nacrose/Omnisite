@@ -68,7 +68,11 @@ const ROUTES: RouteSpec[] = [
     name: 'letters',
     modulePath: '@/app/api/letters/route',
     table: 'letters',
-    validBody: { id: 'lt-1', number: 'L-001' },
+    // `type` is required (z.string().min(1)) — without it the POST would
+    // fail Zod validation and return 400 instead of the expected success
+    // status. Mirrors the actual letter shape used by the correspondence
+    // module (Incoming / Outgoing / Site Instruction).
+    validBody: { id: 'lt-1', number: 'L-001', type: 'Incoming' },
     invalidBody: { id: '' },
   },
   {

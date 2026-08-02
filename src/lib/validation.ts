@@ -327,7 +327,7 @@ export const letterSchema = z.object({
   project_id: z.string().uuid().optional(),
   number: z.string().min(1),
   date: z.string().optional(),
-  type: z.string().optional(),
+  type: z.string().min(1),
   from_party: z.string().optional(),
   to_party: z.string().optional(),
   subject: z.string().optional(),
