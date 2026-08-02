@@ -114,7 +114,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={submitting || loading}>
+            <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
