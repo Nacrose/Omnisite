@@ -1,332 +1,39 @@
 'use client'
 
+// ─── Q&S right pane — Inspector ──────────────────────────────────────────────
+// Extracted from the monolithic qs.tsx. Renders the right pane of the
+// Workspace2Pane layout: the selected item's header (type / status / severity
+// / overdue badges), the optional linked BOQ row, the work-location picker,
+// the NCR workflow stepper + CAP form, billing-hold notice, action button,
+// and the NCR / ITR photo gallery (Supabase Storage bucket: ncr-photos).
+
 import { useState, useRef, useEffect, ChangeEvent } from 'react'
-import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
+import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
-  Plus,
-  Search,
-  ShieldCheck,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
-  FileText,
-  Lock,
-  Users,
-  Clock,
   ArrowRight,
   Camera,
   Loader2,
   Trash2,
+  FileText,
+  Lock,
+  Clock,
+  Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { confirm } from '@/components/ui/confirm-dialog'
-import { useSyncedState } from '@/lib/use-synced-state'
-import { LoadingState } from '@/components/ui/loading-state'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { LocationPicker } from '@/components/ui/location-picker'
+import { type QsItem, type QsCap, NCR_WORKFLOW, NCR_WORKFLOW_STEPS } from './types'
 
-interface QsItem {
-  id: string
-  type: 'ITR' | 'NCR' | 'Punch' | 'Incident' | 'Near-Miss'
-  title: string
-  linkedBoq?: string
-  status:
-    | 'Draft'
-    | 'Submitted'
-    | 'Approved'
-    | 'Rejected'
-    | 'Closed'
-    | 'Open'
-    | 'CAP Submitted'
-    | 'Consultant Sign-off'
-  date: string
-  assignee?: string
-  dueDate?: string
-  severity?: 'low' | 'medium' | 'high'
-  billingHold?: boolean
-  cap?: { rootCause: string; action: string; assignee: string; dueDate: string }
-  /** Optional FK to project_locations.id — where the issue was identified.
-   *  Stored in local state for now; the DB column will land in a follow-up
-   *  migration. */
-  locationId?: string
-}
-
-const INITIAL_ITEMS: QsItem[] = [
-  {
-    id: 'ITR-042',
-    type: 'ITR',
-    title: 'PCC M15 — footing at ch. 4+200 to 4+350',
-    linkedBoq: '1.1.3',
-    status: 'Submitted',
-    date: '30 Jul 2026',
-    assignee: 'Er. Suresh (Consultant)',
-  },
-  {
-    id: 'ITR-041',
-    type: 'ITR',
-    title: 'Stone soling at pier P-4',
-    linkedBoq: '1.1.2',
-    status: 'Approved',
-    date: '29 Jul 2026',
-  },
-  {
-    id: 'NCR-034',
-    type: 'NCR',
-    title: 'Rebar cover < 40mm at box culvert base slab',
-    linkedBoq: '3.2',
-    status: 'Open',
-    date: '28 Jul 2026',
-    assignee: 'Bikash Rai',
-    dueDate: '05 Aug 2026',
-    severity: 'high',
-    billingHold: true,
-  },
-  {
-    id: 'NCR-033',
-    type: 'NCR',
-    title: 'Honeycombing in PCC at ch. 4+050',
-    linkedBoq: '1.1.4',
-    status: 'Closed',
-    date: '20 Jul 2026',
-  },
-  {
-    id: 'PCH-018',
-    type: 'Punch',
-    title: 'Smooth edges at expansion joint',
-    status: 'Open',
-    date: '27 Jul 2026',
-    assignee: 'Foreman Ram',
-    dueDate: '15 Aug 2026',
-    severity: 'low',
-  },
-  {
-    id: 'PCH-017',
-    type: 'Punch',
-    title: 'Clean debris from drainage outlet',
-    status: 'Closed',
-    date: '22 Jul 2026',
-  },
-  {
-    id: 'INC-005',
-    type: 'Incident',
-    title: 'Worker minor cut at rebar yard',
-    status: 'Closed',
-    date: '25 Jul 2026',
-    severity: 'low',
-  },
-  {
-    id: 'NM-012',
-    type: 'Near-Miss',
-    title: 'Tipper reversing without spotter',
-    status: 'Open',
-    date: '28 Jul 2026',
-    severity: 'medium',
-  },
-]
-
-// NCR workflow: Open → CAP Submitted → Consultant Sign-off → Closed
-const NCR_WORKFLOW: Record<string, string | null> = {
-  Open: 'CAP Submitted',
-  'CAP Submitted': 'Consultant Sign-off',
-  'Consultant Sign-off': 'Closed',
-  Closed: null,
-}
-
-export function QsModule() {
-  const [selectedId, setSelectedId] = useState('NCR-034')
-  const [filter, setFilter] = useState<'All' | 'ITR' | 'NCR' | 'Punch' | 'Incident' | 'Near-Miss'>(
-    'All'
-  )
-  const [searchQuery, setSearchQuery] = useState('')
-  const [items, setItems, qsLoading] = useSyncedState<QsItem[]>(
-    'omnisite-qs-items',
-    'qs_items',
-    () => structuredClone(INITIAL_ITEMS) as typeof INITIAL_ITEMS,
-    {
-      fieldMap: { linkedBoq: 'linked_boq', dueDate: 'due_date', billingHold: 'billing_hold' },
-      primaryKey: 'id',
-    }
-  )
-  const filteredByType = filter === 'All' ? items : items.filter((i) => i.type === filter)
-  const filtered = searchQuery.trim()
-    ? filteredByType.filter(
-        (i) =>
-          i.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          i.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (i.assignee || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (i.linkedBoq || '').toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : filteredByType
-  // Inspector should follow the filter — if the selected item isn't in the
-  // filtered list, fall back to the first filtered item instead of showing
-  // a stale selection from a different category.
-  const selected = filtered.find((i) => i.id === selectedId) ?? filtered[0]
-
-  // Advance an NCR to the next workflow status.
-  // Guarded: only NCR-type items can be advanced. Punch / Incident /
-  // Near-Miss items have their own (simpler) lifecycle and must NOT be
-  // pushed into NCR-only statuses like 'CAP Submitted'.
-  const advanceNcr = async (id: string) => {
-    // Look up the target item to determine the next workflow status before
-    // applying any state changes. This lets us gate the financially risky
-    // "Close" transition (which releases the billing hold) behind a confirm.
-    const target = items.find((i) => i.id === id)
-    if (!target || target.type !== 'NCR') return
-    const next = NCR_WORKFLOW[target.status]
-    if (!next) return
-    if (next === 'Closed') {
-      const ok = await confirm(
-        `Close ${target.id}?`,
-        'Closing this NCR will release the billing hold on the linked BOQ item. This has financial implications.',
-        'Close NCR',
-        true
-      )
-      if (!ok) return
-    }
-    setItems((prev) =>
-      prev.map((it) => {
-        if (it.id !== id) return it
-        if (it.type !== 'NCR') return it
-        const n = NCR_WORKFLOW[it.status]
-        if (!n) return it
-        // When closing, release the billing hold
-        const newBillingHold = n === 'Closed' ? false : it.billingHold
-        return { ...it, status: n as QsItem['status'], billingHold: newBillingHold }
-      })
-    )
-    toast.success('NCR advanced', {
-      description: `${target.id} → ${next}${next === 'Closed' ? ' · billing hold released' : ''}`,
-    })
-  }
-
-  // Save CAP (corrective action plan) on an NCR
-  const saveCap = (
-    id: string,
-    cap: { rootCause: string; action: string; assignee: string; dueDate: string }
-  ) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, cap } : it)))
-    toast.success('Corrective Action Plan saved', {
-      description: `${id} ready for consultant submission`,
-    })
-  }
-
-  // Set the linked location on a QS item (NCR / ITR / etc.)
-  const setLocation = (id: string, locationId: string | null) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, locationId: locationId ?? undefined } : it))
-    )
-    toast.success('Location linked', {
-      description: locationId ? `${id} → ${locationId}` : `Cleared location on ${id}`,
-    })
-  }
-
-  if (qsLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingState label="Loading Q&S register…" />
-      </div>
-    )
-  }
-
-  return (
-    <Workspace2Pane
-      leftPane={
-        <>
-          <PaneHeader title="Categories">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </PaneHeader>
-          <PaneBody className="py-2">
-            {(['All', 'ITR', 'NCR', 'Punch', 'Incident', 'Near-Miss'] as const).map((f) => {
-              const count = f === 'All' ? items.length : items.filter((i) => i.type === f).length
-              return (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={cn(
-                    'flex w-full items-center justify-between px-3 py-1.5 text-xs',
-                    filter === f
-                      ? 'bg-accent border-primary border-l-2'
-                      : 'hover:bg-accent/50 border-l-2 border-transparent'
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    {f === 'ITR' && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
-                    {f === 'NCR' && <AlertTriangle className="h-3 w-3 text-red-500" />}
-                    {f === 'Punch' && <FileText className="h-3 w-3 text-amber-500" />}
-                    {f === 'Incident' && <XCircle className="h-3 w-3 text-red-500" />}
-                    {f === 'Near-Miss' && <AlertTriangle className="h-3 w-3 text-amber-500" />}
-                    {f === 'All' && <ShieldCheck className="text-muted-foreground h-3 w-3" />}
-                    {f}
-                  </span>
-                  <Badge variant="secondary" className="h-4 px-1 text-[9px]">
-                    {count}
-                  </Badge>
-                </button>
-              )
-            })}
-            <div className="mt-4 px-3">
-              <div className="relative">
-                <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-                <Input
-                  placeholder="Search register…"
-                  className="h-8 pl-7 text-xs"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-          </PaneBody>
-          <div className="space-y-1.5 border-t border-[var(--pane-divider)] p-3 text-xs">
-            <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
-              Billing Holds
-            </div>
-            {(() => {
-              const holds = items.filter((i) => i.billingHold)
-              if (holds.length === 0) {
-                return (
-                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2 text-[11px] text-emerald-600">
-                    No active billing holds
-                  </div>
-                )
-              }
-              return holds.map((h) => (
-                <div key={h.id} className="rounded-md border border-red-500/30 bg-red-500/10 p-2">
-                  <div className="flex items-center gap-1.5 font-medium text-red-600">
-                    <Lock className="h-3 w-3" />
-                    {h.id} hold active
-                  </div>
-                  <div className="text-muted-foreground mt-0.5 text-[10px]">{h.title}</div>
-                </div>
-              ))
-            })()}
-          </div>
-        </>
-      }
-      rightPane={
-        <QsInspector
-          key={selected.id}
-          item={selected}
-          onAdvance={advanceNcr}
-          onSaveCap={saveCap}
-          onSetLocation={setLocation}
-        />
-      }
-      leftPaneWidth="240px"
-      rightPaneWidth="380px"
-    />
-  )
-}
-
-function QsInspector({
+export function QsInspector({
   item,
   onAdvance,
   onSaveCap,
@@ -334,14 +41,11 @@ function QsInspector({
 }: {
   item: QsItem
   onAdvance: (id: string) => void
-  onSaveCap: (
-    id: string,
-    cap: { rootCause: string; action: string; assignee: string; dueDate: string }
-  ) => void
+  onSaveCap: (id: string, cap: QsCap) => void
   onSetLocation: (id: string, locationId: string | null) => void
 }) {
   // Local state for CAP form
-  const [capForm, setCapForm] = useState({
+  const [capForm, setCapForm] = useState<QsCap>({
     rootCause:
       item.cap?.rootCause ||
       'Rebar spacer blocks displaced during concrete pour due to inadequate fixing.',
@@ -432,9 +136,7 @@ function QsInspector({
     }
   }
 
-  const nextStatus = item.type === 'NCR' ? NCR_WORKFLOW[item.status] : null
-  const workflowSteps = ['Open', 'CAP Submitted', 'Consultant Sign-off', 'Closed']
-  const currentStepIndex = workflowSteps.indexOf(item.status)
+  const currentStepIndex = NCR_WORKFLOW_STEPS.indexOf(item.status)
 
   // Determine the action button label based on current status.
   // Only NCR items have the CAP → Consultant → Close workflow; Punch /
@@ -543,7 +245,7 @@ function QsInspector({
               </div>
               {/* Stepper */}
               <div className="flex items-center gap-1">
-                {workflowSteps.map((step, i) => {
+                {NCR_WORKFLOW_STEPS.map((step, i) => {
                   const isDone = i < currentStepIndex
                   const isCurrent = i === currentStepIndex
                   const isFuture = i > currentStepIndex
@@ -571,7 +273,7 @@ function QsInspector({
                           {step}
                         </div>
                       </div>
-                      {i < workflowSteps.length - 1 && (
+                      {i < NCR_WORKFLOW_STEPS.length - 1 && (
                         <div
                           className={cn(
                             '-mt-4 h-0.5 flex-1',

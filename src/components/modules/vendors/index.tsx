@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, Search, Mountain, Building2, Package } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
 import type { Subcontractor } from './types'
@@ -102,9 +103,43 @@ const CATEGORY_LABEL_SHORT: Record<VendorCategory, string> = {
 
 export function VendorsModule() {
   const [selectedId, setSelectedId] = usePersistentState('omnisite-vendors-selected', 'SC-01')
-  const [vendors, setVendors] = usePersistentState<Vendor[]>(
+  // Synced via /api/vendors when Supabase is configured; falls back to
+  // localStorage (with INITIAL_VENDORS as the seed) when not. The fieldMap
+  // maps camelCase app fields to the snake_case columns on the `vendors`
+  // table (migration 00000000000010).
+  const [vendors, setVendors, vendorsLoading] = useSyncedState<Vendor[]>(
     'omnisite-vendors',
-    () => structuredClone(INITIAL_VENDORS) as Vendor[]
+    'vendors',
+    () => INITIAL_VENDORS,
+    {
+      fieldMap: {
+        tradeName: 'trade_name',
+        vatNo: 'vat_no',
+        contactPerson: 'contact_person',
+        bankAccountName: 'bank_account_name',
+        bankAccountNo: 'bank_account_no',
+        bankName: 'bank_name',
+        bankBranch: 'bank_branch',
+        bankIfsc: 'bank_ifsc',
+        creditDays: 'credit_days',
+        advancePct: 'advance_pct',
+        retentionPct: 'retention_pct',
+        tdsSection: 'tds_section',
+        tdsRate: 'tds_rate',
+        materialsSupplied: 'materials_supplied',
+        workItems: 'work_items',
+        agreementValue: 'agreement_value',
+        advancePaid: 'advance_paid',
+        reworkCost: 'rework_cost',
+        isTunneling: 'is_tunneling',
+        materialIssues: 'material_issues',
+        materialReturns: 'material_returns',
+        customDeductibles: 'custom_deductibles',
+        assignedTasks: 'assigned_tasks',
+        ncrCount: 'ncr_count',
+      },
+      primaryKey: 'id',
+    }
   )
   const [activeTab, setActiveTab] = useState('profile')
   const [searchQuery, setSearchQuery] = useState('')
@@ -125,6 +160,14 @@ export function VendorsModule() {
   }, [vendors, searchQuery, categoryFilter])
 
   const selected = vendors.find((v) => v.id === selectedId) ?? vendors[0]
+
+  if (vendorsLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <LoadingState label="Loading vendors…" />
+      </div>
+    )
+  }
 
   if (!selected) {
     return (

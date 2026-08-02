@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import {
   MATERIALS,
   VENDORS,
@@ -51,11 +53,22 @@ export function AdminModule() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor>(VENDORS[0])
 
   // Locations are a full CRUD surface, so we persist them to localStorage.
-  // Initial state is the seed array; subsequent edits/creates/deletes
-  // mutate this persisted copy in place.
-  const [locations, setLocations] = usePersistentState<ProjectLocation[]>(
+  // Synced via /api/project_locations when Supabase is configured; falls back
+  // to localStorage (with INITIAL_LOCATIONS as the seed) when not. The fieldMap
+  // maps the camelCase ProjectLocation fields to the snake_case columns on
+  // the `project_locations` table (migration 00000000000010).
+  const [locations, setLocations, locationsLoading] = useSyncedState<ProjectLocation[]>(
     'omnisite-admin-locations',
-    INITIAL_LOCATIONS
+    'project_locations',
+    () => INITIAL_LOCATIONS,
+    {
+      fieldMap: {
+        group: 'group_name',
+        assignedScId: 'assigned_vendor_id',
+        sortOrder: 'sort_order',
+      },
+      primaryKey: 'id',
+    }
   )
   const [selectedLocation, setSelectedLocation] = useState<ProjectLocation>(
     () => locations[0] ?? INITIAL_LOCATIONS[0]
@@ -199,16 +212,21 @@ export function AdminModule() {
           )}
           {cat === 'rates' && <RatesView />}
           {cat === 'presets' && <PresetsView />}
-          {cat === 'locations' && (
-            <LocationsView
-              locations={locations}
-              vendors={INITIAL_VENDORS}
-              selectedLocation={selectedLocation}
-              onSelectLocation={setSelectedLocation}
-              searchQuery={searchQuery}
-              onCreateLocation={createLocation}
-            />
-          )}
+          {cat === 'locations' &&
+            (locationsLoading ? (
+              <div className="flex h-full items-center justify-center">
+                <LoadingState label="Loading locations…" />
+              </div>
+            ) : (
+              <LocationsView
+                locations={locations}
+                vendors={INITIAL_VENDORS}
+                selectedLocation={selectedLocation}
+                onSelectLocation={setSelectedLocation}
+                searchQuery={searchQuery}
+                onCreateLocation={createLocation}
+              />
+            ))}
         </>
       }
       rightPane={
@@ -223,14 +241,20 @@ export function AdminModule() {
         ) : cat === 'presets' ? (
           <PresetInspector />
         ) : cat === 'locations' ? (
-          <LocationInspector
-            location={selectedLocation}
-            vendors={INITIAL_VENDORS}
-            existingGroups={existingGroups}
-            onChange={updateLocation}
-            onCloseLocation={closeLocation}
-            onDelete={deleteLocation}
-          />
+          locationsLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <LoadingState label="Loading locations…" />
+            </div>
+          ) : (
+            <LocationInspector
+              location={selectedLocation}
+              vendors={INITIAL_VENDORS}
+              existingGroups={existingGroups}
+              onChange={updateLocation}
+              onCloseLocation={closeLocation}
+              onDelete={deleteLocation}
+            />
+          )
         ) : (
           <PresetInspector />
         )
