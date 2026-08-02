@@ -238,7 +238,13 @@ export function CriticalPathBreachModal({
   const match = task.constraints?.match(/Wk (\d+)/)
   const deadlineWeek = match ? parseInt(match[1]) : 0
   const finishWeek = task.start + task.duration
-  const overrunWeeks = finishWeek - deadlineWeek
+  // Guard: if the constraint has no parseable week (shouldn't happen — the
+  // breach detector only opens this modal when /Wk (\d+)/ matches — but
+  // defensive), render a minimal "invalid constraint" state instead of
+  // showing wildly wrong overrun numbers (audit R3-8 — previously
+  // deadlineWeek fell back to 0, making overrun = finishWeek, e.g. "+48w").
+  const hasValidDeadline = match !== null && deadlineWeek > 0
+  const overrunWeeks = hasValidDeadline ? finishWeek - deadlineWeek : 0
   const overrunDays = overrunWeeks * 7
 
   return (
@@ -267,27 +273,37 @@ export function CriticalPathBreachModal({
             <div className="font-medium text-red-600">
               {task.id} — {task.name}
             </div>
-            <div className="text-muted-foreground">
-              This task has a <span className="font-medium">Must Finish On</span> deadline of Wk{' '}
-              {deadlineWeek} but its forecast finish is Wk {finishWeek}. The deadline is overrun by{' '}
-              {overrunWeeks} week{overrunWeeks === 1 ? '' : 's'}.
-            </div>
-            <div className="grid grid-cols-3 gap-2 pt-2">
-              <div className="text-center">
-                <div className="text-muted-foreground text-[10px]">Deadline</div>
-                <div className="font-mono font-bold">Wk {deadlineWeek}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-muted-foreground text-[10px]">Forecast Finish</div>
-                <div className="font-mono font-bold text-red-600">Wk {finishWeek}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-muted-foreground text-[10px]">Overrun</div>
-                <div className="font-mono font-bold text-red-600">
-                  +{overrunWeeks}w ({overrunDays}d)
+            {hasValidDeadline ? (
+              <>
+                <div className="text-muted-foreground">
+                  This task has a <span className="font-medium">Must Finish On</span> deadline of Wk{' '}
+                  {deadlineWeek} but its forecast finish is Wk {finishWeek}. The deadline is overrun
+                  by {overrunWeeks} week{overrunWeeks === 1 ? '' : 's'}.
                 </div>
+                <div className="grid grid-cols-3 gap-2 pt-2">
+                  <div className="text-center">
+                    <div className="text-muted-foreground text-[10px]">Deadline</div>
+                    <div className="font-mono font-bold">Wk {deadlineWeek}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-muted-foreground text-[10px]">Forecast Finish</div>
+                    <div className="font-mono font-bold text-red-600">Wk {finishWeek}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-muted-foreground text-[10px]">Overrun</div>
+                    <div className="font-mono font-bold text-red-600">
+                      +{overrunWeeks}w ({overrunDays}d)
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-muted-foreground">
+                This task has a deadline constraint ({task.constraints}) but no parseable week
+                number. Edit the task in the inspector to set a valid deadline week (e.g.{' '}
+                {task.constraints}: Wk 48).
               </div>
-            </div>
+            )}
           </div>
 
           {/* Options */}

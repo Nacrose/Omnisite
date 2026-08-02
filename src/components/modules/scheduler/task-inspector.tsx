@@ -24,21 +24,15 @@ import type { ProjectLocation } from '@/lib/types/vendor'
 // "Wk N" suffix, MFO/MSO tasks never trigger breach detection even when
 // they overrun (audit S1).
 //
-// The code map below lets the inspector both render the active button
+// The code set below lets the inspector both render the active button
 // correctly (matching by prefix, not substring — audit S3) and prompt
 // the user for a deadline week when they pick MFO/MSO.
 
-const CONSTRAINT_LONG_FORM: Record<string, string> = {
-  ASAP: 'ASAP',
-  ALAP: 'ALAP',
-  SNET: 'SNET',
-  FNLT: 'FNLT',
-  MFO: 'MFO',
-  MSO: 'MSO',
-}
+/** All recognized constraint codes. */
+const CONSTRAINT_CODES = ['ASAP', 'ALAP', 'SNET', 'FNLT', 'MFO', 'MSO'] as const
 
 /** Constraint codes that require a deadline week suffix. */
-const DEADLINE_CONSTRAINTS = new Set(['MFO', 'MSO'])
+const DEADLINE_CONSTRAINTS = new Set<string>(['MFO', 'MSO'])
 
 /**
  * Match a stored constraint string against a code, accounting for both
@@ -171,7 +165,7 @@ export function TaskInspector({
   // prefix matching (so both "MFO" and "Must Finish On: Wk 32" map to MFO).
   const activeConstraintCode = useMemo(() => {
     if (!task.constraints) return null
-    for (const code of Object.keys(CONSTRAINT_LONG_FORM)) {
+    for (const code of CONSTRAINT_CODES) {
       if (constraintMatches(task.constraints, code)) return code
     }
     return null
@@ -364,7 +358,7 @@ export function TaskInspector({
                 Constraint
               </label>
               <div className="mt-1 grid grid-cols-3 gap-1">
-                {['ASAP', 'ALAP', 'SNET', 'FNLT', 'MFO', 'MSO'].map((c) => (
+                {CONSTRAINT_CODES.map((c) => (
                   <button
                     key={c}
                     onClick={() => handleConstraintClick(c)}

@@ -311,6 +311,20 @@ export function SchedulerModule() {
     // clash with seed task IDs once the count grew past 100, and would
     // duplicate IDs if tasks were deleted and re-added.
     const newId = `T-${Date.now().toString(36)}`
+    const finishWeek = newTask.start + newTask.duration
+    // Build the constraint string. For MFO/MSO, auto-default to the task's
+    // finish/start week so the breach detector has a week to compare against
+    // (audit R3-5 — previously the modal wrote a bare 'MFO' with no week,
+    // so breach detection never fired until the user opened the inspector
+    // and set a week manually). The inspector's deadline-week input will
+    // show the auto-defaulted value, and the user can edit it from there.
+    let constraints = newTask.constraints
+    if ((constraints === 'MFO' || constraints === 'MSO') && newTask.type !== 'Milestone') {
+      constraints = `${constraints}: Wk ${finishWeek}`
+    } else if (constraints === 'MFO' && newTask.type === 'Milestone') {
+      // Milestones have duration 0, so finish = start. Use start week.
+      constraints = `${constraints}: Wk ${newTask.start}`
+    }
     const task: Task = {
       id: newId,
       name: newTask.name || 'New Task',
@@ -321,7 +335,7 @@ export function SchedulerModule() {
       baseline: [newTask.start, newTask.start + newTask.duration],
       resources: [],
       critical: newTask.critical,
-      constraints: newTask.constraints,
+      constraints,
     }
     commitTasks((prev) => [...prev, task])
     setSelectedId(newId)
@@ -471,19 +485,21 @@ export function SchedulerModule() {
       // Summary tasks (e.g. T-301 under T-300) are still found.
       const flat = flattenTasks(tasksRef.current)
       const updated = flat.find((f) => f.task.id === dragging?.id)?.task
-      // Match both the human-readable "Must Finish On: Wk 48" form and
-      // the abbreviated "MFO: Wk 48" / bare "MFO" form (C20 + S1).
-      // Seed T-404 uses the long form; the inspector constraint picker
-      // writes the short form "MFO: Wk N". Both should trigger the EOT
-      // breach detector.
+      // Match both the human-readable and abbreviated forms of MFO and MSO
+      // (C20 + S1 + R3-3). Seed T-404 uses "Must Finish On: Wk 48"; the
+      // inspector constraint picker writes "MFO: Wk N" / "MSO: Wk N".
+      // Both deadline constraint types should trigger the EOT breach
+      // detector — previously only MFO was checked, so a task with
+      // "MSO: Wk 20" whose start was week 25 was silently ignored (R3-3).
       const hasMFO =
         updated && updated.constraints && /^(MFO|Must Finish On)/i.test(updated.constraints)
-      // Detect breach on ANY task type with MFO (audit S2 — previously
-      // only Hammock tasks triggered the breach modal, so a Work task
-      // with MFO that overran was silently ignored). Summary tasks are
+      const hasMSO =
+        updated && updated.constraints && /^(MSO|Must Start On)/i.test(updated.constraints)
+      // Detect breach on ANY task type with MFO/MSO (audit S2 — previously
+      // only Hammock tasks triggered the breach modal). Summary tasks are
       // still excluded because their start/finish are derived from
       // children, not directly editable by dragging.
-      if (updated && hasMFO && updated.type !== 'Summary') {
+      if (updated && (hasMFO || hasMSO) && updated.type !== 'Summary') {
         // Extract deadline from constraint string like "Must Finish On: Wk 32"
         // or "MFO: Wk 32". If the constraint is bare "MFO" with no week
         // (shouldn't happen post-fix since the inspector always writes
@@ -491,10 +507,20 @@ export function SchedulerModule() {
         const match = updated.constraints!.match(/Wk (\d+)/)
         if (match) {
           const deadlineWeek = parseInt(match[1])
-          const finishWeek = updated.start + updated.duration
-          if (finishWeek > deadlineWeek) {
-            setBreachTask(updated)
-            setBreachModal(true)
+          if (hasMFO) {
+            // MFO: task must FINISH by deadlineWeek. Breach if finish > deadline.
+            const finishWeek = updated.start + updated.duration
+            if (finishWeek > deadlineWeek) {
+              setBreachTask(updated)
+              setBreachModal(true)
+            }
+          } else {
+            // MSO: task must START by deadlineWeek. Breach if start > deadline.
+            // (R3-3 — previously MSO was never checked.)
+            if (updated.start > deadlineWeek) {
+              setBreachTask(updated)
+              setBreachModal(true)
+            }
           }
         }
       }

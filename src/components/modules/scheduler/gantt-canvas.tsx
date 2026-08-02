@@ -90,10 +90,14 @@ const TaskBar = memo(function TaskBar({
           (audit S7). */}
       {task.type !== 'Summary' && task.type !== 'Milestone' && (
         <>
+          {/* Left edge: MOVES the task (same as dragging the body).
+              Cursor is grab (not ew-resize) to match the body and signal
+              move, not resize (audit R3-7). */}
           <div
-            className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
+            className="absolute top-0 bottom-0 left-0 w-2 cursor-grab bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
             onMouseDown={(e) => onBarMouseDown(e, task)}
           />
+          {/* Right edge: RESIZES the duration. Cursor is ew-resize. */}
           <div
             className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
             onMouseDown={(e) => onResizeMouseDown(e, task)}
@@ -189,9 +193,12 @@ function buildArrowPaths(
   flatTasks: { task: Task; depth: number }[]
 ): ArrowPath[] {
   const out: ArrowPath[] = []
-  let i = 0
+  // Build a task-id → task lookup map so we don't do an O(n) find() inside
+  // the loop (was O(n²) for the whole path-building pass).
+  const taskById = new Map<string, Task>()
+  for (const { task } of flatTasks) taskById.set(task.id, task)
   for (const [taskId, pos] of positions) {
-    const task = flatTasks.find(({ task }) => task.id === taskId)?.task
+    const task = taskById.get(taskId)
     if (!task?.dependencies) continue
     for (const dep of task.dependencies) {
       const predPos = positions.get(dep.predecessorId)
@@ -214,7 +221,15 @@ function buildArrowPaths(
       // left to successor start.
       const midX = Math.max(x1 + 8, x2 - 8)
       const d = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
-      out.push({ key: `arrow-${i++}`, d, isCritical: !!task.critical })
+      // Stable key: successorId → predecessorId : linkType. Previously used
+      // `arrow-${i++}` which renumbered when tasks were added/removed,
+      // causing React to reuse wrong DOM nodes (visual glitches like wrong
+      // stroke color or wrong path) (audit R3-6).
+      out.push({
+        key: `${taskId}-${dep.predecessorId}-${linkType}`,
+        d,
+        isCritical: !!task.critical,
+      })
     }
   }
   return out
@@ -509,37 +524,43 @@ export const ResourceLoadChart = memo(function ResourceLoadChart({
           resource assignments are wired in.
         </div>
       ) : (
-        <div
-          className="flex items-end"
-          style={{ width: TOTAL_WEEKS * WEEK_WIDTH, height: barHeight + 8 }}
-        >
-          {/* Spacer aligned with the 480px task-name column */}
-          {load.map((v, i) => {
-            const isPeak = v === peak && v > 0
-            const h = v === 0 ? 1 : Math.max(2, (v / peak) * barHeight)
-            return (
-              <div
-                key={i}
-                className="flex-shrink-0 border-r border-[var(--pane-divider)]"
-                style={{
-                  width: WEEK_WIDTH,
-                  height: barHeight + 8,
-                  display: 'flex',
-                  alignItems: 'flex-end',
-                  justifyContent: 'center',
-                }}
-                title={`Wk ${i + 1}: ${v} resource unit${v === 1 ? '' : 's'}`}
-              >
+        // Flex row: 480px task-name spacer (matches the Gantt rows above so
+        // week N of the chart lines up with week N of the Gantt) + the
+        // bar chart timeline. Without the spacer the chart was misaligned
+        // by 480px (audit R3-2).
+        <div className="flex items-stretch">
+          <div className="w-[480px] flex-shrink-0 border-r border-[var(--pane-divider)]" />
+          <div
+            className="flex items-end"
+            style={{ width: TOTAL_WEEKS * WEEK_WIDTH, height: barHeight + 8 }}
+          >
+            {load.map((v, i) => {
+              const isPeak = v === peak && v > 0
+              const h = v === 0 ? 1 : Math.max(2, (v / peak) * barHeight)
+              return (
                 <div
-                  className={cn(
-                    'w-3/4 rounded-t-sm',
-                    isPeak ? 'bg-amber-500/70' : v > 0 ? 'bg-primary/60' : 'bg-transparent'
-                  )}
-                  style={{ height: h }}
-                />
-              </div>
-            )
-          })}
+                  key={i}
+                  className="flex-shrink-0 border-r border-[var(--pane-divider)]"
+                  style={{
+                    width: WEEK_WIDTH,
+                    height: barHeight + 8,
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center',
+                  }}
+                  title={`Wk ${i + 1}: ${v} resource unit${v === 1 ? '' : 's'}`}
+                >
+                  <div
+                    className={cn(
+                      'w-3/4 rounded-t-sm',
+                      isPeak ? 'bg-amber-500/70' : v > 0 ? 'bg-primary/60' : 'bg-transparent'
+                    )}
+                    style={{ height: h }}
+                  />
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

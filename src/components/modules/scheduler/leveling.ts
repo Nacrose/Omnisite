@@ -156,24 +156,6 @@ export function levelResources(tasks: Task[]): LevelingResult {
     // loop may have shifted.)
     const fsPreds = fsPredFinishMap.get(leaf.id) || []
 
-    // Detect pre-existing violations (task already starts before its FS
-    // predecessor finishes). We surface these so the user knows the
-    // schedule has dependency problems that leveling can't fix.
-    for (const pred of fsPreds) {
-      const predLeaf = workLeafById.get(pred.predecessorId)
-      const predFinish = predLeaf != null ? predLeaf.start + predLeaf.duration : pred.finish
-      if (originalStart < predFinish) {
-        violations.push({
-          id: leaf.id,
-          name: leaf.name,
-          predecessorId: pred.predecessorId,
-          predecessorFinish: predFinish,
-          taskStart: originalStart,
-          violationWeeks: predFinish - originalStart,
-        })
-      }
-    }
-
     // Try shifting forward by 0..8 weeks (bounded to avoid infinite loops
     // and to respect the project horizon).
     for (let delta = 0; delta <= 8; delta++) {
@@ -207,6 +189,27 @@ export function levelResources(tasks: Task[]): LevelingResult {
     }
 
     leaf.start = bestStart
+
+    // Check for REMAINING violations post-leveling (audit R3-4 —
+    // previously we checked originalStart BEFORE the candidate loop, so
+    // violations that leveling fixed were still reported in the toast.
+    // Now we check bestStart AFTER the candidate loop, so only violations
+    // that leveling could NOT fix are reported.)
+    for (const pred of fsPreds) {
+      const predLeaf = workLeafById.get(pred.predecessorId)
+      const predFinish = predLeaf != null ? predLeaf.start + predLeaf.duration : pred.finish
+      if (bestStart < predFinish) {
+        violations.push({
+          id: leaf.id,
+          name: leaf.name,
+          predecessorId: pred.predecessorId,
+          predecessorFinish: predFinish,
+          taskStart: bestStart,
+          violationWeeks: predFinish - bestStart,
+        })
+      }
+    }
+
     if (bestStart !== originalStart) {
       shifts.push({
         id: leaf.id,
