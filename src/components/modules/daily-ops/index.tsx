@@ -264,6 +264,18 @@ export function DailyOpsModule() {
                   )
                 )
               }}
+              onUpdate={(field, value) => {
+                // Persist planned/actual/remarks edits into the synced
+                // dsrEntries store so they round-trip to Supabase and
+                // immediately re-render the inspector (variance calc, etc.).
+                // Without this the inspector's three inputs were uncontrolled
+                // and edits were silently dropped on blur.
+                setDsrEntries((prev) =>
+                  prev.map((e) =>
+                    e.id === selected.id ? ({ ...e, [field]: value } as DsrEntry) : e
+                  )
+                )
+              }}
             />
           }
           leftPaneWidth="280px"

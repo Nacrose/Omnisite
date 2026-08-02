@@ -132,6 +132,16 @@ export function FinancialsModule() {
     )
   }
 
+  // Guard against an empty CBS tree (e.g. fresh install with no seed data,
+  // or all nodes deleted). Without this, `selected` is undefined and
+  // `<FinancialsInspector node={selected} />` below would crash
+  // dereferencing `node.code`. Placed AFTER the loading check so we don't
+  // flash "No CBS node selected" while rows are still hydrating, and AFTER
+  // all hooks have been called so we don't violate rules-of-hooks.
+  if (!selected) {
+    return <div className="text-muted-foreground p-4 text-sm">No CBS node selected</div>
+  }
+
   return (
     <Workspace2Pane
       leftPane={

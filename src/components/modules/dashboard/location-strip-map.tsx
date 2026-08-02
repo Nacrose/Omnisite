@@ -128,9 +128,12 @@ export function LocationStripMap() {
     { fieldMap: { start: 'start_week' }, primaryKey: 'id' }
   )
 
-  // QS items — same store the Q&S module reads. The fieldMap mirrors the
-  // one in qs/index.tsx so the camelCase `locationId` / `linkedBoq` /
-  // `dueDate` / `billingHold` fields land correctly on each QsItem.
+  // QS items — same store the Q&S module reads. This fieldMap is a subset
+  // of qs/index.tsx's fieldMap — only the fields this component actually
+  // reads for filtering (locationId, status, type) need correct mapping.
+  // `capSubmittedDate` / `closedDate` are intentionally omitted: this view
+  // never reads those columns, and `useSyncedState` only needs the subset
+  // used for read filtering to be mapped correctly.
   const [qsRows] = useSyncedState<QsItem[]>(
     'omnisite-qs-items',
     'qs_items',

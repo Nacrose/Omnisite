@@ -242,7 +242,25 @@ export function AdminModule() {
         cat === 'users' ? (
           <UsersInspector role={selectedRole} />
         ) : cat === 'materials' ? (
-          <MaterialInspector material={selectedMaterial} />
+          <MaterialInspector
+            material={selectedMaterial}
+            onUpdateAltUomRate={(altIndex, rate) => {
+              // Persist alt-UOM rate edits into the selectedMaterial state so
+              // the inspector re-renders with the new value. Previously the
+              // input was uncontrolled (`defaultValue`), so edits were
+              // silently dropped on blur.
+              setSelectedMaterial((cur) =>
+                cur.altUoms
+                  ? {
+                      ...cur,
+                      altUoms: cur.altUoms.map((alt, i) =>
+                        i === altIndex ? { ...alt, rate } : alt
+                      ),
+                    }
+                  : cur
+              )
+            }}
+          />
         ) : cat === 'rates' ? (
           <RateInspector />
         ) : cat === 'presets' ? (

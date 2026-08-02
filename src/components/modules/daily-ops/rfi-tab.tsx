@@ -204,6 +204,15 @@ export function RfiTab() {
   )
   const overdueCount = rfis.filter((r) => r.status === 'Open' && new Date(r.replyBy) < TODAY).length
 
+  // Guard against an empty RFI store (e.g. fresh install with no seed data,
+  // or all RFIs deleted). Without this, `selected` is undefined and
+  // `<RfiInspector rfi={selected} />` below would crash dereferencing
+  // `rfi.number` / `rfi.status`. Placed AFTER all hooks have been called so
+  // we don't violate rules-of-hooks.
+  if (!selected) {
+    return <div className="text-muted-foreground p-4 text-sm">No RFI selected</div>
+  }
+
   return (
     <Workspace2Pane
       leftPane={

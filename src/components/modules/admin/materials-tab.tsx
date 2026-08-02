@@ -130,7 +130,20 @@ export function MaterialsView({
   )
 }
 
-export function MaterialInspector({ material: m }: { material: Material }) {
+export function MaterialInspector({
+  material: m,
+  onUpdateAltUomRate,
+}: {
+  material: Material
+  /**
+   * Fired when the user edits an alt-UOM rate in the inspector. The parent
+   * mutates its `selectedMaterial` state (and any backing store) so the
+   * change re-renders the inspector immediately. Previously the input used
+   * `defaultValue={alt.rate}` with no onChange, so edits were silently
+   * discarded on blur.
+   */
+  onUpdateAltUomRate?: (altIndex: number, rate: number) => void
+}) {
   return (
     <>
       <PaneHeader title="Material Inspector" />
@@ -184,7 +197,15 @@ export function MaterialInspector({ material: m }: { material: Material }) {
                     <span className="flex-1">
                       {alt.uom} (factor {alt.factor})
                     </span>
-                    <Input className="h-7 w-24 font-mono text-xs" defaultValue={alt.rate} />
+                    <Input
+                      className="h-7 w-24 font-mono text-xs"
+                      type="number"
+                      value={alt.rate}
+                      onChange={(e) => {
+                        const num = Number(e.target.value)
+                        onUpdateAltUomRate?.(i, Number.isFinite(num) ? num : 0)
+                      }}
+                    />
                     <button
                       className="hover:bg-accent rounded p-1"
                       onClick={() =>

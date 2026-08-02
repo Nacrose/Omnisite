@@ -536,7 +536,13 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
                   <label className="text-muted-foreground text-[10px]">
                     Min maintenance threshold
                   </label>
-                  <Input className="mt-1 h-7 text-xs" defaultValue="NPR 25,000" />
+                  <Input
+                    className="text-muted-foreground mt-1 h-7 cursor-default text-xs"
+                    defaultValue="NPR 25,000"
+                    readOnly
+                    aria-label="Min maintenance threshold (display only — editing not implemented)"
+                    title="Display only — editing not implemented"
+                  />
                 </div>
               </>
             ) : (

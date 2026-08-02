@@ -88,7 +88,15 @@ export async function upsertWithAudit(
   p_old_values: Record<string, unknown> | null
 ): Promise<{ data: Record<string, unknown> | null; error: string | null }> {
   if (!isServiceClientConfigured()) {
-    // Demo mode — no audit log, just return the row.
+    // Demo mode — service role key not configured. Warn loudly so the
+    // operator knows upsertWithAudit is a no-op and that writes will NOT
+    // land in Supabase. Previously this branch returned silently with
+    // `{ data: p_row, error: null }`, which looked indistinguishable from
+    // a real upsert success — making this misconfiguration very hard to
+    // notice.
+    console.warn(
+      '[AUDIT] Service role key not configured — upsertWithAudit is a no-op. Data will NOT be persisted to Supabase. Set SUPABASE_SERVICE_ROLE_KEY in your environment.'
+    )
     return { data: p_row, error: null }
   }
 

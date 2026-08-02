@@ -26,6 +26,7 @@ interface StoredPhoto {
 export function DsrInspector({
   entry,
   onUpdateLocation,
+  onUpdate,
 }: {
   entry: DsrEntry
   /**
@@ -35,6 +36,16 @@ export function DsrInspector({
    * the inspector can't do that itself because it only owns the entry prop.
    */
   onUpdateLocation?: (locationId: string | null) => void
+  /**
+   * Fired when the user edits a planned/actual/remarks field. The parent
+   * mutates its synced dsrEntries store so edits persist to Supabase AND
+   * re-render the inspector with updated variance/etc. Previously these
+   * inputs were uncontrolled (`defaultValue`), so edits were silently
+   * dropped on blur — the variance calculation kept using the original
+   * `entry.actual`/`entry.planned` and the change was lost the moment the
+   * user switched entries.
+   */
+  onUpdate?: (field: string, value: string | number) => void
 }) {
   // Material variance reconciliation only applies to concrete-pouring
   // activities. Cement/sand/aggregate coefficients (4.5 bags/cum, 0.45
@@ -275,14 +286,30 @@ export function DsrInspector({
               <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
                 Planned Qty
               </label>
-              <Input className="mt-1 h-8" defaultValue={entry.planned} />
+              <Input
+                className="mt-1 h-8"
+                type="number"
+                value={entry.planned}
+                onChange={(e) => {
+                  const num = Number(e.target.value)
+                  onUpdate?.('planned', Number.isFinite(num) ? num : 0)
+                }}
+              />
               <span className="text-muted-foreground text-[10px]">{entry.uom}</span>
             </div>
             <div>
               <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
                 Actual Completed Qty
               </label>
-              <Input className="mt-1 h-8" defaultValue={entry.actual} />
+              <Input
+                className="mt-1 h-8"
+                type="number"
+                value={entry.actual}
+                onChange={(e) => {
+                  const num = Number(e.target.value)
+                  onUpdate?.('actual', Number.isFinite(num) ? num : 0)
+                }}
+              />
               <span className="text-muted-foreground text-[10px]">{entry.uom}</span>
             </div>
             <div className="bg-secondary/40 rounded-md p-2.5">
@@ -317,7 +344,11 @@ export function DsrInspector({
               <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
                 Remarks
               </label>
-              <Textarea className="mt-1 min-h-[60px] text-xs" defaultValue={entry.remarks} />
+              <Textarea
+                className="mt-1 min-h-[60px] text-xs"
+                value={entry.remarks || ''}
+                onChange={(e) => onUpdate?.('remarks', e.target.value)}
+              />
             </div>
 
             <div className="flex items-start gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 p-2.5 text-[11px]">
