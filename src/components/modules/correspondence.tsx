@@ -138,7 +138,17 @@ export function CorrespondenceModule() {
       leftPane={
         <>
           <PaneHeader title="Categories">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info('Custom categories coming soon', {
+                  description: 'Use the existing Incoming/Outgoing/Site Instruction types.',
+                })
+              }
+              title="New category (coming soon)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>
@@ -354,9 +364,9 @@ export function CorrespondenceModule() {
                       variant="outline"
                       className="mt-2 h-7 gap-1 text-[10px]"
                       onClick={() =>
-                        toast.info('Convert to Variation Order coming soon', {
+                        toast.info('Variation Order creation coming soon', {
                           description:
-                            'Will create a formal VO per FIDIC Clause 13 linked to this Site Instruction.',
+                            'Document VOs in Correspondence and link them to this letter.',
                         })
                       }
                       title="Convert to Variation Order (coming soon)"
@@ -377,7 +387,7 @@ export function CorrespondenceModule() {
                   className="h-8 w-full justify-start gap-2 text-xs"
                   onClick={() =>
                     toast.info('PDF viewer coming soon', {
-                      description: `Letter ${selected.number} PDF will be rendered inline once the viewer is wired up.`,
+                      description: 'Open the attached PDF from your file system.',
                     })
                   }
                   title="View PDF (coming soon)"
@@ -391,7 +401,7 @@ export function CorrespondenceModule() {
                   className="h-8 w-full justify-start gap-2 text-xs"
                   onClick={() =>
                     toast.info('Draft reply coming soon', {
-                      description: `Will open a composer pre-addressed to ${selected.from} with subject RE: ${selected.subject}.`,
+                      description: 'Compose replies externally and log them here.',
                     })
                   }
                   title="Draft Reply (coming soon)"
@@ -405,8 +415,7 @@ export function CorrespondenceModule() {
                   className="h-8 w-full justify-start gap-2 text-xs"
                   onClick={() =>
                     toast.info('Follow-up scheduling coming soon', {
-                      description:
-                        "Will create a calendar reminder tied to this letter's reply deadline.",
+                      description: 'Set reminders in your calendar app.',
                     })
                   }
                   title="Schedule follow-up (coming soon)"

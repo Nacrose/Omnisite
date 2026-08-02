@@ -222,7 +222,17 @@ export function EquipmentModule() {
       leftPane={
         <>
           <PaneHeader title="Fleet Categories">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info(
+                  'Equipment creation coming soon — add equipment via the API or contact admin.'
+                )
+              }
+              title="Add equipment (coming soon)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>

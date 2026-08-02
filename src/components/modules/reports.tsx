@@ -127,7 +127,17 @@ export function ReportsModule() {
       leftPane={
         <>
           <PaneHeader title="Templates & Widgets">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info(
+                  'Template builder coming soon — drag widgets onto the canvas to create a custom report.'
+                )
+              }
+              title="New template (coming soon)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>
@@ -140,8 +150,12 @@ export function ReportsModule() {
                 <button
                   key={t.id}
                   className="hover:bg-accent/50 w-full rounded border border-transparent p-2 text-left hover:border-[var(--pane-divider)]"
-                  disabled
-                  title="Coming soon"
+                  onClick={() =>
+                    toast.info(
+                      'Template loading coming soon — drag widgets onto the canvas instead.'
+                    )
+                  }
+                  title={`Load ‘${t.name}’ (coming soon)`}
                 >
                   <div className="text-xs font-medium">{t.name}</div>
                   <div className="text-muted-foreground text-[10px]">
@@ -189,8 +203,10 @@ export function ReportsModule() {
               variant="ghost"
               size="sm"
               className="h-7 gap-1.5 text-xs"
-              disabled
-              title="Coming soon"
+              onClick={() =>
+                toast.info('Preview uses the browser print dialog — click Export PDF to print.')
+              }
+              title="Preview (uses browser print)"
             >
               <Eye className="h-3.5 w-3.5" />
               Preview

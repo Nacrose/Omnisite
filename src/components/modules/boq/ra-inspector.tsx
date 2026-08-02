@@ -511,8 +511,11 @@ export function RaInspector({ item }: { item: BoqItem }) {
             variant="outline"
             size="sm"
             className="h-7 gap-1.5 text-xs"
-            disabled
-            title="Coming soon"
+            onClick={() =>
+              toast.info('RA preset saving coming soon', {
+                description: 'Presets are managed in Admin → RA Presets.',
+              })
+            }
           >
             <FolderOpen className="h-3.5 w-3.5" />
             Load Preset
@@ -521,14 +524,25 @@ export function RaInspector({ item }: { item: BoqItem }) {
             variant="outline"
             size="sm"
             className="h-7 gap-1.5 text-xs"
-            disabled
-            title="Coming soon"
+            onClick={() =>
+              toast.info('RA preset saving coming soon', {
+                description: 'Presets are managed in Admin → RA Presets.',
+              })
+            }
           >
             <Save className="h-3.5 w-3.5" />
             Save Preset
           </Button>
           <div className="flex-1" />
-          <Button size="sm" className="h-7 gap-1.5 text-xs" disabled title="Coming soon">
+          <Button
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() =>
+              toast.info('RA preset saving coming soon', {
+                description: 'Presets are managed in Admin → RA Presets.',
+              })
+            }
+          >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Save RA
           </Button>

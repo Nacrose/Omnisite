@@ -21,7 +21,6 @@ import {
   Camera,
   Loader2,
   Trash2,
-  FileText,
   Lock,
   Clock,
   Users,
@@ -591,18 +590,12 @@ export function QsInspector({
               variant="outline"
               size="sm"
               className="h-8 w-full justify-start gap-2 text-xs"
-              disabled
-              title="Coming soon"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              View Attachments ({photos.length} photos)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 w-full justify-start gap-2 text-xs"
-              disabled
-              title="Coming soon"
+              onClick={() =>
+                toast.info('Assignee management coming soon', {
+                  description: 'Update the assignee field via the inspector form.',
+                })
+              }
+              title="Assign / Reassign (coming soon)"
             >
               <Users className="h-3.5 w-3.5" />
               Assign / Reassign

@@ -247,7 +247,15 @@ export function ProcurementModule() {
         leftPane={
           <>
             <PaneHeader title="Procurement">
-              <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                onClick={() =>
+                  toast.info('New requisition creation coming soon — use the API or contact admin.')
+                }
+                title="New requisition (coming soon)"
+              >
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             </PaneHeader>
@@ -341,13 +349,30 @@ export function ProcurementModule() {
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
-                disabled
-                title="Coming soon"
+                onClick={() => toast.info('Use the search box in the center pane.')}
+                title="Search (use center pane)"
               >
                 <Search className="h-3.5 w-3.5" />
                 Search
               </Button>
-              <Button size="sm" className="h-7 gap-1.5 text-xs" disabled title="Coming soon">
+              <Button
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => {
+                  const tabName =
+                    tab === 'req'
+                      ? 'requisition'
+                      : tab === 'po'
+                        ? 'consolidated PO'
+                        : tab === 'grn'
+                          ? 'GRN'
+                          : tab === 'stock'
+                            ? 'material'
+                            : 'MIN'
+                  toast.info(`New ${tabName} creation coming soon.`)
+                }}
+                title="New entry (coming soon)"
+              >
                 <Plus className="h-3.5 w-3.5" />
                 New{' '}
                 {tab === 'req'

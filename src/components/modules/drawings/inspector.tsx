@@ -5,6 +5,7 @@ import { Separator } from '@/components/ui/separator'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Link2, History, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { Dwg } from './types'
 import { DrawingViewer } from './drawing-viewer'
 
@@ -59,18 +60,23 @@ export function DrawingInspector({ dwg }: { dwg: Dwg }) {
             </div>
             <div className="space-y-1.5">
               {dwg.links.map((l, i) => (
-                <div
+                <button
                   key={i}
-                  className="hover:bg-accent/30 flex cursor-not-allowed cursor-pointer items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5 text-xs opacity-40"
-                  title="Coming soon"
-                  aria-disabled="true"
+                  type="button"
+                  onClick={() =>
+                    toast.info('Drawing links coming soon', {
+                      description: 'Connect drawings to BOQ items, tasks, and NCRs.',
+                    })
+                  }
+                  className="hover:bg-accent/30 flex w-full cursor-pointer items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5 text-left text-xs"
+                  title="Open link (coming soon)"
                 >
                   <Badge variant="outline" className="text-[9px]">
                     {l.type}
                   </Badge>
                   <span className="flex-1 truncate">{l.ref}</span>
                   <Eye className="text-muted-foreground h-3 w-3" />
-                </div>
+                </button>
               ))}
             </div>
           </div>

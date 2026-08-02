@@ -276,7 +276,17 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
       listPane={
         <>
           <PaneHeader title="Messages">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info(
+                  'Channel creation coming soon — use the existing general/site/management channels.'
+                )
+              }
+              title="New channel (coming soon)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>
@@ -332,8 +342,10 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
             {visibleTeamMembers.map((m) => (
               <button
                 key={m.id}
-                disabled
-                title="Coming soon"
+                onClick={() =>
+                  toast.info('Direct messages coming soon — use the project channels for now.')
+                }
+                title="Direct message (coming soon)"
                 className="hover:bg-accent/50 flex w-full items-center gap-2.5 px-3 py-2 transition-colors"
               >
                 <div className="relative flex-shrink-0">
@@ -376,16 +388,16 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
               <Users className="h-4 w-4" />
             </button>
             <button
+              onClick={() => toast.info('Voice/video calls not available — use external tools.')}
               className="hover:bg-accent text-muted-foreground rounded-md p-1.5"
               title="Call (coming soon)"
-              disabled
             >
               <Phone className="h-4 w-4" />
             </button>
             <button
+              onClick={() => toast.info('Channel settings coming soon.')}
               className="hover:bg-accent text-muted-foreground rounded-md p-1.5"
               title="More (coming soon)"
-              disabled
             >
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -489,16 +501,20 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
           <div className="flex-shrink-0 border-t border-[var(--pane-divider)] p-3">
             <div className="flex items-center gap-2">
               <button
+                onClick={() =>
+                  toast.info('File attachments coming soon — share file URLs as text messages.')
+                }
                 className="hover:bg-accent text-muted-foreground rounded-lg p-2"
                 title="Attach file (coming soon)"
-                disabled
               >
                 <Paperclip className="h-4 w-4" />
               </button>
               <button
+                onClick={() =>
+                  toast.info('Image attachments coming soon — share image URLs as text messages.')
+                }
                 className="hover:bg-accent text-muted-foreground hidden rounded-lg p-2 sm:block"
                 title="Attach image (coming soon)"
-                disabled
               >
                 <ImageIcon className="h-4 w-4" />
               </button>
@@ -512,9 +528,9 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
                   className="placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
                 />
                 <button
+                  onClick={() => toast.info('Emoji picker coming soon.')}
                   className="text-muted-foreground hover:text-foreground rounded p-1"
                   title="Emoji (coming soon)"
-                  disabled
                 >
                   <Smile className="h-4 w-4" />
                 </button>

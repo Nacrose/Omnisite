@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Plus, X, AlertTriangle, Zap, ArrowRight, FileText } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { TOTAL_WEEKS, type Task } from './types'
 
@@ -295,10 +296,15 @@ export function CriticalPathBreachModal({
 
             {/* EOT Claim */}
             <button
-              onClick={onEotClaim}
-              disabled={!onEotClaim}
-              title={onEotClaim ? undefined : 'Coming soon'}
-              className="hover:border-primary/40 hover:bg-accent/30 group flex w-full items-start gap-3 rounded-lg border border-[var(--pane-divider)] p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--pane-divider)] disabled:hover:bg-transparent"
+              onClick={() =>
+                onEotClaim
+                  ? onEotClaim()
+                  : toast.info(
+                      'EOT claim filing coming soon — document the claim in the Correspondence module as a Site Instruction.'
+                    )
+              }
+              title="File EOT Claim"
+              className="hover:border-primary/40 hover:bg-accent/30 group flex w-full items-start gap-3 rounded-lg border border-[var(--pane-divider)] p-3 text-left transition-colors"
             >
               <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
                 <FileText className="h-4 w-4 text-amber-500" />
@@ -316,10 +322,15 @@ export function CriticalPathBreachModal({
 
             {/* Acceleration */}
             <button
-              onClick={onAccelerate}
-              disabled={!onAccelerate}
-              title={onAccelerate ? undefined : 'Coming soon'}
-              className="hover:border-primary/40 hover:bg-accent/30 group flex w-full items-start gap-3 rounded-lg border border-[var(--pane-divider)] p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--pane-divider)] disabled:hover:bg-transparent"
+              onClick={() =>
+                onAccelerate
+                  ? onAccelerate()
+                  : toast.info(
+                      'Schedule acceleration coming soon — contact the planning team for crash options.'
+                    )
+              }
+              title="Accelerate (Crash Schedule)"
+              className="hover:border-primary/40 hover:bg-accent/30 group flex w-full items-start gap-3 rounded-lg border border-[var(--pane-divider)] p-3 text-left transition-colors"
             >
               <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-violet-500/15">
                 <Zap className="h-4 w-4 text-violet-500" />

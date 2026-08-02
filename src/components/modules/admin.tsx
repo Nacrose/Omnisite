@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Search, Users, Package, Zap, Settings as SettingsIcon, MapPin } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -106,12 +107,23 @@ export function AdminModule() {
     { id: 'presets', name: 'RA Preset Library', icon: SettingsIcon, count: PRESETS.length },
     { id: 'locations', name: 'Work Locations', icon: MapPin, count: locations.length },
   ]
+  const activeCatName = CATS.find((c) => c.id === cat)?.name ?? cat
   return (
     <Workspace2Pane
       leftPane={
         <>
           <PaneHeader title="Master Data">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info(
+                  `Use the New button in the center pane to create a new ${activeCatName} entry.`
+                )
+              }
+              title="Add entry (use center pane)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>
@@ -166,8 +178,22 @@ export function AdminModule() {
             </div>
             {/* The Locations tab owns its own "+ New Location" button inside the
                 view (it triggers a modal form), so for that tab the shared
-                header New button stays disabled to avoid a duplicate affordance. */}
-            <Button size="sm" className="h-7 gap-1.5 text-xs" disabled title="Coming soon">
+                header New button redirects users to the in-view affordance
+                instead of duplicating it. Other tabs surface a "coming soon"
+                toast — creation flows for users / materials / rates / presets
+                will land alongside their respective API endpoints. */}
+            <Button
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() =>
+                cat === 'locations'
+                  ? toast.info(
+                      'Use the “+ New Location” button in the center pane to create a work location.'
+                    )
+                  : toast.info(`New ${activeCatName} creation coming soon — use the API for now.`)
+              }
+              title="New entry"
+            >
               <Plus className="h-3.5 w-3.5" />
               New
             </Button>

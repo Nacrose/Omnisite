@@ -325,7 +325,18 @@ export function BoqModule() {
                   </span>
                 )}
               </div>
-              <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => {
+                  if (selectedLeaf?.hasRA) {
+                    exportRa(selectedLeaf)
+                  } else {
+                    toast.error('Select a BOQ item with Rate Analysis enabled first.')
+                  }
+                }}
+              >
                 <FileSpreadsheet className="h-3.5 w-3.5" />
                 Export RA (DoR Format)
               </Button>
@@ -348,7 +359,17 @@ export function BoqModule() {
                 <Download className="h-3.5 w-3.5" />
                 Export CSV
               </Button>
-              <Button size="sm" className="h-7 gap-1.5 text-xs">
+              <Button
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => {
+                  if (selectedLeaf) {
+                    addChildItem(selectedLeaf.id, ctx)
+                  } else {
+                    toast.error('Select a parent heading first, then click + to add a child item.')
+                  }
+                }}
+              >
                 <Plus className="h-3.5 w-3.5" />
                 Item
               </Button>
@@ -541,8 +562,12 @@ export function BoqModule() {
             <ContextMenuItem
               icon={<Edit3 className="h-3.5 w-3.5" />}
               label="Edit item"
-              disabled
-              onClick={() => setContextMenu(null)}
+              onClick={() => {
+                toast.info('Inline editing coming soon', {
+                  description: 'Edit Qty and Rate directly in the grid cells.',
+                })
+                setContextMenu(null)
+              }}
             />
             <ContextMenuItem
               icon={<Copy className="h-3.5 w-3.5" />}
@@ -573,8 +598,12 @@ export function BoqModule() {
             <ContextMenuItem
               icon={<Link2 className="h-3.5 w-3.5" />}
               label="Link to Schedule"
-              disabled
-              onClick={() => setContextMenu(null)}
+              onClick={() => {
+                toast.info('Task linking coming soon', {
+                  description: 'Assign BOQ items to scheduler tasks from the Task Inspector.',
+                })
+                setContextMenu(null)
+              }}
             />
             <ContextMenuItem
               icon={<History className="h-3.5 w-3.5" />}

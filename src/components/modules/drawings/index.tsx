@@ -233,7 +233,18 @@ export function DrawingsModule() {
       leftPane={
         <>
           <PaneHeader title="Disciplines">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info('Custom disciplines coming soon', {
+                  description:
+                    'Use the existing Bridge/Civil/Structural/Mechanical/Electrical types.',
+                })
+              }
+              title="Add discipline (coming soon)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>

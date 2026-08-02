@@ -21,6 +21,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { type QsItem, type QsFilter, QS_FILTERS } from './types'
 
 export function QsRegistersPane({
@@ -39,7 +40,17 @@ export function QsRegistersPane({
   return (
     <>
       <PaneHeader title="Categories">
-        <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7"
+          onClick={() =>
+            toast.info(`New ${filter} creation coming soon`, {
+              description: 'Use the API or contact admin to create entries.',
+            })
+          }
+          title="New entry (coming soon)"
+        >
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </PaneHeader>

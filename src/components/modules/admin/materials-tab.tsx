@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Zap, Edit3, Copy, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import {
   useColumnVisibility,
@@ -186,8 +187,12 @@ export function MaterialInspector({ material: m }: { material: Material }) {
                     <Input className="h-7 w-24 font-mono text-xs" defaultValue={alt.rate} />
                     <button
                       className="hover:bg-accent rounded p-1"
+                      onClick={() =>
+                        toast.info(
+                          'Auto-calc from primary UOM coming soon — enter the converted rate manually.'
+                        )
+                      }
                       title="Auto-calc (coming soon)"
-                      disabled
                     >
                       <Zap className="h-3 w-3 text-amber-500" />
                     </button>
@@ -207,8 +212,8 @@ export function MaterialInspector({ material: m }: { material: Material }) {
               variant="outline"
               size="sm"
               className="h-8 w-full justify-start gap-2 text-xs"
-              disabled
-              title="Coming soon"
+              onClick={() => toast.info('Material duplication coming soon.')}
+              title="Duplicate material"
             >
               <Copy className="h-3.5 w-3.5" />
               Duplicate
@@ -217,8 +222,10 @@ export function MaterialInspector({ material: m }: { material: Material }) {
               variant="outline"
               size="sm"
               className="h-8 w-full justify-start gap-2 text-xs"
-              disabled
-              title="Coming soon"
+              onClick={() =>
+                toast.info('Inline editing coming soon — edit fields directly in the table.')
+              }
+              title="Edit material"
             >
               <Edit3 className="h-3.5 w-3.5" />
               Edit
@@ -227,8 +234,8 @@ export function MaterialInspector({ material: m }: { material: Material }) {
               variant="ghost"
               size="sm"
               className="h-8 w-full justify-start gap-2 text-xs text-amber-600"
-              disabled
-              title="Coming soon"
+              onClick={() => toast.info('Archive coming soon — set the archived flag via the API.')}
+              title="Soft archive material"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Soft Archive (no delete)

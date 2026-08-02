@@ -272,7 +272,7 @@ export function DrawingViewer({ dwg }: DrawingViewerProps) {
             variant="ghost"
             className="h-7 w-7 p-0"
             title="Fullscreen (coming soon)"
-            disabled
+            onClick={() => toast.info('Fullscreen mode coming soon')}
           >
             <Maximize2 className="h-3.5 w-3.5" />
           </Button>

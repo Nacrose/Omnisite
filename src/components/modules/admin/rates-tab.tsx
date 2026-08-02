@@ -4,6 +4,7 @@ import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Edit3 } from 'lucide-react'
+import { toast } from 'sonner'
 import { MATERIALS } from './types'
 
 // Tier 1 org baseline rates by district — read-only reference rows.
@@ -41,8 +42,10 @@ export function RatesView() {
             size="sm"
             variant="ghost"
             className="h-6 gap-1 text-[10px]"
-            disabled
-            title="Coming soon"
+            onClick={() =>
+              toast.info('Inline rate editing coming soon — use the BOQ Rate Analysis inspector.')
+            }
+            title="Inline edit in RA Builder"
           >
             <Edit3 className="h-3 w-3" />
             Inline edit in RA Builder

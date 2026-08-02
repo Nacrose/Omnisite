@@ -509,9 +509,10 @@ export function SchedulerModule() {
             setBreachModal(false)
             setBreachTask(null)
           }}
-          // EOT Claim and Accelerate callbacks are omitted — the modal renders
-          // those buttons as disabled with "Coming soon" tooltips until the
-          // features are built.
+          // EOT Claim and Accelerate callbacks are omitted — the modal falls
+          // back to informative toasts ("coming soon — use Correspondence
+          // module / contact planning team") until the underlying features
+          // are wired up.
         />
       )}
     </>

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { MapPin, Clock, DollarSign, Plus } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { Worker } from './index'
 import { computeDailyPayroll } from './payroll-calc'
@@ -129,8 +130,10 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
               variant="outline"
               size="sm"
               className="mt-2 h-7 w-full gap-1 text-xs"
-              disabled
-              title="Coming soon"
+              onClick={() =>
+                toast.info('Task splitting coming soon — allocate hours across tasks manually.')
+              }
+              title="Split hours to another task"
             >
               <Plus className="h-3 w-3" />
               Split hours to another task
