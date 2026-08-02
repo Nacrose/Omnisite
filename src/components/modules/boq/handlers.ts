@@ -448,6 +448,11 @@ export function exportRa(item: BoqItem | undefined): void {
   writeSection('Equipment', equipment)
 
   const directCost = [...materials, ...labour, ...equipment].reduce((s, r) => s + r.qty * r.rate, 0)
+  // Note: this uses DoR default 7.5% additions (2.5% + 1.5% + 3.5%). The RA
+  // Inspector allows user-editable percentage costs — those edits are NOT
+  // reflected in this export. When the inspector's user-editable coefficients
+  // become the source of truth, swap this hardcoded 0.075 for a lookup
+  // against the selected item's coefficient overrides.
   const pctAdd = directCost * 0.075 // 2.5+1.5+3.5% on direct
   const opCost = (directCost + pctAdd) * 0.15
   const totalCost = directCost + pctAdd + opCost

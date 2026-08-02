@@ -133,6 +133,122 @@ export function CorrespondenceModule() {
   // filtered list, fall back to the first filtered letter.
   const selected = filtered.find((l) => l.id === selectedId) ?? filtered[0]
 
+  // Guard: when the filter produces no letters (e.g. a category with no
+  // entries, or a search query that matches nothing), `selected` is
+  // `undefined`. The rightPane below dereferences `selected.number`,
+  // `selected.type`, etc. — without this guard it would crash with a
+  // TypeError. Show an honest empty state instead.
+  if (!selected) {
+    return (
+      <Workspace3Pane
+        leftPane={
+          <>
+            <PaneHeader title="Categories">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                onClick={() =>
+                  toast.info('Custom categories coming soon', {
+                    description: 'Use the existing Incoming/Outgoing/Site Instruction types.',
+                  })
+                }
+                title="New category (coming soon)"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </PaneHeader>
+            <PaneBody className="py-2">
+              {(['All', 'Incoming', 'Outgoing', 'Site Instruction'] as const).map((f) => {
+                const count =
+                  f === 'All' ? letters.length : letters.filter((l) => l.type === f).length
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={cn(
+                      'flex w-full items-center justify-between px-3 py-1.5 text-xs',
+                      filter === f
+                        ? 'bg-accent border-primary border-l-2'
+                        : 'hover:bg-accent/50 border-l-2 border-transparent'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      {f === 'Incoming' && <ArrowRight className="h-3 w-3 text-emerald-500" />}
+                      {f === 'Outgoing' && <ArrowLeft className="h-3 w-3 text-sky-500" />}
+                      {f === 'Site Instruction' && <FileText className="h-3 w-3 text-amber-500" />}
+                      {f === 'All' && <Mail className="text-muted-foreground h-3 w-3" />}
+                      {f}
+                    </span>
+                    <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+                      {count}
+                    </Badge>
+                  </button>
+                )
+              })}
+              <div className="mt-4 px-3">
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search letters…"
+                    className="h-8 pl-7 text-xs"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+            </PaneBody>
+          </>
+        }
+        centerPane={
+          <>
+            <PaneHeader title={`Correspondence · ${filtered.length} letters`}>
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+                <Search className="h-3.5 w-3.5" />
+                Search
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() =>
+                  toast.info('New letter creation coming soon', {
+                    description:
+                      'Use the API for now — POST to /api/letters with the letter payload.',
+                  })
+                }
+                title="New Letter (coming soon)"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Letter
+              </Button>
+            </PaneHeader>
+            <PaneBody className="px-0">
+              <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 p-12 text-xs">
+                <Mail className="h-6 w-6 opacity-40" />
+                <div className="font-medium">No letters match the current filter</div>
+                <div className="text-[11px]">
+                  Try a different category or clear the search query.
+                </div>
+              </div>
+            </PaneBody>
+          </>
+        }
+        rightPane={
+          <>
+            <PaneHeader title="Letter Inspector" />
+            <PaneBody>
+              <div className="text-muted-foreground p-6 text-xs">
+                Select a letter from the list to view details.
+              </div>
+            </PaneBody>
+          </>
+        }
+        leftPaneWidth="240px"
+        rightPaneWidth="380px"
+      />
+    )
+  }
+
   return (
     <Workspace3Pane
       leftPane={
@@ -207,7 +323,7 @@ export function CorrespondenceModule() {
               onClick={() =>
                 toast.info('New letter creation coming soon', {
                   description:
-                    'Use the API for now — POST to /correspondence with the letter payload.',
+                    'Use the API for now — POST to /api/letters with the letter payload.',
                 })
               }
               title="New Letter (coming soon)"

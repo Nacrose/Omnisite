@@ -12,16 +12,27 @@ import {
   Users,
   Clock,
   Truck,
-  Fuel,
-  Mail,
-  AlertTriangle,
   Mountain,
   Thermometer,
   Droplets,
   Wind,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+
+// ─── Daily Site Log ─────────────────────────────────────────────────────────
+//
+// There is currently no `daily_site_logs` DB table or API route. Until that
+// lands, this view renders EMPTY defaults for every section so the user
+// sees a real "log a fresh day" form instead of yesterday's demo data.
+// Previously the cards were pre-populated with fabricated weather,
+// visitors, manpower, equipment, and a geological face log — which made
+// it look like real records existed when they didn't, and gave false
+// confidence that the data was being persisted somewhere.
+//
+// Each section below is a controlled-or-uncontrolled input the user can
+// fill in. None of the inputs persist yet (no backing store); when the
+// `daily_site_logs` table + route land, swap these `defaultValue=""`
+// props for `useSyncedState` bindings.
 
 export function DailySiteLogView({ date }: { date: string }) {
   // Format the ISO date as "30 July 2026" for the header.
@@ -35,50 +46,66 @@ export function DailySiteLogView({ date }: { date: string }) {
   return (
     <>
       <PaneHeader title={`Daily Site Log · ${formatted}`}>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={() =>
+            toast.info('Copy Yesterday coming soon', {
+              description:
+                'Will prefill weather/visitors/manpower/equipment from the previous day once the daily_site_logs table lands.',
+            })
+          }
+          title="Copy Yesterday (coming soon)"
+        >
           <Copy className="h-3.5 w-3.5" />
           Copy Yesterday
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={() =>
+            toast.info('Photo upload coming soon', {
+              description:
+                'Daily site log photos will attach once the daily_site_logs table lands.',
+            })
+          }
+          title="Photo (coming soon)"
+        >
           <Camera className="h-3.5 w-3.5" />
           Photo
         </Button>
       </PaneHeader>
       <PaneBody className="space-y-4 p-4">
-        {/* Weather */}
+        {/* Weather — empty defaults until daily_site_logs exists */}
         <Card title="Weather" icon={<Cloud className="h-4 w-4" />}>
           <div className="grid grid-cols-4 gap-3 text-center">
-            <WeatherCell icon={<Thermometer className="h-4 w-4" />} label="Max" value="28°C" />
-            <WeatherCell icon={<Thermometer className="h-4 w-4" />} label="Min" value="18°C" />
-            <WeatherCell icon={<Droplets className="h-4 w-4" />} label="Rain" value="2.4mm" />
-            <WeatherCell icon={<Wind className="h-4 w-4" />} label="Wind" value="12 km/h" />
+            <WeatherCell icon={<Thermometer className="h-4 w-4" />} label="Max" value="—" />
+            <WeatherCell icon={<Thermometer className="h-4 w-4" />} label="Min" value="—" />
+            <WeatherCell icon={<Droplets className="h-4 w-4" />} label="Rain" value="—" />
+            <WeatherCell icon={<Wind className="h-4 w-4" />} label="Wind" value="—" />
           </div>
           <div className="mt-3 flex gap-2">
             <Input
               className="h-8 text-xs"
               placeholder="Sky condition (clear / overcast / rainy)…"
-              defaultValue="Partly cloudy, light rain afternoon"
+              defaultValue=""
             />
           </div>
         </Card>
 
-        {/* Visitors */}
+        {/* Visitors — empty array until daily_site_logs exists */}
         <Card title="Visitors" icon={<Users className="h-4 w-4" />}>
           <div className="space-y-1.5">
-            {[
-              {
-                name: 'Er. Suresh Maharjan',
-                org: 'DoR — Supervision Consultant',
-                purpose: 'PCC pour inspection',
-                time: '10:30',
-              },
-              {
-                name: 'Mr. David Rai',
-                org: 'Client Rep — DoR',
-                purpose: 'Monthly progress review',
-                time: '14:00',
-              },
-            ].map((v, i) => (
+            {(
+              [] as Array<{
+                name: string
+                org: string
+                purpose: string
+                time: string
+              }>
+            ).map((v, i) => (
               <div
                 key={i}
                 className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5 text-xs"
@@ -95,213 +122,69 @@ export function DailySiteLogView({ date }: { date: string }) {
                 <div className="text-muted-foreground text-[10px]">{v.time}</div>
               </div>
             ))}
-            <Button variant="ghost" size="sm" className="h-7 w-full gap-1 text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-full gap-1 text-xs"
+              onClick={() =>
+                toast.info('Visitor logging coming soon', {
+                  description:
+                    'Add visitor rows once the daily_site_logs table + route land. No backing store exists yet.',
+                })
+              }
+            >
               <Plus className="h-3 w-3" />
               Add visitor
             </Button>
           </div>
         </Card>
 
-        {/* Delays */}
+        {/* Delays — empty default textarea */}
         <Card title="Delays / Interruptions" icon={<Clock className="h-4 w-4" />}>
           <Textarea
             className="min-h-[60px] text-xs"
-            defaultValue="09:30-11:30 — Concrete pump breakdown at P-4 footing pour. Replacement arranged from Bhotahiti depot. 2 hours lost. Sub-contractor M/S Lama Constructions notified."
+            defaultValue=""
+            placeholder="Describe any delays or interruptions (e.g. equipment breakdown, weather stoppage, missing material)…"
           />
         </Card>
 
-        {/* Manpower */}
+        {/* Manpower — empty default with a "log from T&A" hint */}
         <Card
           title="Manpower Log"
           icon={<Users className="h-4 w-4" />}
           action={
-            <Button variant="ghost" size="sm" className="h-6 gap-1 text-[10px]">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 text-[10px]"
+              onClick={() =>
+                toast.info('Copy Yesterday coming soon', {
+                  description:
+                    'Will prefill manpower from the previous day once the daily_site_logs table lands.',
+                })
+              }
+            >
               <Copy className="h-3 w-3" />
               Yesterday
             </Button>
           }
         >
-          <div className="space-y-1.5">
-            {[
-              { trade: 'Mason (Skilled)', count: 12, hours: 8 },
-              { trade: 'Mazdoor (Unskilled)', count: 48, hours: 8 },
-              { trade: 'Bar bender', count: 6, hours: 8 },
-              { trade: 'Carpenter', count: 4, hours: 8 },
-              { trade: 'Operator', count: 5, hours: 8 },
-              { trade: 'Helper', count: 8, hours: 6 },
-            ].map((m, i) => (
-              <div key={i} className="grid grid-cols-12 items-center gap-2 text-xs">
-                <Input className="col-span-6 h-7" defaultValue={m.trade} />
-                <Input className="col-span-3 h-7 text-right" defaultValue={m.count} />
-                <Input className="col-span-3 h-7 text-right" defaultValue={m.hours} />
-              </div>
-            ))}
+          <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-3 text-center text-[11px]">
+            No manpower data — log from Time &amp; Attendance
           </div>
         </Card>
 
-        {/* Equipment */}
+        {/* Equipment — empty default with a "log from Equipment module" hint */}
         <Card title="Equipment Log" icon={<Truck className="h-4 w-4" />}>
-          <div className="space-y-2">
-            <div className="text-muted-foreground grid grid-cols-12 gap-2 px-1 text-[10px] font-semibold tracking-wider uppercase">
-              <div className="col-span-4">Equipment</div>
-              <div className="col-span-2 text-center">Start</div>
-              <div className="col-span-2 text-center">End</div>
-              <div className="col-span-2 text-center">Output</div>
-              <div className="col-span-2 text-center">Fuel</div>
-            </div>
-            {[
-              {
-                name: 'JCB 3DX (Excavator)',
-                start: '08:00',
-                end: '17:00',
-                output: '240 cum',
-                fuel: '32 l',
-                burn: 4.0,
-                norm: 3.5,
-              },
-              {
-                name: 'Concrete Mixer 0.4 cum',
-                start: '09:00',
-                end: '15:00',
-                output: '28.5 cum',
-                fuel: '12 l',
-                burn: 2.0,
-                norm: 2.0,
-              },
-              {
-                name: 'Tata 1109 (Tipper)',
-                start: '08:30',
-                end: '17:30',
-                output: '14 trips',
-                fuel: '18 l',
-                burn: 2.0,
-                norm: 2.5,
-              },
-            ].map((e, i) => {
-              const burnAlert = e.burn > e.norm
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    'grid grid-cols-12 items-center gap-2 rounded border p-1.5 text-xs',
-                    burnAlert ? 'border-red-500/40 bg-red-500/5' : 'border-[var(--pane-divider)]'
-                  )}
-                >
-                  <div className="col-span-4">
-                    <div className="truncate font-medium">{e.name}</div>
-                    <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
-                      <Fuel
-                        className={cn(
-                          'h-2.5 w-2.5',
-                          burnAlert ? 'text-red-500' : 'text-emerald-500'
-                        )}
-                      />
-                      Burn {e.burn} l/hr{' '}
-                      {burnAlert && <span className="text-red-500">· ⚠ above norm {e.norm}</span>}
-                    </div>
-                  </div>
-                  <div className="col-span-2 text-center font-mono">{e.start}</div>
-                  <div className="col-span-2 text-center font-mono">{e.end}</div>
-                  <div className="col-span-2 text-center font-mono">{e.output}</div>
-                  <div className="col-span-2 text-center font-mono">{e.fuel}</div>
-                </div>
-              )
-            })}
-            {/* Fuel alert summary */}
-            {[{ name: 'JCB 3DX (Excavator)', burn: 4.0, norm: 3.5 }].filter((e) => e.burn > e.norm)
-              .length > 0 && (
-              <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-[11px]">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-red-500" />
-                <div className="flex-1">
-                  <div className="font-medium text-red-600">
-                    Fuel burn-rate alert — possible theft or excessive idling
-                  </div>
-                  <div className="text-muted-foreground mt-0.5">
-                    JCB 3DX burned 4.0 l/hr vs RA norm of 3.5 l/hr (14% over). Alert sent to PM and
-                    storekeeper. Recommend operator log review and fuel dipstick check.
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-6 text-[10px]"
-                  disabled
-                  title="Coming soon"
-                >
-                  Escalate
-                </Button>
-              </div>
-            )}
+          <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-3 text-center text-[11px]">
+            No equipment data — log from Equipment module
           </div>
         </Card>
 
-        {/* Geological face log (tunneling) */}
+        {/* Geological face log (tunneling) — empty default */}
         <Card title="Geological Face Log · Tunneling" icon={<Mountain className="h-4 w-4" />}>
-          <div className="space-y-2">
-            <div className="text-muted-foreground grid grid-cols-12 gap-2 px-1 text-[10px] font-semibold tracking-wider uppercase">
-              <div className="col-span-3">Chainage</div>
-              <div className="col-span-3">Rock Class</div>
-              <div className="col-span-4">Support Installed</div>
-              <div className="col-span-2">Advance</div>
-            </div>
-            {[
-              {
-                ch: '0+875',
-                rock: 'Class III (Good)',
-                support: 'Steel ribs @ 1.2m + Shotcrete 50mm',
-                adv: '1.5m',
-              },
-              {
-                ch: '0+876.5',
-                rock: 'Class III (Good)',
-                support: 'Steel ribs @ 1.2m + Shotcrete 50mm',
-                adv: '1.5m',
-              },
-              {
-                ch: '0+878',
-                rock: 'Class IV (Fair) — deviation',
-                support: 'Steel ribs @ 0.8m + Shotcrete 75mm + Rock bolt',
-                adv: '1.2m',
-                alert: true,
-              },
-            ].map((g, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'grid grid-cols-12 items-center gap-2 rounded border p-1.5 text-xs',
-                  g.alert ? 'border-amber-500/40 bg-amber-500/5' : 'border-[var(--pane-divider)]'
-                )}
-              >
-                <div className="col-span-3 font-mono">{g.ch}</div>
-                <div className="col-span-3">{g.rock}</div>
-                <div className="col-span-4 text-[11px]">{g.support}</div>
-                <div className="col-span-2 text-right font-mono">{g.adv}</div>
-              </div>
-            ))}
-            {[
-              {
-                ch: '0+878',
-                rock: 'Class IV (Fair) — deviation',
-                support: 'Steel ribs @ 0.8m + Shotcrete 75mm + Rock bolt',
-                adv: '1.2m',
-                alert: true,
-              },
-            ].some((g) => g.alert) && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px]">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-amber-500" />
-                <div className="flex-1">
-                  <div className="font-medium">Deviation from design support pattern</div>
-                  <div className="text-muted-foreground">
-                    Class IV rock encountered at ch. 0+878 — support upgraded. Auto-RFI generated
-                    for consultant approval.
-                  </div>
-                </div>
-                <Button size="sm" variant="outline" className="h-6 gap-1 text-[10px]">
-                  <Mail className="h-3 w-3" />
-                  Open RFI
-                </Button>
-              </div>
-            )}
+          <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-3 text-center text-[11px]">
+            No geological face log entries
           </div>
         </Card>
       </PaneBody>

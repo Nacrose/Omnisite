@@ -34,6 +34,7 @@ import {
   type ColumnDef,
 } from '@/components/ui/table-utils'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { useApp } from '@/lib/app-store'
 import { LoadingState } from '@/components/ui/loading-state'
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core'
 
@@ -66,7 +67,8 @@ export function BoqModule() {
     '2.1',
     '3',
   ])
-  const [boqRows, setBoqRows, boqLoading, boqTruncated] = useSyncedState<BoqItem[]>(
+  const { activeProject } = useApp()
+  const [boqRows, setBoqRows, boqLoading, boqTruncated, loadMoreBoq] = useSyncedState<BoqItem[]>(
     'omnisite-boq-data',
     'boq_items',
     () => structuredClone(BOQ_DATA) as typeof BOQ_DATA,
@@ -273,7 +275,7 @@ export function BoqModule() {
         centerPane={
           <>
             <PaneHeader
-              title={`BOQ · ${selected.size > 0 ? `${selected.size} selected` : 'Kathmandu Ring Road P3'}`}
+              title={`BOQ · ${selected.size > 0 ? `${selected.size} selected` : (activeProject ?? 'No project selected')}`}
             >
               {/* Search — moved from the old left outline pane */}
               <div className="relative">
@@ -290,12 +292,31 @@ export function BoqModule() {
                 Edit Qty/Rate · drag rows to headings to reparent
               </span>
               {boqTruncated && (
-                <span
-                  className="hidden items-center gap-1 rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 lg:flex dark:text-amber-300"
-                  title="Dataset hit the 2000-row cap. Refine your filter or contact admin for full data."
-                >
-                  Showing first 2000 rows
-                </span>
+                <>
+                  <span
+                    className="hidden items-center gap-1 rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 lg:flex dark:text-amber-300"
+                    title="Dataset hit the 2000-row cap. Refine your filter or contact admin for full data."
+                  >
+                    Showing first 2000 rows
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 gap-1.5 px-2 text-[10px]"
+                    onClick={async () => {
+                      try {
+                        await loadMoreBoq()
+                        toast.success('Loaded next page')
+                      } catch {
+                        toast.error('Failed to load more rows')
+                      }
+                    }}
+                    title="Fetch the next page of BOQ rows from the server"
+                  >
+                    <FilePlus className="h-3 w-3" />
+                    Load more
+                  </Button>
+                </>
               )}
               {/* Undo/Redo buttons */}
               <div className="mr-1 flex items-center gap-0.5 border-r border-[var(--pane-divider)] pr-1.5">

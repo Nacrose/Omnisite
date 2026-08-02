@@ -24,96 +24,21 @@ interface Notification {
   module?: ModuleId
 }
 
-const NOTIFICATIONS: Notification[] = [
-  {
-    id: 'n1',
-    type: 'alert',
-    title: 'NCR billing hold active',
-    desc: 'NCR-034 dropped Max Billable Qty to 0 for BOQ 3.2',
-    time: '5 min ago',
-    unread: true,
-    severity: 'critical',
-    notifyType: 'ncr_hold',
-    recipient: 'pm@omnisite',
-    module: 'qs',
-  },
-  {
-    id: 'n2',
-    type: 'approval',
-    title: 'PO awaiting approval',
-    desc: 'PO-2410-018 — Cement 1,200 bags · NPR 1,104,000',
-    time: '12 min ago',
-    unread: true,
-    severity: 'warning',
-    notifyType: 'po_approval',
-    recipient: 'pm@omnisite',
-    module: 'procurement',
-  },
-  {
-    id: 'n3',
-    type: 'reminder',
-    title: 'RFI reply overdue',
-    desc: 'RFI-067 — Rebar detailing at expansion joint · 4 days overdue',
-    time: '1 hr ago',
-    unread: true,
-    severity: 'critical',
-    notifyType: 'rfi_overdue',
-    recipient: 'pm@omnisite',
-    module: 'daily-ops',
-  },
-  {
-    id: 'n4',
-    type: 'approval',
-    title: 'DSR review needed',
-    desc: 'DSR #087 — Chainage 4+200 to 4+350 PCC submitted by Bikash R.',
-    time: '2 hrs ago',
-    unread: true,
-    severity: 'warning',
-    notifyType: 'dsr_review',
-    recipient: 'pm@omnisite',
-    module: 'daily-ops',
-  },
-  {
-    id: 'n5',
-    type: 'document',
-    title: 'Drawing revision issued',
-    desc: 'KRR-P3-DR-DR-008 Rev A — Box culvert rebar details (Pending)',
-    time: '3 hrs ago',
-    unread: false,
-    severity: 'info',
-    module: 'drawings',
-  },
-  {
-    id: 'n6',
-    type: 'safety',
-    title: 'Near-miss reported',
-    desc: 'NM-012 — Tipper reversing without spotter at ch. 4+200',
-    time: '4 hrs ago',
-    unread: false,
-    severity: 'warning',
-    module: 'qs',
-  },
-  {
-    id: 'n7',
-    type: 'reminder',
-    title: 'Toolbox talk scheduled',
-    desc: 'Today 15:00 — Excavation safety at ch. 4+200',
-    time: '5 hrs ago',
-    unread: false,
-    severity: 'info',
-    module: 'qs',
-  },
-  {
-    id: 'n8',
-    type: 'approval',
-    title: 'RA Bill #4 submitted',
-    desc: 'NPR 18.4 Cr — awaiting client approval',
-    time: 'Yesterday',
-    unread: false,
-    severity: 'info',
-    module: 'financials',
-  },
-]
+// ─── Notifications seed ─────────────────────────────────────────────────────
+//
+// Notifications should be computed from live data (pending POs, overdue
+// RFIs, billing-hold NCRs, etc.) — not yet wired. The hardcoded demo
+// array below was emitting real emails/SMS via the sendNotification()
+// dispatch in the mount effect, which meant every demo session was
+// firing off fake "PO awaiting approval" / "RFI overdue" alerts to
+// pm@omnisite. Until the live-data pipeline lands, we ship an EMPTY
+// array AND gate the dispatch behind a separate flag so fake entries
+// (added later for staging/demo) can't trigger emails.
+const NOTIFICATIONS: Notification[] = []
+// Flip to `true` ONLY when entries above are backed by real data.
+// When false, the sendNotification() dispatch in the mount effect is
+// a no-op — fake notifications never trigger emails/SMS.
+const NOTIFICATIONS_DISPATCH_ENABLED = false
 
 const ICONS = {
   approval: FileText,
@@ -151,7 +76,14 @@ export function NotificationsBell() {
   // ─── Fire server-side notifications for overdue / critical items ──────────
   // Runs once per session (guarded by sessionStorage) to avoid spamming the
   // console / email / SMS channels on every re-render.
+  //
+  // Gated behind NOTIFICATIONS_DISPATCH_ENABLED: when the seed array is
+  // empty (the current state) or holds demo-only entries, this is a no-op
+  // so fake notifications never trigger real emails/SMS. Flip the flag
+  // only when the array is populated from live data (pending POs,
+  // overdue RFIs, billing-hold NCRs, etc.).
   useEffect(() => {
+    if (!NOTIFICATIONS_DISPATCH_ENABLED) return
     const SESSION_KEY = 'omnisite-notifications-dispatched'
     if (typeof window === 'undefined') return
     if (window.sessionStorage.getItem(SESSION_KEY)) return

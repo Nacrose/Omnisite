@@ -30,7 +30,6 @@ import {
   ArrowRight,
   Clock,
   FileText,
-  ShieldAlert,
   DollarSign,
   Gauge,
   Activity,
@@ -40,10 +39,12 @@ import { KpiStrip } from './kpi-strip'
 import { UrgentActionsQueue, type UrgentAction } from './urgent-actions'
 import { MiniGanttChart, SCurveChart, CashFlowChart, BacklogChart } from './charts'
 import { LocationStripMap } from './location-strip-map'
+import { useApp } from '@/lib/app-store'
 
 export function DashboardModule() {
   const router = useRouter()
   const navigateToModule = (id: string) => router.push(`/${id}`)
+  const { activeProject } = useApp()
 
   const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
@@ -231,12 +232,18 @@ export function DashboardModule() {
     }
 
     // Tasks at 0% progress past their scheduled start week. The scheduler
-    // hardcodes `todayWeek = 16` (see scheduler/index.tsx) — we mirror that
-    // here so "past start week" matches what the Gantt canvas shows as
-    // TODAY. A task with progress === 0 whose `start` is before this week
-    // is genuinely stalled (it should have begun).
+    // computes `todayWeek` from a fixed project epoch (see scheduler/index.tsx)
+    // — we mirror that same formula here so "past start week" matches what
+    // the Gantt canvas shows as TODAY. A task with progress === 0 whose
+    // `start` is before this week is genuinely stalled (it should have begun).
     const flatTasks = flattenTasks(taskRows)
-    const SCHEDULER_TODAY_WEEK = 16
+    // Mirrors the scheduler's PROJECT_EPOCH + MS_PER_WEEK constants so the
+    // dashboard's "today" agrees with the Gantt canvas's red TODAY line.
+    const PROJECT_EPOCH = new Date('2026-04-01')
+    const SCHEDULER_TODAY_WEEK = Math.max(
+      0,
+      Math.floor((Date.now() - PROJECT_EPOCH.getTime()) / (7 * 24 * 60 * 60 * 1000))
+    )
     for (const { task } of flatTasks) {
       if (task.type === 'Work' && task.progress === 0 && task.start < SCHEDULER_TODAY_WEEK) {
         actions.push({
@@ -275,7 +282,7 @@ export function DashboardModule() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Project Command Center</h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Kathmandu Ring Road Expansion · Package 3 · FIDIC Red Book · DoR Norms 2075
+              {activeProject ?? 'No project selected'} · FIDIC Red Book · DoR Norms 2075
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -389,36 +396,23 @@ export function DashboardModule() {
                     <Users className="h-3.5 w-3.5" />
                     Manpower on site
                   </div>
-                  <div className="mt-1 text-xl font-bold">83</div>
-                  <div className="text-muted-foreground text-[10px]">5 trades · see Daily Ops</div>
+                  <div className="text-muted-foreground mt-1 text-[11px] leading-snug">
+                    Open Daily Ops to log today&apos;s site status
+                  </div>
                 </div>
                 <div className="bg-secondary/40 rounded-md p-3">
                   <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
                     <Truck className="h-3.5 w-3.5" />
                     Equipment active
                   </div>
-                  <div className="mt-1 text-xl font-bold">3</div>
-                  <div className="text-muted-foreground text-[10px]">
-                    1 idle · 1 breakdown · see Equipment
+                  <div className="text-muted-foreground mt-1 text-[11px] leading-snug">
+                    Open Equipment to view fleet status
                   </div>
                 </div>
               </div>
               <Separator />
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-xs">
-                  <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-                  <span className="flex-1">Toolbox talk held — Excavation safety at ch. 4+200</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <Cloud className="h-3.5 w-3.5 text-sky-500" />
-                  <span className="flex-1">
-                    Light rain forecast 14:00-16:00 · cover fresh concrete
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <FileText className="h-3.5 w-3.5 text-violet-500" />
-                  <span className="flex-1">RA Bill #4 awaiting client approval · NPR 18.4 Cr</span>
-                </div>
+              <div className="text-muted-foreground text-[11px] leading-relaxed">
+                No daily brief data — open Daily Ops to log today&apos;s site status.
               </div>
               <Button
                 variant="ghost"

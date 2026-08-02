@@ -209,7 +209,18 @@ export function RfiTab() {
       leftPane={
         <>
           <PaneHeader title="RFI Register">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info('Use the DSR Inspector to draft an RFI', {
+                  description:
+                    'RFIs are created from the DSR Inspector — switch to the DSR tab to draft one from a daily entry.',
+                })
+              }
+              title="Add RFI (via DSR Inspector)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>
@@ -514,7 +525,16 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 Log Consultant Reply
               </Button>
             )}
-            <Button variant="outline" size="sm" className="h-8 w-full justify-start gap-2 text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-full justify-start gap-2 text-xs"
+              onClick={() =>
+                toast.info('RFI PDF export coming soon', {
+                  description: `Will render ${rfi.number} as a printable PDF using the question / background / impact fields above.`,
+                })
+              }
+            >
               <FileText className="h-3.5 w-3.5" />
               View PDF
             </Button>
@@ -523,6 +543,11 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 variant="outline"
                 size="sm"
                 className="h-8 w-full justify-start gap-2 text-xs"
+                onClick={() =>
+                  toast.info('Linked DSR navigation coming soon', {
+                    description: `Will switch the Daily Ops module to the DSR tab and select ${rfi.linkedDsr}. Cross-module deep-linking is not yet wired.`,
+                  })
+                }
               >
                 <ArrowRight className="h-3.5 w-3.5" />
                 Open linked DSR ({rfi.linkedDsr})
@@ -536,6 +561,11 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 variant="outline"
                 size="sm"
                 className="h-8 w-full justify-start gap-2 text-xs text-amber-600"
+                onClick={() =>
+                  toast.info('Convert to Variation Order coming soon', {
+                    description: `Will create a VO draft from ${rfi.number} with the cost impact pre-filled. VO module is not yet wired.`,
+                  })
+                }
               >
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Convert to Variation Order

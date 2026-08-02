@@ -16,7 +16,8 @@ import {
   HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DSR_ENTRIES, StatusDot } from './types'
+import { DSR_ENTRIES, StatusDot, type DsrEntry } from './types'
+import { useSyncedState } from '@/lib/use-synced-state'
 import { WorkProgressView } from './work-progress'
 import { DailySiteLogView } from './daily-site-log'
 import { DsrInspector } from './dsr-inspector'
@@ -28,14 +29,27 @@ export function DailyOpsModule() {
   const [topView, setTopView] = useState<TopView>('dsr')
   const [view, setView] = useState<'progress' | 'log'>('progress')
   const [selectedId, setSelectedId] = useState('D-087')
+  // Synced DSR entries — reads/writes go through the REST API client in
+  // Supabase mode, falls back to localStorage otherwise. Previously this
+  // imported `DSR_ENTRIES` directly, so the Daily Ops module was
+  // disconnected from the store: edits never persisted in Supabase mode
+  // and other tabs didn't see them in realtime. The `fieldMap` maps the
+  // camelCase boolean flags on the client type (`hasRfi`, `hasPhotos`)
+  // to the snake_case DB columns (`has_rfi`, `has_photos`).
+  const [dsrEntries, , dsrLoading] = useSyncedState<DsrEntry[]>(
+    'omnisite-dsr-entries',
+    'dsr_entries',
+    () => structuredClone(DSR_ENTRIES) as typeof DSR_ENTRIES,
+    { fieldMap: { hasRfi: 'has_rfi', hasPhotos: 'has_photos' }, primaryKey: 'id' }
+  )
   // Date for the DSR — defaults to the date of the first seed entry (today in
   // demo data). Users can navigate to previous/next days. Entries are filtered
   // to the selected date so you can actually pull up historical reports.
   const [selectedDate, setSelectedDate] = useState(
-    DSR_ENTRIES[0]?.date || new Date().toISOString().slice(0, 10)
+    dsrEntries[0]?.date || new Date().toISOString().slice(0, 10)
   )
-  const dayEntries = DSR_ENTRIES.filter((d) => d.date === selectedDate)
-  const selected = dayEntries.find((d) => d.id === selectedId) ?? dayEntries[0] ?? DSR_ENTRIES[0]
+  const dayEntries = dsrEntries.filter((d) => d.date === selectedDate)
+  const selected = dayEntries.find((d) => d.id === selectedId) ?? dayEntries[0] ?? dsrEntries[0]
 
   // Live RFI count from the shared store — updates when DSR Inspector adds one.
   const rfis = useSyncExternalStore(subscribeRfis, getRfis, getRfis)
@@ -53,7 +67,7 @@ export function DailyOpsModule() {
         <ClipboardList className="h-3.5 w-3.5" />
         Daily Site Reports
         <span className="bg-secondary text-muted-foreground ml-1 rounded-full px-1 py-0.5 text-[9px] font-semibold">
-          {DSR_ENTRIES.length}
+          {dsrEntries.length}
         </span>
       </Button>
       <Button
@@ -79,6 +93,17 @@ export function DailyOpsModule() {
         {headerStrip}
         <div className="min-h-0 flex-1">
           <RfiTab />
+        </div>
+      </div>
+    )
+  }
+
+  if (dsrLoading) {
+    return (
+      <div className="flex h-full w-full flex-col overflow-hidden">
+        {headerStrip}
+        <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-xs">
+          Loading DSR entries…
         </div>
       </div>
     )
@@ -129,7 +154,7 @@ export function DailyOpsModule() {
                     onChange={(e) => {
                       setSelectedDate(e.target.value)
                       // Reset selection to first entry of the new day (if any)
-                      const first = DSR_ENTRIES.find((d) => d.date === e.target.value)
+                      const first = dsrEntries.find((d) => d.date === e.target.value)
                       if (first) setSelectedId(first.id)
                     }}
                     className="bg-transparent text-[10px] font-semibold tracking-wider uppercase outline-none"
@@ -177,7 +202,7 @@ export function DailyOpsModule() {
           centerPane={
             view === 'progress' ? (
               <WorkProgressView
-                entries={dayEntries.length > 0 ? dayEntries : DSR_ENTRIES}
+                entries={dayEntries.length > 0 ? dayEntries : dsrEntries}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
               />

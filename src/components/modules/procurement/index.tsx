@@ -31,6 +31,7 @@ import {
 } from './types'
 import { INITIAL_POS, INITIAL_REQS, INITIAL_GRNS, INITIAL_STOCK } from './types'
 import { useSyncedState } from '@/lib/use-synced-state'
+import { usePersistentState } from '@/lib/use-persistent-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { useFocusTrap } from '@/lib/use-focus-trap'
 import { ReqCenterView } from './req-view'
@@ -82,19 +83,20 @@ export function ProcurementModule() {
     () => structuredClone(INITIAL_STOCK) as typeof INITIAL_STOCK,
     { fieldMap: { onHand: 'on_hand', avgCost: 'avg_cost' }, primaryKey: 'code' }
   )
-  // MINs are synced via useSyncedState so newly-issued MINs persist across
-  // refreshes (and to Supabase when configured). Previously the badge count
-  // was hardcoded to `INITIAL_MINS.length` and `MinCenterView` read from
-  // the constant directly — so new MINs were invisible after a refresh.
-  // The setter is intentionally skipped — MIN creation flow is not wired yet
-  // (the New button surfaces a "coming soon" toast). When creation lands,
-  // swap the empty slot back to `setMins`.
-  const [mins, , minsLoading] = useSyncedState<MinNote[]>(
+  // MINs (Material Issue Notes) are localStorage-only — there is currently
+  // no `material_issue_notes` API route or DB table. useSyncedState would
+  // try to POST to `/api/material_issue_notes` and fail in Supabase mode,
+  // polluting the console with upsert errors. Fall back to
+  // usePersistentState so MINs persist across refreshes without hitting
+  // the network. When a `material_issue_notes` table + route land,
+  // swap this back to useSyncedState('omnisite-procurement-mins',
+  // 'material_issue_notes', ...).
+  const [mins] = usePersistentState<MinNote[]>(
     'omnisite-procurement-mins',
-    'material_issue_notes',
-    () => structuredClone(INITIAL_MINS) as typeof INITIAL_MINS,
-    { primaryKey: 'id' }
+    () => structuredClone(INITIAL_MINS) as typeof INITIAL_MINS
   )
+  // usePersistentState is synchronous, so MINs are never in a loading state.
+  const minsLoading = false
   // Override modal state
   const [overrideModal, setOverrideModal] = useState<{
     reqId: string
@@ -428,10 +430,16 @@ export function ProcurementModule() {
                   setGrns((prev) =>
                     prev.map((g) => {
                       if (g.poId !== poId) return g
-                      const matched = g.poQty === g.grnQty && g.grnQty === g.invoiceQty
+                      // 3-way match: PO qty vs GRN qty vs Invoice qty, AND
+                      // PO rate vs Invoice rate. A qty match with a rate
+                      // mismatch would still over/under-pay the vendor —
+                      // locking payment in that case prevents silent
+                      // commercial leakage.
+                      const matched =
+                        g.poQty === g.grnQty && g.grnQty === g.invoiceQty && g.poRate === g.rate
                       if (!matched) {
                         toast.error('Payment locked', {
-                          description: `${poId} fails 3-way match. PO ${g.poQty} ≠ GRN ${g.grnQty} ≠ Inv ${g.invoiceQty}. Cannot approve.`,
+                          description: `${poId} fails 3-way match. PO ${g.poQty} ≠ GRN ${g.grnQty} ≠ Inv ${g.invoiceQty} (qty), or PO rate ${g.poRate} ≠ Inv rate ${g.rate}. Cannot approve.`,
                         })
                         return g
                       }

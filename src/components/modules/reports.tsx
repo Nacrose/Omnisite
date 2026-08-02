@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { usePersistentState } from '@/lib/use-persistent-state'
+import { useApp } from '@/lib/app-store'
 
 const TEMPLATES = [
   { id: 't1', name: 'Weekly Progress Report', pages: 4, lastUsed: '3 days ago' },
@@ -77,6 +78,7 @@ export function ReportsModule() {
   )
   // The currently selected widget — drives the right inspector pane.
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { activeProject } = useApp()
 
   const selectedWidget = useMemo(
     () => layout.find((w) => w.id === selectedId) ?? null,
@@ -270,7 +272,7 @@ export function ReportsModule() {
                     </div>
                     <div className="text-lg font-bold text-slate-900">Weekly Progress Report</div>
                     <div className="text-[10px] text-slate-500">
-                      Kathmandu Ring Road Expansion — Package 3
+                      {activeProject ?? 'No project selected'}
                     </div>
                   </div>
                   <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-900 text-xs font-bold text-white">

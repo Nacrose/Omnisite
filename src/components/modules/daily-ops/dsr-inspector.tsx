@@ -44,9 +44,10 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
   // tracked per DSR entry. We honestly pass `null` and let the MaterialRow
   // show "—" with a "not available" note.
   const issued: number | null = null
-  const variance =
-    theoretical > 0 && issued !== null ? ((issued - theoretical) / theoretical) * 100 : 0
-  const overVariance = isConcreteActivity && issued !== null && Math.abs(variance) > 5
+  // Material variance check will activate when MIN data linkage is implemented.
+  // The previous `variance` / `overVariance` block here was unreachable dead
+  // code (issued is always null), and its >5% override panel never rendered.
+  // Removed to keep the inspector honest — re-add when MIN rows are wired in.
   // RFI draft modal state
   const [rfiModalOpen, setRfiModalOpen] = useState(false)
   const [rfiDraft, setRfiDraft] = useState({
@@ -57,7 +58,13 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
   })
   const [rfiSaved, setRfiSaved] = useState(false)
   // Stable RFI ID — generated once per mount so it doesn't change on re-render.
-  const [rfiId] = useState(() => Math.floor(Math.random() * 9000) + 1000)
+  // Uses crypto.randomUUID (truncated to 8 chars) instead of Math.random() so
+  // IDs aren't predictable / collision-prone across mounts.
+  const [rfiId] = useState(() =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10)
+  )
 
   // ─── Photo upload state ───────────────────────────────────────────────────
   // Photos are stored per-DSR entry in a Supabase Storage folder named after
@@ -360,23 +367,9 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
                     populate the reconciliation.
                   </div>
                 )}
-                {overVariance && (
-                  <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[11px]">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-red-500" />
-                    <div>
-                      <div className="font-medium">
-                        Material variance &gt; 5% — cannot mark Completed
-                      </div>
-                      <div className="text-muted-foreground">
-                        Cement consumption {variance.toFixed(1)}% above theoretical. Mandatory
-                        remark required to override.
-                      </div>
-                      <Button size="sm" variant="outline" className="mt-1.5 h-6 text-[10px]">
-                        Add override remark
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                {/* Material variance check will activate when MIN data linkage is implemented.
+                    The previous overVariance panel (variance > 5% override) was unreachable
+                    dead code — removed. See the comment near `issued` above. */}
               </>
             ) : (
               <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-4 text-center text-[11px]">

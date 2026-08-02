@@ -13,7 +13,7 @@ import { toast } from 'sonner'
 import { WorkerList } from './worker-list'
 import { WorkerInspector } from './inspector'
 import { PhoneMockup } from './phone-mockup'
-import { computeDailyPayroll, enumeratePayPeriodDays, formatPayPeriodLabel } from './payroll-calc'
+import { computeDailyPayroll, formatPayPeriodLabel } from './payroll-calc'
 
 export interface Worker {
   id: string
@@ -240,41 +240,32 @@ export function TimeAttendanceModule() {
               size="sm"
               className="mt-2 h-7 w-full gap-1.5 text-xs"
               onClick={() => {
-                // Payroll CSV export — one row per worker per day in the
-                // selected pay period, with regular/OT split and wage calc.
-                // Uses the same `computeDailyPayroll` helper as the worker
-                // inspector so the two views never disagree.
-                const days = enumeratePayPeriodDays(payPeriodStart, payPeriodEnd)
-                if (days.length === 0) {
-                  toast.error('Invalid pay period', {
-                    description: 'Pick a start date on or before the end date.',
-                  })
-                  return
-                }
+                // Payroll CSV export — until per-day attendance tracking
+                // exists, we export ONLY today's snapshot (one row per
+                // worker). The previous version fanned `todayHours` out
+                // across every day in the pay-period range, fabricating
+                // hours that weren't actually worked. When a daily
+                // attendance table is added, swap this for a per-day
+                // lookup keyed by (workerId, date).
+                const today = new Date().toISOString().slice(0, 10)
                 const rows: (string | number)[][] = []
-                for (const day of days) {
-                  for (const w of workerList) {
-                    // We don't have per-day historical attendance yet, so each
-                    // day in the period uses the worker's `todayHours` as the
-                    // hours worked that day. Once a daily attendance table
-                    // exists, swap this for a lookup keyed by (workerId, day).
-                    const hours = w.todayHours ?? 0
-                    const p = computeDailyPayroll(w, hours)
-                    rows.push([
-                      w.name,
-                      w.trade,
-                      day,
-                      p.regularHours.toFixed(2),
-                      p.otHours.toFixed(2),
-                      p.wageRate.toFixed(2),
-                      p.regularPay.toFixed(2),
-                      p.otPay.toFixed(2),
-                      p.totalPay.toFixed(2),
-                    ])
-                  }
+                for (const w of workerList) {
+                  const hours = w.todayHours ?? 0
+                  const p = computeDailyPayroll(w, hours)
+                  rows.push([
+                    w.name,
+                    w.trade,
+                    today,
+                    p.regularHours.toFixed(2),
+                    p.otHours.toFixed(2),
+                    p.wageRate.toFixed(2),
+                    p.regularPay.toFixed(2),
+                    p.otPay.toFixed(2),
+                    p.totalPay.toFixed(2),
+                  ])
                 }
                 exportToCsv(
-                  'omnisite-payroll.csv',
+                  'omnisite-payroll-today.csv',
                   [
                     'Worker',
                     'Trade',
@@ -288,12 +279,13 @@ export function TimeAttendanceModule() {
                   ],
                   rows,
                   [
-                    "# NOTE: Daily hours are estimated from today's snapshot. Per-day attendance tracking is not yet implemented.",
-                    '# Verify and adjust in Excel before finalizing payroll.',
+                    "# NOTE: This export contains today's attendance snapshot only.",
+                    '# Multi-day payroll requires per-day attendance tracking (not yet implemented).',
                   ]
                 )
-                toast.success('Payroll CSV exported', {
-                  description: `${rows.length} rows for ${workerList.length} workers, ${payPeriodStart} to ${payPeriodEnd}. NOTE: Daily hours are estimated from today's snapshot — per-day attendance tracking is not yet implemented. Verify and adjust in Excel before finalizing.`,
+                toast.success("Exported today's attendance snapshot", {
+                  description:
+                    'Multi-day payroll requires per-day attendance tracking (not yet implemented).',
                 })
               }}
             >

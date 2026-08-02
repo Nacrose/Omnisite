@@ -1,0 +1,21 @@
+-- Migration: Add dependencies JSONB column to tasks
+-- Date: 2026-08-01
+--
+-- The Task type on the client has had `dependencies?: TaskDependency[]`
+-- for a while (used by the CPM calculator in the Scheduler), but the
+-- field was never persisted — every reload reset the dependency graph
+-- to whatever the seed data contained, and any user edits were lost.
+--
+-- This adds the missing column so the scheduler's useSyncedState hook
+-- can round-trip the dependencies array. The client JSON.stringifies
+-- the array before POSTing (same pattern as `children` / `baseline`);
+-- PostgREST accepts the string for a JSONB column and parses it, and
+-- returns the parsed array on read.
+--
+-- Note: a separate `task_dependencies` table already exists (migration
+-- 00000000000003) with FS/SS/FF/SF link types and lag. This column is
+-- the denormalized, client-side representation that mirrors the Task
+-- type — the table remains the source of truth for server-side
+-- constraint solving and audit.
+
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS dependencies JSONB;

@@ -39,6 +39,13 @@ export const taskSchema = z.object({
   sort_order: z.number().int().default(0),
   children: z.string().optional(),
   baseline: z.string().optional(),
+  // Serialized JSON of TaskDependency[] (predecessorId + linkType + lag).
+  // Same pattern as `children` / `baseline` — the client JSON.stringifies
+  // before POSTing. Without this, the Zod validation stripped the field
+  // on POST, so dependencies silently disappeared in Supabase mode and
+  // CPM re-calculation produced a flat (no-predecessor) network after
+  // every reload.
+  dependencies: z.string().optional(),
 })
 
 // Workers
@@ -104,6 +111,13 @@ export const qsItemSchema = z.object({
   severity: z.enum(['low', 'medium', 'high']).optional(),
   billing_hold: z.boolean().default(false),
   cap: z.string().nullable().optional(), // serialized JSON
+  // Date the Corrective Action Plan was submitted to the consultant, and
+  // the date the item was closed. These existed on the client type but
+  // had no DB columns / schema entries, so any Q&S item with these set
+  // would silently lose them on POST in Supabase mode (Zod stripped the
+  // unknown fields, and the DB rejected them as missing columns).
+  cap_submitted_date: z.string().nullable().optional(),
+  closed_date: z.string().nullable().optional(),
 })
 
 // Chat Messages

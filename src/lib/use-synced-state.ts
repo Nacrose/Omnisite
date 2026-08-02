@@ -72,6 +72,22 @@ const TABLE_TO_ENDPOINT: Record<string, string> = {
   qs_items: 'qs-items',
   chat_messages: 'chat-messages',
   drawing_annotations: 'drawing-annotations',
+  // Tables below were previously missing — without these entries,
+  // `endpointFor(table)` returned the table name verbatim, so POSTs to
+  // `/api/requisitions` (etc.) hit a 404 in Supabase mode and silently
+  // fell back to localStorage. The migration to useSyncedState for these
+  // modules looked correct but data never actually round-tripped.
+  purchase_orders: 'purchase-orders',
+  stock_items: 'stock-items',
+  project_locations: 'project-locations',
+  user_projects: 'user-projects',
+  dsr_entries: 'dsr-entries',
+  letters: 'letters',
+  grns: 'grns',
+  vendors: 'vendors',
+  requisitions: 'requisitions',
+  drawings: 'drawings',
+  subcontractors: 'subcontractors',
 }
 
 function endpointFor(table: string): string {
@@ -222,7 +238,7 @@ export function useSyncedState<T>(
         const dbCol = fmap[key] || camelToSnake(key)
 
         // Complex fields that don't exist as DB columns — serialize as JSON
-        if (key === 'children' || key === 'baseline') {
+        if (key === 'children' || key === 'baseline' || key === 'dependencies') {
           row[dbCol] = JSON.stringify(item[key])
           continue
         }

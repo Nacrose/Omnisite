@@ -46,6 +46,13 @@ export function SchedulerModule() {
         baseline: 'baseline_finish',
         constraints: 'constraints',
         parentId: 'parent_id',
+        // Explicit no-op mapping so the dependencies JSON string survives
+        // the camelToSnake auto-convert (which would otherwise also produce
+        // 'dependencies' — listed here for clarity so future contributors
+        // don't accidentally drop it). Without this, Zod's taskSchema (now
+        // extended to accept `dependencies`) would still receive the field,
+        // but the round-trip is now end-to-end explicit.
+        dependencies: 'dependencies',
       },
       primaryKey: 'id',
     }
@@ -116,7 +123,7 @@ export function SchedulerModule() {
     () => flat.filter(({ task }) => !showCriticalOnly || task.critical || task.type === 'Summary'),
     [flat, showCriticalOnly]
   )
-  const selectedTask = flat.find((f) => f.task.id === selectedId)?.task ?? flat[0].task
+  const selectedTask = flat.find((f) => f.task.id === selectedId)?.task ?? flat[0]?.task ?? null
 
   // Project finish — the latest end-week (start + duration) across all
   // tasks. Previously this was hardcoded to "Wk 48" in the footer; now it
@@ -166,8 +173,11 @@ export function SchedulerModule() {
 
   // Add a new task to the top level
   const addTask = () => {
-    const taskNum = flat.length + 1
-    const newId = `T-${500 + taskNum}`
+    // Time-based ID so concurrent adds (or two sessions creating tasks at
+    // the same second) don't collide. Previously `T-${500 + taskNum}` would
+    // clash with seed task IDs once the count grew past 100, and would
+    // duplicate IDs if tasks were deleted and re-added.
+    const newId = `T-${Date.now().toString(36)}`
     const task: Task = {
       id: newId,
       name: newTask.name || 'New Task',
@@ -378,6 +388,18 @@ export function SchedulerModule() {
     return (
       <div className="flex h-full items-center justify-center">
         <LoadingState label="Loading tasks…" />
+      </div>
+    )
+  }
+
+  // Guard against an empty task tree (e.g. fresh install with no seed data,
+  // or all tasks deleted). Without this, `selectedTask` is null and the
+  // TaskInspector below would crash dereferencing it. Placed AFTER all hooks
+  // have been called so we don't violate rules-of-hooks.
+  if (!selectedTask) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <LoadingState label="No tasks yet — add one to get started." />
       </div>
     )
   }

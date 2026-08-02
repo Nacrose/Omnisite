@@ -80,7 +80,7 @@ export const DEFAULT_CHANNELS: ChatChannel[] = [
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   {
     id: 'u-arjun',
-    name: 'Site Engineer',
+    name: 'Arjun Sharma',
     initials: 'AS',
     color: '#f97316',
     role: 'Project Manager',
@@ -154,6 +154,24 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
   }
 
   // Load messages from Supabase
+  //
+  // NOTE: This deliberately BYPASSES useSyncedState and reads
+  // `chat_messages` directly via the Supabase client. This is an
+  // intentional, scoped exception to the "all reads go through the REST
+  // API client" rule, made because:
+  //   1. Chat is latency-sensitive — every message round-trips through
+  //      the API client's per-row upsert queue, which is fine for
+  //      dozens of rows but causes visible lag for hundreds of messages.
+  //   2. Chat uses Supabase realtime directly (postgres_changes INSERT
+  //      channel below). Co-locating the read path on the same client
+  //      keeps the realtime subscription + initial load consistent —
+  //      the API client's separate realtime channel cache would create
+  //      a second subscription and double the connection count.
+  //   3. Chat messages are append-only and don't need the
+  //      camelCase↔snake_case field mapping that useSyncedState provides
+  //      (the column names already match the client type 1:1).
+  // Writes still go through the REST API client (`upsertOne('chat-messages', ...)`)
+  // so server-side validation / audit logging applies to POSTs.
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
       const t = setTimeout(() => setLoading(false), 0)

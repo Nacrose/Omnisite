@@ -5,7 +5,18 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Package, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react'
+import { toast } from 'sonner'
 import { ReqItem, Tab } from './types'
+
+// Human-readable label for each procurement tab — used by the "select an
+// item" placeholder shown when the inspector is opened on a non-req tab.
+const TAB_LABELS: Record<Tab, string> = {
+  req: 'requisition',
+  po: 'PO',
+  grn: 'GRN',
+  stock: 'stock item',
+  min: 'MIN',
+}
 
 export function ProcurementInspector({
   tab,
@@ -16,6 +27,29 @@ export function ProcurementInspector({
   selectedId: string
   reqs: ReqItem[]
 }) {
+  // The inspector only renders requisition details. The PO/GRN/Stock/MIN
+  // tabs have their own list views in the center pane; showing requisition
+  // data there is misleading (it would surface a requisition that has
+  // nothing to do with the selected PO/GRN). Surface an honest placeholder
+  // instead — the center pane already shows the row-level details for the
+  // active tab.
+  if (tab !== 'req') {
+    return (
+      <>
+        <PaneHeader title="Inspector" />
+        <PaneBody>
+          <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 p-12 text-center text-xs">
+            <Package className="h-6 w-6 opacity-40" />
+            <div className="font-medium">No {TAB_LABELS[tab]} selected</div>
+            <div className="text-[11px]">
+              Select a {TAB_LABELS[tab]} item from the list to view details.
+            </div>
+          </div>
+        </PaneBody>
+      </>
+    )
+  }
+
   const req = reqs.find((r) => r.id === selectedId) ?? reqs[0]
   if (!req) return null
   return (
@@ -95,11 +129,29 @@ export function ProcurementInspector({
             Actions
           </div>
           <div className="space-y-1.5">
-            <Button variant="outline" size="sm" className="h-8 w-full justify-start gap-2 text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-full justify-start gap-2 text-xs"
+              onClick={() =>
+                toast.info('Convert to Consolidated PO coming soon', {
+                  description: `Use the "Generate POs" button in the Requisitions center to bulk-convert approved reqs into per-vendor POs.`,
+                })
+              }
+            >
               <Package className="h-3.5 w-3.5" />
               Convert to Consolidated PO
             </Button>
-            <Button variant="outline" size="sm" className="h-8 w-full justify-start gap-2 text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-full justify-start gap-2 text-xs"
+              onClick={() =>
+                toast.info('Mark Fully PO\u2019d coming soon', {
+                  description: `Will flip ${req.id} status to "Fully PO\u2019d" once per-line PO coverage tracking is wired.`,
+                })
+              }
+            >
               <CheckCircle2 className="h-3.5 w-3.5" />
               Mark Fully PO'd
             </Button>
@@ -107,6 +159,11 @@ export function ProcurementInspector({
               variant="ghost"
               size="sm"
               className="text-destructive h-8 w-full justify-start gap-2 text-xs"
+              onClick={() =>
+                toast.info('Cancel Requisition coming soon', {
+                  description: `Will mark ${req.id} as Cancelled and audit-log the reason. Cancellation flow is not yet wired.`,
+                })
+              }
             >
               <AlertTriangle className="h-3.5 w-3.5" />
               Cancel Requisition

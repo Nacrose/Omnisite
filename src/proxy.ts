@@ -23,11 +23,22 @@ const STATIC_SECURITY_HEADERS: Record<string, string> = {
  * This removes the need for 'unsafe-inline' in script-src — the main
  * XSS attack vector for apps that render user-generated content (chat
  * messages, DSR remarks, letter bodies).
+ *
+ * IMPORTANT: `script-src` uses `'nonce-${nonce}'` only. We do NOT keep
+ * `'unsafe-inline'` or `'unsafe-eval'` — both reintroduce the XSS
+ * surface the nonce is supposed to close. If a third-party script
+ * legitimately needs inline execution, give it the nonce via the
+ * Next.js `<Script nonce>` API; do NOT relax the directive.
+ *
+ * `'unsafe-inline'` is kept in `style-src` because Tailwind injects
+ * runtime style elements (e.g. for animation states) and React
+ * inline-style props generate `<style>` payloads — neither can be
+ * nonced without a much larger refactor.
  */
 function buildCspHeader(nonce: string): string {
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https: blob:",
