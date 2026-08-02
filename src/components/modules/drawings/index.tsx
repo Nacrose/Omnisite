@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
+import { useSyncedState } from '@/lib/use-synced-state'
+import { LoadingState } from '@/components/ui/loading-state'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -111,9 +113,6 @@ const DWS: Dwg[] = [
   },
 ]
 
-// Derive disciplines from the actual data so empty categories don't show.
-const DISCIPLINES = ['All', ...Array.from(new Set(DWS.map((d) => d.discipline)))]
-
 // 25 MB upload cap (matches the original upload handler).
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
@@ -123,15 +122,43 @@ export function DrawingsModule() {
   const [discipline, setDiscipline] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
-  // Newly uploaded drawings (in-session only — they get persisted when the
-  // user opens them and edits/saves a markup. The drawings table itself is
-  // not written from here; this is the same pattern the original code used
-  // for the upload toast.)
-  const [uploadedDrawings, setUploadedDrawings] = useState<Dwg[]>([])
+  // Drawings are synced via useSyncedState so uploads persist across refreshes
+  // (and to Supabase when configured). The `fieldMap` maps the camelCase app
+  // fields to the snake_case columns on the `drawings` table (migration
+  // 00000000000013).
+  const [drawings, setDrawings, drawingsLoading] = useSyncedState<Dwg[]>(
+    'omnisite-drawings',
+    'drawings',
+    () => DWS,
+    {
+      fieldMap: {
+        fileUrl: 'file_url',
+        fileType: 'file_type',
+        sourceFileUrl: 'source_file_url',
+        fileSize: 'file_size',
+      },
+      primaryKey: 'id',
+    }
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const allDrawings = [...uploadedDrawings, ...DWS]
-  const selected = allDrawings.find((d) => d.id === selectedId) ?? DWS[0]
+  // Live discipline list — derived from the synced drawings so a new
+  // discipline on an upload (e.g. 'Uploaded') appears as its own filter
+  // category. 'All' is always first.
+  const DISCIPLINES = useMemo(
+    () => ['All', ...Array.from(new Set(drawings.map((d) => d.discipline)))],
+    [drawings]
+  )
+
+  const selected = drawings.find((d) => d.id === selectedId) ?? drawings[0]
+
+  if (drawingsLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <LoadingState label="Loading drawings…" />
+      </div>
+    )
+  }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -203,7 +230,7 @@ export function DrawingsModule() {
         sourceFileUrl: isViewerType ? undefined : result.url,
         fileSize: file.size,
       }
-      setUploadedDrawings((prev) => [newDwg, ...prev])
+      setDrawings((prev) => [newDwg, ...prev])
       setSelectedId(newId)
 
       toast.success('Drawing uploaded', {
@@ -219,7 +246,7 @@ export function DrawingsModule() {
     }
   }
 
-  const filtered = allDrawings.filter((d) => {
+  const filtered = drawings.filter((d) => {
     if (discipline !== 'All' && d.discipline !== discipline) return false
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -262,9 +289,7 @@ export function DrawingsModule() {
           <PaneBody className="py-2">
             {DISCIPLINES.map((d) => {
               const count =
-                d === 'All'
-                  ? allDrawings.length
-                  : allDrawings.filter((x) => x.discipline === d).length
+                d === 'All' ? drawings.length : drawings.filter((x) => x.discipline === d).length
               return (
                 <button
                   key={d}
@@ -291,7 +316,7 @@ export function DrawingsModule() {
       }
       centerPane={
         <>
-          <PaneHeader title={`Drawings Register · ${filtered.length} of ${allDrawings.length}`}>
+          <PaneHeader title={`Drawings Register · ${filtered.length} of ${drawings.length}`}>
             <input
               ref={fileInputRef}
               type="file"

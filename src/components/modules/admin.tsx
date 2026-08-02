@@ -99,11 +99,17 @@ export function AdminModule() {
   }
 
   // Compute counts from the real arrays so badges never lie.
+  // NOTE: totalUsers is a DEMO count derived from the seed `users` field on
+  // each Role in ROLES. The real per-project user count comes from the
+  // `user_projects` query surfaced in the Users tab (see UsersView).
   const totalUsers = ROLES.reduce((s, r) => s + r.users, 0)
-  const CATS: { id: Cat; name: string; icon: typeof Users; count: number }[] = [
+  // Each category entry's `count` field drives the sidebar badge. The rates
+  // tab is a fixed 3-tier library (Org / Project / RA Preset) — surface that
+  // as a label rather than a numeric count so the badge isn't misleading.
+  const CATS: { id: Cat; name: string; icon: typeof Users; count: number | string }[] = [
     { id: 'users', name: 'User Management', icon: Users, count: totalUsers },
     { id: 'materials', name: 'Material Master', icon: Package, count: MATERIALS.length },
-    { id: 'rates', name: '3-Tier Rate Library', icon: Zap, count: 3 },
+    { id: 'rates', name: '3-Tier Rate Library', icon: Zap, count: '3 tiers' },
     { id: 'presets', name: 'RA Preset Library', icon: SettingsIcon, count: PRESETS.length },
     { id: 'locations', name: 'Work Locations', icon: MapPin, count: locations.length },
   ]

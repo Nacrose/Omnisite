@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,19 @@ const TIER1_DISTRICT_RATES = [
 ]
 
 export function RatesView() {
+  // Tier 2 project rates are PM-editable inline. Local state mirrors the
+  // MATERIALS seed (projectRate ?? rate) so edits persist in-session —
+  // previously the Input was uncontrolled (defaultValue), so edits were
+  // lost on every re-render. The state is keyed by material code so each
+  // Input binds to a stable identity across renders.
+  const [projectRates, setProjectRates] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {}
+    for (const m of MATERIALS.slice(0, 3)) {
+      init[m.code] = m.projectRate ?? m.rate
+    }
+    return init
+  })
+
   return (
     <PaneBody className="space-y-3 p-4">
       <div className="overflow-hidden rounded-lg border border-[var(--pane-divider)]">
@@ -62,7 +76,14 @@ export function RatesView() {
               <span className="text-muted-foreground line-through">NPR {m.rate}</span>
               <Input
                 className="h-7 w-24 font-mono text-xs"
-                defaultValue={(m.projectRate ?? m.rate).toLocaleString()}
+                value={(projectRates[m.code] ?? m.projectRate ?? m.rate).toLocaleString()}
+                onChange={(e) => {
+                  // Strip non-digits (the user may type "NPR" or commas) and
+                  // fall back to the previous value if the input is empty.
+                  const digits = e.target.value.replace(/[^\d]/g, '')
+                  const next = digits ? parseInt(digits, 10) : (projectRates[m.code] ?? m.rate)
+                  setProjectRates((prev) => ({ ...prev, [m.code]: next }))
+                }}
               />
             </div>
           ))}

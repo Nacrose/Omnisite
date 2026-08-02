@@ -43,14 +43,14 @@ export function QsInspector({
   onSaveCap: (id: string, cap: QsCap) => void
   onSetLocation: (id: string, locationId: string | null) => void
 }) {
-  // Local state for CAP form
+  // Local state for CAP form — start from empty defaults so the user fills
+  // in their own root cause and corrective action. Previously this was
+  // pre-populated with hardcoded seed text ("Rebar spacer blocks displaced
+  // during concrete pour…") for every NCR, which made every NCR look like
+  // it had already been investigated.
   const [capForm, setCapForm] = useState<QsCap>({
-    rootCause:
-      item.cap?.rootCause ||
-      'Rebar spacer blocks displaced during concrete pour due to inadequate fixing.',
-    action:
-      item.cap?.action ||
-      'Reinstate cover with additional spacer blocks. Re-pour affected area after consultant re-inspection. Update method statement for future pours.',
+    rootCause: item.cap?.rootCause || '',
+    action: item.cap?.action || '',
     assignee: item.cap?.assignee || item.assignee || '',
     dueDate: item.cap?.dueDate || item.dueDate || '',
   })

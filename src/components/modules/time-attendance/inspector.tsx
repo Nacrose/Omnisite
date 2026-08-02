@@ -146,7 +146,7 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
           <div>
             <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
               <DollarSign className="h-3 w-3" />
-              Labour Cost Auto-Calc
+              Labour cost (today)
             </div>
             <div className="space-y-1.5 rounded-md border border-[var(--pane-divider)] p-2.5">
               <div className="flex justify-between">
@@ -177,9 +177,6 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
               <div className="flex justify-between font-bold">
                 <span>Today&apos;s labour cost</span>
                 <span className="font-mono">NPR {todayCost.toFixed(0)}</span>
-              </div>
-              <div className="text-muted-foreground mt-1 text-[10px]">
-                Auto-pushed to Financials (ACWP) against CBS nodes from allocated tasks.
               </div>
             </div>
           </div>

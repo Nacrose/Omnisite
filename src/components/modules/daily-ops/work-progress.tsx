@@ -26,8 +26,11 @@ export function WorkProgressView({
   onSelect: (id: string) => void
 }) {
   const selected = entries.find((e) => e.id === selectedId)
-  // Stable ITR ID — generated once per mount so it doesn't change on every render.
-  const [itrId] = useState(() => Math.floor(Math.random() * 9000) + 1000)
+  // Stable ITR ID — generated once per mount using crypto.randomUUID() so it
+  // doesn't change on re-render and isn't based on Math.random() (which could
+  // collide across mounts). The displayed ITR uses the first 8 hex chars so
+  // it stays compact while remaining unique.
+  const [itrId] = useState(() => crypto.randomUUID().slice(0, 8))
   const router = useRouter()
   const COLS: ColumnDef[] = [
     { key: 'dsr', label: 'DSR #' },

@@ -3,6 +3,11 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 
+// Today's date in ISO YYYY-MM-DD form. Seed DSR entries use this so the demo
+// always shows "today" regardless of when the user opens the app, instead of
+// being frozen on a hardcoded '2026-07-30'.
+const TODAY_ISO = new Date().toISOString().slice(0, 10)
+
 export interface DsrEntry {
   id: string
   task: string
@@ -38,7 +43,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     status: 'in-progress',
     hasPhotos: true,
     remarks: 'Concrete pump breakdown 2 hrs, recovered',
-    date: '2026-07-30',
+    date: TODAY_ISO,
   },
   {
     id: 'D-088',
@@ -50,7 +55,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     uom: 'MT',
     status: 'in-progress',
     hasPhotos: true,
-    date: '2026-07-30',
+    date: TODAY_ISO,
   },
   {
     id: 'D-089',
@@ -63,7 +68,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     status: 'completed',
     hasPhotos: true,
     remarks: 'Hard rock encountered, used breaker',
-    date: '2026-07-30',
+    date: TODAY_ISO,
   },
   {
     id: 'D-090',
@@ -75,7 +80,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     uom: 'sqm',
     status: 'completed',
     hasPhotos: true,
-    date: '2026-07-30',
+    date: TODAY_ISO,
   },
   {
     id: 'D-091',
@@ -87,7 +92,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     uom: 'hr',
     status: 'in-progress',
     remarks: 'Water table higher than expected',
-    date: '2026-07-30',
+    date: TODAY_ISO,
   },
   {
     id: 'D-092',
@@ -101,7 +106,7 @@ export const DSR_ENTRIES: DsrEntry[] = [
     hasRfi: true,
     hasPhotos: true,
     remarks: 'Rock class III encountered, installed steel ribs',
-    date: '2026-07-30',
+    date: TODAY_ISO,
   },
 ]
 

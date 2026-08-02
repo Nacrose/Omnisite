@@ -171,21 +171,13 @@ export function EquipmentModule() {
   const selected = equipList.find((e) => e.id === selectedId) ?? equipList[0]
   // Only bill active equipment for hours. Idle/breakdown equipment costs 0
   // (previously defaulted to 8 hours via `|| 8`, inflating the daily cost by
-  // ~NPR 34K and pushing wrong numbers to Financials ACWP).
+  // ~NPR 34K).
   const totalCost = equipList.reduce((s, e) => s + (e.chargeRate || 0) * effectiveHours(e), 0)
 
-  // Filter categories by the search query (matches category name OR any
-  // equipment name/id/type within that category).
-  const allCategories = [
-    'All',
-    'Excavator',
-    'Tipper Truck',
-    'Mixer',
-    'Vibrator',
-    'Plant',
-    'Compactor',
-    'Crane',
-  ]
+  // Derive categories from the actual equipment list so empty categories
+  // (e.g. 'Compactor', 'Crane' — none in seed) never show. 'All' is always
+  // first and aggregates every equipment type.
+  const allCategories = ['All', ...Array.from(new Set(equipList.map((e) => e.type)))]
   const visibleCategories = searchQuery.trim()
     ? allCategories.filter((cat) => {
         if (cat === 'All') return true
@@ -275,12 +267,9 @@ export function EquipmentModule() {
           </PaneBody>
           <div className="space-y-1 border-t border-[var(--pane-divider)] p-3 text-xs">
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
-              Today&apos;s Fleet Cost
+              Today&apos;s fleet cost
             </div>
             <div className="text-lg font-bold">NPR {totalCost.toLocaleString()}</div>
-            <div className="text-muted-foreground text-[10px]">
-              Auto-pushed to Financials (ACWP)
-            </div>
           </div>
         </>
       }
@@ -491,15 +480,19 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
                     'Project pays Routine Maint',
                     'Project pays Major Repairs',
                   ].map((term) => {
-                    // Match the FULL phrase (payer + item), not just the first
-                    // word of the item. The old matcher stripped "project pays "
-                    // and matched only the first word, so "Project pays Driver
-                    // Salary" would incorrectly match "Renter pays Driver Salary".
-                    const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
-                    const normalizeTerm = (s: string) =>
-                      normalize(s).replace('driver salary', 'driver')
-                    const checked = (equip.rental?.terms || []).some(
-                      (t) => normalizeTerm(t) === normalizeTerm(term)
+                    // Simple keyword match — strip the "Project pays " /
+                    // "Renter pays " prefix to get the meaningful keyword,
+                    // then check if any rental term mentions that keyword
+                    // (case-insensitive). This replaces the previous fragile
+                    // normalizeTerm() that aggressively rewrote
+                    // "Driver Salary" → "Driver" and required exact full-phrase
+                    // equality.
+                    const keyword = term
+                      .toLowerCase()
+                      .replace(/^(project|renter)\s+pays\s+/, '')
+                      .trim()
+                    const checked = (equip.rental?.terms || []).some((t) =>
+                      t.toLowerCase().includes(keyword)
                     )
                     return (
                       <label

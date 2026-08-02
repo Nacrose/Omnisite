@@ -90,6 +90,30 @@ export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'u-ram', name: 'Ram Bahadur', initials: 'RB', color: '#8b5cf6', role: 'Foreman' },
 ]
 
+// ─── Per-user color derivation ──────────────────────────────────────────────
+//
+// Each authenticated user gets a stable color derived from their auth id, so
+// the same user always shows the same avatar color (regardless of which
+// project they're in) and different users in the same channel get different
+// colors. Without this, every sender got the same `#f97316` orange — making
+// it impossible to tell two senders apart at a glance.
+const USER_COLORS = [
+  '#f97316',
+  '#3b82f6',
+  '#10b981',
+  '#8b5cf6',
+  '#ef4444',
+  '#f59e0b',
+  '#06b6d4',
+  '#ec4899',
+]
+
+function colorForUser(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  return USER_COLORS[Math.abs(hash) % USER_COLORS.length]
+}
+
 // ─── Main Module ─────────────────────────────────────────────────────────────
 
 export interface ChatModuleProps {
@@ -113,8 +137,11 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
 
   // Derive sender info from the authenticated user (falls back to a neutral
   // demo identity when there is no session yet — e.g. demo mode before sign-in).
+  // Color is derived from the user's id so each user gets a stable, distinct
+  // avatar color (instead of every sender getting the same orange).
+  const currentUserId = user?.id ?? 'demo-user'
   const currentUser = {
-    id: user?.id ?? 'demo-user',
+    id: currentUserId,
     name: user?.name ?? user?.email ?? 'Anonymous',
     initials:
       (user?.name || user?.email || 'A')
@@ -123,7 +150,7 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
         .slice(0, 2)
         .map((s) => s.charAt(0).toUpperCase())
         .join('') || 'A',
-    color: '#f97316',
+    color: colorForUser(currentUserId),
   }
 
   // Load messages from Supabase

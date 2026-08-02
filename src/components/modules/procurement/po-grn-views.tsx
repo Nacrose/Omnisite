@@ -5,7 +5,7 @@ import { PaneBody } from '@/components/workspace-3pane'
 import { CheckCircle2, AlertTriangle, Boxes } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, Grn, StockItem, INITIAL_MINS } from './types'
+import { Po, Grn, StockItem, MinNote } from './types'
 import {
   useColumnVisibility,
   ColumnToggle,
@@ -200,9 +200,13 @@ export function GrnCenterView({
                         title={
                           matched
                             ? 'Toggle payment approval'
-                            : g.poRate !== undefined && g.poRate !== g.rate
-                              ? `Locked — rate mismatch: PO rate ${g.poRate} vs invoice rate ${g.rate}`
-                              : 'Locked — quantity mismatch: PO qty ≠ GRN qty ≠ Invoice qty'
+                            : g.poRate !== undefined &&
+                                g.poRate !== g.rate &&
+                                (g.poQty !== g.grnQty || g.grnQty !== g.invoiceQty)
+                              ? 'Locked — qty + rate mismatch'
+                              : g.poRate !== undefined && g.poRate !== g.rate
+                                ? `Locked — rate mismatch: PO rate ${g.poRate} vs invoice rate ${g.rate}`
+                                : 'Locked — quantity mismatch: PO qty ≠ GRN qty ≠ Invoice qty'
                         }
                       >
                         {matched ? (g.payStatus === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
@@ -342,10 +346,10 @@ export function StockCenterView({ stock }: { stock: StockItem[] }) {
   )
 }
 
-export function MinCenterView() {
+export function MinCenterView({ mins }: { mins: MinNote[] }) {
   return (
     <PaneBody className="space-y-2 p-4">
-      {INITIAL_MINS.map((m) => (
+      {mins.map((m) => (
         <div
           key={m.id}
           className="hover:bg-accent/30 cursor-pointer rounded-lg border border-[var(--pane-divider)] p-3"

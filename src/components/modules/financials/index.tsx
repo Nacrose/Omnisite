@@ -61,6 +61,13 @@ export function FinancialsModule() {
   const flat = flattenCbs(cbsData)
   const selected = flat.find((c) => c.code === selectedCode) ?? flat[0]
 
+  // Count top-level nodes (no parentCode) and leaf nodes (no children) from
+  // the LIVE tree so the left-pane footer reflects user edits. Previously
+  // this was hardcoded as "3 top nodes · 7 leaf items", which drifted out
+  // of sync whenever the CBS tree was edited.
+  const topLevelCount = cbsData.filter((c) => !c.parentCode).length
+  const leafCount = flat.filter((c) => !c.children || c.children.length === 0).length
+
   // Update a CBS node's committed/actual/forecast.
   // After updating a leaf, walk back UP the tree and re-aggregate parent
   // totals so the parent's actual/committed/forecast/marginPct reflect
@@ -158,7 +165,7 @@ export function FinancialsModule() {
               </div>
             </div>
             <div className="text-muted-foreground px-3 py-2 text-[10px]">
-              Mirrors BOQ WBS · 3 top nodes · 7 leaf items
+              Mirrors BOQ WBS · {topLevelCount} top nodes · {leafCount} leaf items
             </div>
             {CBS.filter((c) => {
               if (!cbsSearch.trim()) return true

@@ -1,23 +1,11 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Search, Fingerprint } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Worker } from './index'
-
-// Fixed trade filter list — drives the left-pane trade filter. Includes the
-// 'All Trades' synthetic entry plus every trade that appears in the seed data
-// (or that the Admin module might create).
-const TRADES = [
-  'All Trades',
-  'Mason (Skilled)',
-  'Mazdoor (Unskilled)',
-  'Bar bender',
-  'Operator',
-  'Helper',
-  'Carpenter',
-] as const
 
 /**
  * WorkerList — the left-pane trade filter + search box for Time & Attendance.
@@ -26,6 +14,10 @@ const TRADES = [
  * search box at the top. The selected trade and search query are owned by the
  * parent module (TimeAttendanceModule) so they can drive the inspector's
  * derived `selected` worker.
+ *
+ * The trade list is derived from the actual `workers` array so empty trades
+ * (e.g. 'Carpenter' when no carpenter is on-site) never show as a 0-count
+ * category. 'All Trades' is always first and aggregates every trade.
  */
 export function WorkerList({
   workers,
@@ -40,6 +32,12 @@ export function WorkerList({
   searchQuery: string
   onSearchChange: (q: string) => void
 }) {
+  // Derive trades from the actual worker list so empty categories don't show.
+  // 'All Trades' is always first and aggregates every trade.
+  const trades = useMemo(
+    () => ['All Trades', ...Array.from(new Set(workers.map((w) => w.trade)))],
+    [workers]
+  )
   return (
     <>
       <div className="mb-2 px-3">
@@ -53,7 +51,7 @@ export function WorkerList({
           />
         </div>
       </div>
-      {TRADES.map((t) => {
+      {trades.map((t) => {
         const count =
           t === 'All Trades' ? workers.length : workers.filter((w) => w.trade === t).length
         return (

@@ -21,6 +21,13 @@ import { levelResources } from './leveling'
 import { useMemo } from 'react'
 import { produce } from 'immer'
 
+// TODO: replace with real project epoch once project settings exist.
+// For now, use a fixed epoch so the TODAY line is deterministic and moves
+// forward as real time passes (previously hardcoded to `16`, which kept
+// the red marker pinned at week 16 forever).
+const PROJECT_EPOCH = new Date('2026-04-01') // approx project start
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
+
 export function SchedulerModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedId, setSelectedId] = usePersistentState('omnisite-scheduler-selected', 'T-203')
@@ -110,6 +117,14 @@ export function SchedulerModule() {
     [flat, showCriticalOnly]
   )
   const selectedTask = flat.find((f) => f.task.id === selectedId)?.task ?? flat[0].task
+
+  // Project finish — the latest end-week (start + duration) across all
+  // tasks. Previously this was hardcoded to "Wk 48" in the footer; now it
+  // recomputes from the task tree so dragging/resizing tasks updates it.
+  const projectFinishWeek = useMemo(
+    () => (flat.length > 0 ? Math.max(...flat.map((f) => f.task.start + f.task.duration)) : 0),
+    [flat]
+  )
 
   // Update a task's start date when dragged
   const updateTaskStart = (id: string, newStart: number) => {
@@ -261,8 +276,9 @@ export function SchedulerModule() {
     return rows
   }
 
-  // Gantt canvas
-  const todayWeek = 16
+  // Gantt canvas — TODAY line is computed from the project epoch so it
+  // advances as real time passes (was previously hardcoded to `16`).
+  const todayWeek = Math.max(0, Math.floor((Date.now() - PROJECT_EPOCH.getTime()) / MS_PER_WEEK))
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // Mouse handlers for drag-to-move on Gantt bars
@@ -414,7 +430,7 @@ export function SchedulerModule() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Project finish</span>
-                <span className="font-mono">Wk 48</span>
+                <span className="font-mono">Wk {projectFinishWeek}</span>
               </div>
             </div>
           </>
@@ -486,7 +502,7 @@ export function SchedulerModule() {
             />
           </>
         }
-        rightPane={<TaskInspector task={selectedTask} />}
+        rightPane={<TaskInspector task={selectedTask} onUpdateDuration={updateTaskDuration} />}
         leftPaneWidth="320px"
         rightPaneWidth="380px"
       />

@@ -187,8 +187,21 @@ export function RfiTab() {
   const rfis = useRfiStore((s) => s.rfis)
   const [selectedId, setSelectedId] = useState('r1')
   const [filter, setFilter] = useState<'All' | 'Open' | 'Replied' | 'Closed'>('All')
+  const [searchQuery, setSearchQuery] = useState('')
   const selected = rfis.find((r) => r.id === selectedId) ?? rfis[0]
-  const filtered = filter === 'All' ? rfis : rfis.filter((r) => r.status === filter)
+  // Filter by status first, then by the search query (matches RFI number,
+  // subject, or question text — the most common lookups).
+  const filtered = (filter === 'All' ? rfis : rfis.filter((r) => r.status === filter)).filter(
+    (r) => {
+      if (!searchQuery.trim()) return true
+      const q = searchQuery.toLowerCase()
+      return (
+        r.number.toLowerCase().includes(q) ||
+        r.subject.toLowerCase().includes(q) ||
+        r.question.toLowerCase().includes(q)
+      )
+    }
+  )
   const overdueCount = rfis.filter((r) => r.status === 'Open' && new Date(r.replyBy) < TODAY).length
 
   return (
@@ -220,7 +233,12 @@ export function RfiTab() {
             </div>
             <div className="relative">
               <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-              <Input placeholder="Filter by subject / number…" className="h-8 pl-7 text-xs" />
+              <Input
+                placeholder="Filter by number / subject / question…"
+                className="h-8 pl-7 text-xs"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
           <PaneBody className="py-2">
@@ -236,62 +254,70 @@ export function RfiTab() {
                 </div>
               </div>
             )}
-            {filtered.map((r) => {
-              const isOverdue = r.status === 'Open' && new Date(r.replyBy) < TODAY
-              const isSelected = r.id === selectedId
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => setSelectedId(r.id)}
-                  className={cn(
-                    'hover:bg-accent/50 w-full border-l-2 px-3 py-2 text-left transition-colors',
-                    isSelected ? 'bg-accent border-l-primary' : 'border-l-transparent'
-                  )}
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-muted-foreground font-mono text-[10px]">{r.number}</span>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'h-4 px-1 text-[9px]',
-                        r.status === 'Open' &&
-                          'border-amber-500/40 text-amber-700 dark:text-amber-300',
-                        r.status === 'Replied' &&
-                          'border-sky-500/40 text-sky-700 dark:text-sky-300',
-                        r.status === 'Closed' &&
-                          'border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
-                      )}
-                    >
-                      {r.status}
-                    </Badge>
-                    {r.severity === 'high' && (
+            {filtered.length === 0 ? (
+              <div className="text-muted-foreground px-3 py-8 text-center text-[10px]">
+                No RFIs match &ldquo;{searchQuery}&rdquo;.
+              </div>
+            ) : (
+              filtered.map((r) => {
+                const isOverdue = r.status === 'Open' && new Date(r.replyBy) < TODAY
+                const isSelected = r.id === selectedId
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedId(r.id)}
+                    className={cn(
+                      'hover:bg-accent/50 w-full border-l-2 px-3 py-2 text-left transition-colors',
+                      isSelected ? 'bg-accent border-l-primary' : 'border-l-transparent'
+                    )}
+                  >
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-muted-foreground font-mono text-[10px]">
+                        {r.number}
+                      </span>
                       <Badge
                         variant="outline"
-                        className="h-4 border-red-500/40 px-1 text-[9px] text-red-700 dark:text-red-300"
+                        className={cn(
+                          'h-4 px-1 text-[9px]',
+                          r.status === 'Open' &&
+                            'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                          r.status === 'Replied' &&
+                            'border-sky-500/40 text-sky-700 dark:text-sky-300',
+                          r.status === 'Closed' &&
+                            'border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                        )}
                       >
-                        HIGH
+                        {r.status}
                       </Badge>
-                    )}
-                    {isOverdue && (
-                      <span className="ml-auto flex items-center gap-0.5 text-[9px] font-medium text-red-600">
-                        <Clock className="h-2.5 w-2.5" />
-                        Overdue
-                      </span>
-                    )}
-                  </div>
-                  <div className="truncate text-xs font-medium">{r.subject}</div>
-                  <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[10px]">
-                    <span>{r.date}</span>
-                    {r.linkedDsr && (
-                      <>
-                        <span>·</span>
-                        <span className="font-mono">DSR: {r.linkedDsr}</span>
-                      </>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
+                      {r.severity === 'high' && (
+                        <Badge
+                          variant="outline"
+                          className="h-4 border-red-500/40 px-1 text-[9px] text-red-700 dark:text-red-300"
+                        >
+                          HIGH
+                        </Badge>
+                      )}
+                      {isOverdue && (
+                        <span className="ml-auto flex items-center gap-0.5 text-[9px] font-medium text-red-600">
+                          <Clock className="h-2.5 w-2.5" />
+                          Overdue
+                        </span>
+                      )}
+                    </div>
+                    <div className="truncate text-xs font-medium">{r.subject}</div>
+                    <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[10px]">
+                      <span>{r.date}</span>
+                      {r.linkedDsr && (
+                        <>
+                          <span>·</span>
+                          <span className="font-mono">DSR: {r.linkedDsr}</span>
+                        </>
+                      )}
+                    </div>
+                  </button>
+                )
+              })
+            )}
           </PaneBody>
         </>
       }

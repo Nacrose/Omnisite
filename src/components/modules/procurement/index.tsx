@@ -18,7 +18,17 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, ReqItem, Grn, StockItem, Tab, STOCK, INITIAL_MINS, Vendor as BidVendor } from './types'
+import {
+  Po,
+  ReqItem,
+  Grn,
+  StockItem,
+  MinNote,
+  Tab,
+  STOCK,
+  INITIAL_MINS,
+  Vendor as BidVendor,
+} from './types'
 import { INITIAL_POS, INITIAL_REQS, INITIAL_GRNS, INITIAL_STOCK } from './types'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
@@ -71,6 +81,19 @@ export function ProcurementModule() {
     'stock_items',
     () => structuredClone(INITIAL_STOCK) as typeof INITIAL_STOCK,
     { fieldMap: { onHand: 'on_hand', avgCost: 'avg_cost' }, primaryKey: 'code' }
+  )
+  // MINs are synced via useSyncedState so newly-issued MINs persist across
+  // refreshes (and to Supabase when configured). Previously the badge count
+  // was hardcoded to `INITIAL_MINS.length` and `MinCenterView` read from
+  // the constant directly — so new MINs were invisible after a refresh.
+  // The setter is intentionally skipped — MIN creation flow is not wired yet
+  // (the New button surfaces a "coming soon" toast). When creation lands,
+  // swap the empty slot back to `setMins`.
+  const [mins, , minsLoading] = useSyncedState<MinNote[]>(
+    'omnisite-procurement-mins',
+    'material_issue_notes',
+    () => structuredClone(INITIAL_MINS) as typeof INITIAL_MINS,
+    { primaryKey: 'id' }
   )
   // Override modal state
   const [overrideModal, setOverrideModal] = useState<{
@@ -233,7 +256,7 @@ export function ProcurementModule() {
     setOverrideReason('')
   }
 
-  if (reqsLoading || posLoading) {
+  if (reqsLoading || posLoading || minsLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <LoadingState label="Loading procurement data…" />
@@ -278,7 +301,7 @@ export function ProcurementModule() {
                   {
                     id: 'min' as Tab,
                     name: 'Material Issues (MIN)',
-                    count: INITIAL_MINS.length,
+                    count: mins.length,
                     icon: ArrowRight,
                   },
                 ]
@@ -428,7 +451,7 @@ export function ProcurementModule() {
               />
             )}
             {tab === 'stock' && <StockCenterView stock={stock} />}
-            {tab === 'min' && <MinCenterView />}
+            {tab === 'min' && <MinCenterView mins={mins} />}
           </>
         }
         rightPane={<ProcurementInspector tab={tab} selectedId={selectedId} reqs={reqs} />}

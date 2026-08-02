@@ -14,7 +14,13 @@ import type { Task } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { INITIAL_LOCATIONS, INITIAL_VENDORS } from '@/data/seed/vendors'
 
-export function TaskInspector({ task }: { task: Task }) {
+export function TaskInspector({
+  task,
+  onUpdateDuration,
+}: {
+  task: Task
+  onUpdateDuration?: (id: string, newDuration: number) => void
+}) {
   // Local mirror of the task's locationId so the inspector reflects the
   // selection immediately. The parent owns the source of truth (the task
   // tree); mutating `task.locationId` here lets other components reading
@@ -139,7 +145,21 @@ export function TaskInspector({ task }: { task: Task }) {
               <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
                 Duration (weeks)
               </label>
-              <Input className="mt-1 h-8 text-xs" defaultValue={task.duration} />
+              <Input
+                className="mt-1 h-8 text-xs"
+                type="number"
+                min={1}
+                value={task.duration}
+                onChange={(e) => {
+                  const next = parseInt(e.target.value, 10)
+                  // Only propagate when the user enters a valid positive
+                  // integer. Empty / NaN input is ignored so the field
+                  // doesn't temporarily store garbage in the task tree.
+                  if (!Number.isNaN(next) && next >= 1 && onUpdateDuration) {
+                    onUpdateDuration(task.id, next)
+                  }
+                }}
+              />
             </div>
             <div>
               <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
