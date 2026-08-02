@@ -173,9 +173,13 @@ export function AddTaskModal({
               onChange={(e) => setNewTask((t) => ({ ...t, critical: e.target.checked }))}
               className="h-4 w-4"
             />
-            <span className="flex-1 text-xs">Mark as critical path task</span>
+            <span className="flex-1 text-xs">Mark as critical (manual override)</span>
             <span className="text-[10px] text-red-500">highlighted in red</span>
           </label>
+          <p className="text-muted-foreground -mt-1 px-1 text-[10px] leading-relaxed">
+            CPM auto-computes the critical path from dependencies. This manual flag is only used for
+            Summary tasks (excluded from CPM) or as a fallback if CPM fails.
+          </p>
 
           {/* Preview */}
           <div className="bg-secondary/30 rounded-md p-2.5 text-[11px]">

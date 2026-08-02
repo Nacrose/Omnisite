@@ -118,11 +118,15 @@ export function TaskInspector({
    */
   onUpdateConstraint?: (constraint: string) => void
 }) {
-  // Local mirror of the task's locationId so the inspector reflects the
-  // selection immediately. The parent owns the source of truth (the task
-  // tree); mutating `task.locationId` here lets other components reading
-  // the same tree instance see the link right away.
-  const [locationId, setLocationId] = useState<string | undefined>(task.locationId)
+  // Use task.locationId directly as the LocationPicker value — no local
+  // mirror needed. The parent's onUpdateLocation callback propagates the
+  // change, the task tree updates, and the new task prop flows back in the
+  // same React batch. This is the standard controlled-component pattern and
+  // avoids the stale-local-state bug that a useState mirror would cause
+  // when the task prop changes externally (audit R5-1).
+  //
+  // The toast for the location link is fired in the onChange handler below.
+  const locationId = task.locationId
 
   // Read the live project-locations store (Supabase when configured, localStorage
   // otherwise) — same hook the Admin → Locations tab and the LocationPicker use.
@@ -180,22 +184,42 @@ export function TaskInspector({
     return w != null ? String(w) : ''
   })
 
+  // Sync deadline-week input when the task's constraints change externally
+  // (audit R5-1). Uses the "adjust state during render" pattern from the
+  // React docs instead of useEffect+setState (which the linter flags as
+  // react-hooks/set-state-in-effect). This pattern stores the previous prop
+  // value and resets the local state during render when the prop changes —
+  // no extra render, no lint violation.
+  const [prevConstraints, setPrevConstraints] = useState(task.constraints)
+  if (task.constraints !== prevConstraints) {
+    setPrevConstraints(task.constraints)
+    const w = extractDeadlineWeek(task.constraints)
+    setDeadlineWeekInput(w != null ? String(w) : '')
+  }
+
   const handleConstraintClick = (code: string) => {
     if (!onUpdateConstraint) return
     if (DEADLINE_CONSTRAINTS.has(code)) {
       // For MFO/MSO, build "CODE: Wk N" using the input value. If the input
-      // is empty, fall back to the task's current finish week so the
-      // constraint is always actionable (the breach detector needs a week).
+      // is empty, fall back to the task's current finish week (MFO) or start
+      // week (MSO) so the constraint is always actionable (the breach
+      // detector needs a week). Previously MSO used the finish week as
+      // fallback, but MSO means "Must Start On" — the deadline should be
+      // the start week (audit R5-4).
       const parsed = parseInt(deadlineWeekInput, 10)
-      const week = Number.isNaN(parsed) ? task.start + task.duration : parsed
+      const fallbackWeek = code === 'MFO' ? task.start + task.duration : task.start
+      const week = Number.isNaN(parsed) ? fallbackWeek : parsed
       onUpdateConstraint(buildConstraint(code, week))
       if (Number.isNaN(parsed)) {
         // Pre-fill the input with the auto-derived week so the user sees
         // what was applied.
         setDeadlineWeekInput(String(week))
-        toast.info(`Defaulted ${code} deadline to current finish (Wk ${week})`, {
-          description: 'Edit the week number to set a different deadline.',
-        })
+        toast.info(
+          `Defaulted ${code} deadline to current ${code === 'MFO' ? 'finish' : 'start'} (Wk ${week})`,
+          {
+            description: 'Edit the week number to set a different deadline.',
+          }
+        )
       }
     } else {
       onUpdateConstraint(buildConstraint(code, null))
@@ -233,12 +257,13 @@ export function TaskInspector({
             <LocationPicker
               value={locationId}
               onChange={(locId) => {
-                setLocationId(locId ?? undefined)
                 // Propagate to the parent so the synced tasks store is
                 // mutated — the location_id column added in migration 12 is
                 // then persisted to Supabase and visible to other modules.
                 // Without this, the link lived only in this inspector's
                 // local state and was lost on remount / page reload.
+                // (audit R5-1: no local mirror — task.locationId is the
+                // source of truth, updated via the parent callback.)
                 onUpdateLocation?.(locId)
                 // Look up the location name from the LIVE synced store so
                 // the toast reflects admin edits to location names (audit S8).

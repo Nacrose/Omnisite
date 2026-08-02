@@ -147,9 +147,17 @@ function buildVisibleRows(tasks: Task[], expanded: Set<string>): VisibleRow[] {
     for (const t of items) {
       const left = t.start * WEEK_WIDTH
       const width = Math.max(t.duration * WEEK_WIDTH, t.type === 'Milestone' ? 12 : 6)
-      const baseLeft = t.baseline[0] * WEEK_WIDTH
-      const baseWidth = Math.max((t.baseline[1] - t.baseline[0]) * WEEK_WIDTH, 4)
-      const varianceWeeks = t.start - t.baseline[0]
+      // Guard: baseline may be undefined if the task was loaded from
+      // Supabase with NULL baseline_start/baseline_finish columns (fromDb
+      // only sets `baseline` when both columns are non-undefined). Fall
+      // back to [start, start + duration] so the baseline ghost renders
+      // directly under the bar (zero variance) instead of crashing
+      // (audit R5-2 — previously t.baseline[0] threw "Cannot read
+      // properties of undefined" for tasks with no baseline).
+      const baseline = t.baseline ?? [t.start, t.start + t.duration]
+      const baseLeft = baseline[0] * WEEK_WIDTH
+      const baseWidth = Math.max((baseline[1] - baseline[0]) * WEEK_WIDTH, 4)
+      const varianceWeeks = t.start - baseline[0]
       out.push({ task: t, depth, rowIndex, left, width, baseLeft, baseWidth, varianceWeeks })
       rowIndex++
       if (t.children && t.children.length > 0 && expanded.has(t.id)) {

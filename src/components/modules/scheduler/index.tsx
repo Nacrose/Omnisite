@@ -167,15 +167,20 @@ export function SchedulerModule() {
   // Each task's `dependencies` array (TaskDependency[]) is passed through to
   // calculateCpm with full link type (FS/SS/FF/SF) and lag information, so
   // the forward/backward pass uses correct finish/start constraints.
-  // Summary and Hammock tasks are excluded from CPM input: Summary tasks are
-  // roll-ups (their start/finish are derived from children, not scheduled)
-  // and Hammock tasks are anchored to other tasks rather than duration-based.
-  // Including them in the CPM network would inject phantom predecessors and
-  // corrupt the critical path (C9).
+  // Summary tasks are excluded from CPM input: they're roll-ups (their
+  // start/finish are derived from children, not scheduled). Including them
+  // would inject phantom predecessors and corrupt the critical path (C9).
+  //
+  // Hammock tasks ARE included (audit R5-3 — previously excluded, which
+  // meant any task with an SS/FS dep on a Hammock lost its predecessor in
+  // the CPM network and got an incorrectly large float. e.g. T-302 SS on
+  // T-301: with T-301 excluded, T-302 had no deps → ES=0 → float=14; with
+  // T-301 included, T-302's SS dep gives ES=14 → float=0, correctly
+  // identifying T-302 as near-critical).
   const cpmResult = useMemo(() => {
     const flat = flattenTasks(taskTree)
     const cpmTasks: CpmTask[] = flat
-      .filter(({ task }) => task.type === 'Work' || task.type === 'Milestone')
+      .filter(({ task }) => task.type !== 'Summary')
       .map(({ task }) => ({
         id: task.id,
         duration: task.duration,
