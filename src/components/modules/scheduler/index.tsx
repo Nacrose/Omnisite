@@ -233,11 +233,30 @@ export function SchedulerModule() {
   const flat = useMemo(() => flattenTasks(tasksWithCpm), [tasksWithCpm])
   const selectedTask = flat.find((f) => f.task.id === selectedId)?.task ?? flat[0]?.task ?? null
 
+  // If selectedId points to a task that no longer exists (deleted, or stale
+  // persisted ID), selectedTask falls back to flat[0] — but selectedId in
+  // state is still the stale ID, so the outline highlights NO row. Sync
+  // selectedId to the fallback so the outline highlights the right row
+  // (audit R6-6). Uses the "adjust state during render" pattern to avoid
+  // the lint violation that useEffect+setState would trigger.
+  if (selectedTask && selectedTask.id !== selectedId) {
+    setSelectedId(selectedTask.id)
+  }
+
   // Project finish — the latest end-week (start + duration) across all
-  // tasks. Previously this was hardcoded to "Wk 48" in the footer; now it
-  // recomputes from the task tree so dragging/resizing tasks updates it.
+  // LEAF tasks. Previously this used all tasks including Summary, whose
+  // duration can be stale (not yet recomputed from children), inflating
+  // the reported finish week. Leaf tasks (Work, Milestone, Hammock) have
+  // authoritative durations (audit R6-9).
   const projectFinishWeek = useMemo(
-    () => (flat.length > 0 ? Math.max(...flat.map((f) => f.task.start + f.task.duration)) : 0),
+    () =>
+      flat.length > 0
+        ? Math.max(
+            ...flat
+              .filter((f) => !f.task.children || f.task.children.length === 0)
+              .map((f) => f.task.start + f.task.duration)
+          )
+        : 0,
     [flat]
   )
 
@@ -309,7 +328,14 @@ export function SchedulerModule() {
     // duplicate IDs if tasks were deleted and re-added.
     const newId = `T-${Date.now().toString(36)}`
     const isMilestone = newTask.type === 'Milestone'
-    const duration = isMilestone ? 0 : newTask.duration
+    const isSummary = newTask.type === 'Summary'
+    // Milestones have duration 0. Summary tasks start with duration 0 —
+    // it's derived from children once children are added (the leveling
+    // rebuild and the Gantt's buildVisibleRows both handle this, but the
+    // initial Summary should not carry a stale duration from the input
+    // field, which would show a misleading "5w" in the outline until the
+    // first leveling pass (audit R6-3).
+    const duration = isMilestone || isSummary ? 0 : newTask.duration
     const finishWeek = newTask.start + duration
     // Build the constraint string. For MFO/MSO, auto-default to the task's
     // finish/start week so the breach detector has a week to compare against
@@ -350,18 +376,15 @@ export function SchedulerModule() {
     setExpandedArr((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
-  const renderTaskRows = () => {
-    const rows: React.ReactNode[] = []
-    // When searchQuery is non-empty, filter the tree by id/name (keeping ancestors).
-    // The "Critical path only" toggle is handled inside the walk below (we
-    // still render the full tree structure but skip non-critical leaf tasks),
-    // so the user sees the Summary groups with their critical children visible
-    // and non-critical children hidden — much more useful than a flat list
-    // (audit R4-4 — previously the toggle produced a confusing flat list of
-    // Summary + critical tasks with no nesting).
+  // Search-filtered task tree — shared between the outline (renderTaskRows)
+  // and the Gantt canvas so both views stay in sync when searching. Without
+  // this, searching would filter the outline but leave the Gantt showing
+  // all tasks, creating a confusing mismatch (audit R6-4). Memoized so the
+  // filter only re-runs when tasksWithCpm or searchQuery change.
+  const filteredTasks = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
+    if (!q) return tasksWithCpm
     const filterTree = (items: Task[]): Task[] => {
-      if (!q) return items
       const out: Task[] = []
       for (const t of items) {
         const childMatches = t.children ? filterTree(t.children) : []
@@ -375,7 +398,15 @@ export function SchedulerModule() {
       }
       return out
     }
-    const itemsToRender = filterTree(tasksWithCpm)
+    return filterTree(tasksWithCpm)
+  }, [tasksWithCpm, searchQuery])
+
+  // Flattened version of filteredTasks for the Gantt's arrow lookup and
+  // the outline's footer stats.
+  const filteredFlat = useMemo(() => flattenTasks(filteredTasks), [filteredTasks])
+
+  const renderTaskRows = () => {
+    const rows: React.ReactNode[] = []
     const walk = (items: Task[], depth: number) => {
       for (const t of items) {
         // "Critical path only" filter: skip non-critical LEAF tasks.
@@ -443,7 +474,7 @@ export function SchedulerModule() {
         if (hasChildren && isExpanded) walk(t.children!, depth + 1)
       }
     }
-    walk(itemsToRender, 0)
+    walk(filteredTasks, 0)
     return rows
   }
 
@@ -744,8 +775,8 @@ export function SchedulerModule() {
               </Button>
             </PaneHeader>
             <GanttCanvas
-              tasks={tasksWithCpm}
-              flatTasks={flat}
+              tasks={filteredTasks}
+              flatTasks={filteredFlat}
               expanded={expanded}
               selectedId={selectedId}
               onSelect={setSelectedId}

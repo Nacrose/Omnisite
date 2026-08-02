@@ -61,7 +61,13 @@ function flattenLeaves(tasks: Task[]): Task[] {
     for (const t of items) {
       if (t.children && t.children.length > 0) {
         walk(t.children)
-      } else if (t.type === 'Work') {
+      } else if (t.type === 'Work' || t.type === 'Hammock') {
+        // Include Hammock tasks in the leaf set — they have durations and
+        // resources (e.g. seed T-301 has resources: ['L-3']), so their
+        // load contributes to the weekly peak. Previously only Work tasks
+        // were included, so Hammock resources were invisible to leveling
+        // (audit R6-2). Hammock tasks are still NOT shift candidates
+        // (they're anchored to other tasks), but their load is counted.
         out.push(t)
       }
     }
@@ -146,6 +152,12 @@ export function levelResources(tasks: Task[]): LevelingResult {
   for (const leaf of workLeaves) {
     if (leaf.critical) continue
     if (leaf.duration === 0) continue // milestone-like
+    // Only Work tasks are shift candidates. Hammock tasks are anchored to
+    // other tasks (their duration is quantity-driven, not time-driven), so
+    // shifting them would break their semantic meaning. They're in the
+    // leaf set only so their resources contribute to the weekly load
+    // (audit R6-2).
+    if (leaf.type !== 'Work') continue
 
     const originalStart = leaf.start
     let bestStart = originalStart
