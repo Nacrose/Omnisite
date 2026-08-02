@@ -31,9 +31,15 @@ export interface Task {
   resources: string[]
   critical?: boolean
   constraints?: string
-  // No DB column — seed-only fields, not persisted in Supabase mode
+  // Not in Zod schema (validation.ts taskSchema) — Zod strips unknown keys
+  // before POST, so these fields never reach the DB and no `boq_allocated` /
+  // `boq_total` columns exist on the tasks table. They are seed-only fields
+  // used by the BOQ/RA tab in the TaskInspector (currently unpopulated in
+  // the seed) and are NOT persisted in Supabase mode. Adding them to the
+  // schema without a backing column would cause PostgREST to reject the
+  // POST; leaving them off the type entirely would lose the seed data.
   boqAllocated?: number
-  // No DB column — seed-only fields, not persisted in Supabase mode
+  // Not in Zod schema — stripped before POST, seed-only field. See above.
   boqTotal?: number
   children?: Task[]
   /**

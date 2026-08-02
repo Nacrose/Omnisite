@@ -191,9 +191,19 @@ function buildArrowPaths(
     for (const dep of task.dependencies) {
       const predPos = positions.get(dep.predecessorId)
       if (!predPos) continue
-      const x1 = predPos.barRight
+      // x1 is the point on the predecessor bar that drives the link:
+      //   SS/SF come off the predecessor's START  (left edge)
+      //   FS/FF come off the predecessor's FINISH (right edge)
+      // x2 is the point on the successor bar the arrow points to:
+      //   FF/SF point at the successor's FINISH (right edge)
+      //   FS/SS point at the successor's START  (left edge)
+      // Without this, every arrow was drawn FS-style (pred right → succ left)
+      // regardless of linkType — visually wrong for SS/FF/SF links and a
+      // misleading picture of the schedule logic.
+      const linkType = dep.linkType || 'FS'
+      const x1 = linkType === 'SS' || linkType === 'SF' ? predPos.barLeft : predPos.barRight
+      const x2 = linkType === 'FF' || linkType === 'SF' ? pos.barRight : pos.barLeft
       const y1 = predPos.barTop
-      const x2 = pos.barLeft
       const y2 = pos.barTop
       // Elbow path: right from predecessor finish, down/up to successor row,
       // left to successor start.

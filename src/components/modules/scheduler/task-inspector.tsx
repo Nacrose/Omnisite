@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
 import { Link2, Calendar, Gauge, Package, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -18,6 +17,7 @@ export function TaskInspector({
   task,
   onUpdateDuration,
   onUpdateLocation,
+  onUpdateConstraint,
 }: {
   task: Task
   onUpdateDuration?: (id: string, newDuration: number) => void
@@ -28,6 +28,13 @@ export function TaskInspector({
    * inspector can't do that itself because it only owns a local mirror.
    */
   onUpdateLocation?: (locationId: string | null) => void
+  /**
+   * Fired when the user clicks one of the constraint-type buttons
+   * (ASAP/ALAP/SNET/FNLT/MFO/MSO). The parent mutates the synced tasks
+   * store so the chosen code persists to Supabase and is visible to the
+   * EOT breach detector (which inspects the `constraints` string).
+   */
+  onUpdateConstraint?: (constraint: string) => void
 }) {
   // Local mirror of the task's locationId so the inspector reflects the
   // selection immediately. The parent owns the source of truth (the task
@@ -181,11 +188,14 @@ export function TaskInspector({
                 {['ASAP', 'ALAP', 'SNET', 'FNLT', 'MFO', 'MSO'].map((c) => (
                   <button
                     key={c}
+                    onClick={() => onUpdateConstraint?.(c)}
+                    disabled={!onUpdateConstraint}
                     className={cn(
                       'h-7 rounded border text-[11px] transition-colors',
                       task.constraints?.includes(c)
                         ? 'bg-primary text-primary-foreground border-primary'
-                        : 'hover:bg-accent border-[var(--pane-divider)]'
+                        : 'hover:bg-accent border-[var(--pane-divider)]',
+                      !onUpdateConstraint && 'cursor-not-allowed opacity-50'
                     )}
                   >
                     {c}
@@ -193,10 +203,6 @@ export function TaskInspector({
                 ))}
               </div>
             </div>
-            <label className="flex items-center gap-2 pt-1">
-              <Switch defaultChecked />
-              <span>Effort-driven scheduling</span>
-            </label>
             <Separator />
             <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
               Dependencies ({task.dependencies?.length || 0})

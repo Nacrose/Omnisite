@@ -218,7 +218,7 @@ export const TASKS: Task[] = [
         progress: 0,
         baseline: [50, 50],
         resources: [],
-        constraints: 'MFO: Wk 48',
+        constraints: 'Must Finish On: Wk 48',
         dependencies: [{ taskId: 'T-404', predecessorId: 'T-403', linkType: 'FS', lagWeeks: 0 }],
       },
     ],

@@ -18,7 +18,7 @@ import { TaskInspector } from './task-inspector'
 import { AddTaskModal, CriticalPathBreachModal, EMPTY_NEW_TASK, type NewTaskDraft } from './modals'
 import { calculateCpm, type CpmTask } from '@/lib/cpm'
 import { levelResources } from './leveling'
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { produce } from 'immer'
 import { flattenTree, rebuildTreeFromRows } from '@/lib/tree-utils'
 
@@ -109,8 +109,12 @@ export function SchedulerModule() {
   // EOT / Critical Path Breach modal
   const [breachModal, setBreachModal] = useState(false)
   const [breachTask, setBreachTask] = useState<Task | null>(null)
-  // Convert expanded array to Set for O(1) lookups
-  const expanded = new Set(expandedArr)
+  // Convert expanded array to Set for O(1) lookups. Memoized so the Set
+  // instance is stable across renders when `expandedArr` hasn't changed —
+  // without this, every render produces a new Set, busting the `useMemo`
+  // cache on `buildVisibleRows(tasks, expanded)` (and forcing the Gantt
+  // canvas to re-walk the entire task tree on every unrelated re-render).
+  const expanded = useMemo(() => new Set(expandedArr), [expandedArr])
 
   // Rebuild the task tree from the flat rows in `tasks`.
   //
@@ -160,18 +164,27 @@ export function SchedulerModule() {
   }
 
   // Real CPM calculation — compute critical path from task dependencies.
-  // Each task's `dependencies` array (TaskDependency[]) is resolved into the
-  // flat predecessor ID list that calculateCpm expects. FS/SS/FF/SF link
-  // types are all treated as FS for the CPM pass — the link type affects
-  // scheduling semantics (start-to-start vs finish-to-start) but the critical
-  // path identification is the same: a task is critical if its float is 0.
+  // Each task's `dependencies` array (TaskDependency[]) is passed through to
+  // calculateCpm with full link type (FS/SS/FF/SF) and lag information, so
+  // the forward/backward pass uses correct finish/start constraints.
+  // Summary and Hammock tasks are excluded from CPM input: Summary tasks are
+  // roll-ups (their start/finish are derived from children, not scheduled)
+  // and Hammock tasks are anchored to other tasks rather than duration-based.
+  // Including them in the CPM network would inject phantom predecessors and
+  // corrupt the critical path (C9).
   const cpmResult = useMemo(() => {
     const flat = flattenTasks(taskTree)
-    const cpmTasks: CpmTask[] = flat.map(({ task }) => ({
-      id: task.id,
-      duration: task.duration,
-      predecessors: (task.dependencies || []).map((d) => d.predecessorId),
-    }))
+    const cpmTasks: CpmTask[] = flat
+      .filter(({ task }) => task.type === 'Work' || task.type === 'Milestone')
+      .map(({ task }) => ({
+        id: task.id,
+        duration: task.duration,
+        dependencies: (task.dependencies || []).map((d) => ({
+          predecessorId: d.predecessorId,
+          linkType: d.linkType,
+          lag: d.lagWeeks,
+        })),
+      }))
     try {
       const result = calculateCpm(cpmTasks)
       return result
@@ -380,23 +393,26 @@ export function SchedulerModule() {
   const todayWeek = Math.max(0, Math.floor((Date.now() - PROJECT_EPOCH.getTime()) / MS_PER_WEEK))
   const canvasRef = useRef<HTMLDivElement>(null)
 
-  // Mouse handlers for drag-to-move on Gantt bars
-  const onBarMouseDown = (e: React.MouseEvent, t: Task) => {
+  // Mouse handlers for drag-to-move on Gantt bars. Wrapped in useCallback
+  // (empty dep array — they only close over setState setters, which are
+  // stable) so the memoized `TaskBar` children of the Gantt canvas don't
+  // re-render on every parent render due to a new function identity.
+  const onBarMouseDown = useCallback((e: React.MouseEvent, t: Task) => {
     if (t.type === 'Milestone' || t.type === 'Summary') return
     e.stopPropagation()
     e.preventDefault()
     setSelectedId(t.id)
     setDragging({ id: t.id, startX: e.clientX, originalStart: t.start, mode: 'move' })
-  }
+  }, [])
 
   // Mouse handler for resize (right-edge drag) on Gantt bars
-  const onResizeMouseDown = (e: React.MouseEvent, t: Task) => {
+  const onResizeMouseDown = useCallback((e: React.MouseEvent, t: Task) => {
     if (t.type === 'Milestone' || t.type === 'Summary') return
     e.stopPropagation()
     e.preventDefault()
     setSelectedId(t.id)
     setDragging({ id: t.id, startX: e.clientX, originalDuration: t.duration, mode: 'resize' })
-  }
+  }, [])
 
   // Keep a ref to the latest task tree so the drag-end breach detector
   // reads post-drag values instead of the stale closure value captured
@@ -424,13 +440,15 @@ export function SchedulerModule() {
       // Summary tasks (e.g. T-301 under T-300) are still found.
       const flat = flattenTasks(tasksRef.current)
       const updated = flat.find((f) => f.task.id === dragging?.id)?.task
-      if (
-        updated &&
-        updated.type === 'Hammock' &&
-        updated.constraints?.includes('Must Finish On')
-      ) {
+      // Match both the human-readable "Must Finish On: Wk 48" form and
+      // the abbreviated "MFO: Wk 48" form (C20). Seed T-404 uses the
+      // abbreviated form; the inspector constraint picker writes the
+      // long form. Both should trigger the EOT breach detector.
+      const hasMFO =
+        updated && updated.constraints && /^(MFO|Must Finish On)/i.test(updated.constraints)
+      if (updated && updated.type === 'Hammock' && hasMFO) {
         // Extract deadline from constraint string like "Must Finish On: Wk 32"
-        const match = updated.constraints.match(/Wk (\d+)/)
+        const match = updated.constraints!.match(/Wk (\d+)/)
         if (match) {
           const deadlineWeek = parseInt(match[1])
           const finishWeek = updated.start + updated.duration
@@ -562,7 +580,12 @@ export function SchedulerModule() {
                 size="sm"
                 className="h-7 text-xs"
                 onClick={() => {
-                  const result = levelResources(taskTree)
+                  // Use the CPM-annotated task tree (not the raw seed/persisted
+                  // tree) so leveling's heuristics read the computed
+                  // `critical` flags rather than the seed-decorated ones
+                  // (C13). Without this, leveling would treat seed-marked
+                  // tasks as critical even after CPM recomputed their float.
+                  const result = levelResources(tasksWithCpm)
                   if (result.shifts.length === 0) {
                     toast.success('Resources already level', {
                       description: `Peak load: ${result.peakLoadBefore} resource units/week`,
@@ -618,6 +641,7 @@ export function SchedulerModule() {
         }
         rightPane={
           <TaskInspector
+            key={selectedTask.id}
             task={selectedTask}
             onUpdateDuration={updateTaskDuration}
             onUpdateLocation={(locId) => {
@@ -645,6 +669,25 @@ export function SchedulerModule() {
                 })
               )
             }}
+            onUpdateConstraint={(constraint) =>
+              // Propagate the picked constraint code (ASAP/ALAP/SNET/FNLT/MFO/MSO)
+              // into the synced tasks store so it persists to Supabase and is
+              // visible to the EOT breach detector (which checks the
+              // `constraints` string for `Must Finish On` / `MFO`). Walks the
+              // tree so nested children are updated immutably (matches the
+              // locationId update path).
+              commitTasks((prev) =>
+                produce(prev, (draft) => {
+                  const walk = (items: Task[]) => {
+                    for (const t of items) {
+                      if (t.id === selectedTask.id) t.constraints = constraint
+                      if (t.children) walk(t.children)
+                    }
+                  }
+                  walk(draft as Task[])
+                })
+              )
+            }
           />
         }
         leftPaneWidth="320px"
