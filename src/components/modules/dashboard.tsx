@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
@@ -9,6 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ModuleId } from '@/lib/app-store'
 import { Separator } from '@/components/ui/separator'
+import { useSyncedState } from '@/lib/use-synced-state'
+import { type BoqItem, BOQ_DATA, flatten as flattenBoq } from '@/components/modules/boq/types'
+import { type Task, TASKS, flattenTasks } from '@/components/modules/scheduler/types'
+import { type CbsNode, CBS } from '@/components/modules/financials/types'
 import {
   TrendingUp,
   TrendingDown,
@@ -194,6 +198,68 @@ export function DashboardModule() {
     }
   }, [])
 
+  // ─── Live data hooks ──────────────────────────────────────────────────────
+  // These three useSyncedState calls fetch from Supabase when configured, and
+  // fall back to localStorage (with the seed data as initial state) otherwise.
+  // The dashboard's header KPIs then aggregate from these arrays so the
+  // numbers always reflect what's in the database — not the seed arrays.
+  const [boqRows] = useSyncedState<BoqItem[]>(
+    'omnisite-boq-data',
+    'boq_items',
+    () => structuredClone(BOQ_DATA) as typeof BOQ_DATA,
+    {
+      fieldMap: { desc: 'description', hasRA: 'has_ra', parentId: 'parent_id' },
+      primaryKey: 'id',
+    }
+  )
+  const [taskRows] = useSyncedState<Task[]>(
+    'omnisite-scheduler-tasks',
+    'tasks',
+    () => structuredClone(TASKS) as typeof TASKS,
+    { primaryKey: 'id' }
+  )
+  const [cbsRows] = useSyncedState<CbsNode[]>(
+    'omnisite-financials-cbs',
+    'cbs_nodes',
+    () => structuredClone(CBS) as typeof CBS,
+    {
+      fieldMap: { marginPct: 'margin_pct', parentCode: 'parent_code' },
+      primaryKey: 'code',
+    }
+  )
+
+  // Live KPI aggregation. Memoized on the underlying arrays so unrelated
+  // re-renders (e.g. the per-second clock tick) don't re-walk every row.
+  const liveKpis = useMemo(() => {
+    const flatBoq = flattenBoq(boqRows)
+    const contractTotal = flatBoq
+      .filter((i) => i.type !== 'Heading')
+      .reduce((sum, i) => sum + i.qty * i.rate, 0)
+
+    const flatTasks = flattenTasks(taskRows)
+    const totalTasks = flatTasks.length
+    const criticalTasks = flatTasks.filter((t) => t.task.critical).length
+    const completedTasks = flatTasks.filter((t) => t.task.progress >= 100).length
+    const overallProgress =
+      totalTasks > 0
+        ? Math.round(flatTasks.reduce((s, t) => s + t.task.progress, 0) / totalTasks)
+        : 0
+
+    // CBS totals — only roots (no parentCode) to avoid double-counting.
+    const totalBudget = cbsRows.filter((c) => !c.parentCode).reduce((s, c) => s + c.budget, 0)
+    const totalActual = cbsRows.filter((c) => !c.parentCode).reduce((s, c) => s + c.actual, 0)
+
+    return {
+      contractTotal,
+      totalTasks,
+      criticalTasks,
+      completedTasks,
+      overallProgress,
+      totalBudget,
+      totalActual,
+    }
+  }, [boqRows, taskRows, cbsRows])
+
   return (
     <div className="workspace-bg h-full overflow-y-auto">
       <div className="mx-auto max-w-[1600px] space-y-5 p-6">
@@ -226,6 +292,32 @@ export function DashboardModule() {
                       year: 'numeric',
                     })
                   : '—'}
+              </span>
+            </div>
+            {/* Live aggregation chips — sourced from useSyncedState hooks */}
+            <div className="bg-card text-muted-foreground hidden items-center gap-3 rounded-md border border-[var(--pane-divider)] px-3 text-xs sm:flex">
+              <span
+                className="flex items-center gap-1.5"
+                title="Contract total (sum of qty × rate for non-heading BOQ items)"
+              >
+                <DollarSign className="h-3.5 w-3.5" />
+                NPR {(liveKpis.contractTotal / 1_000_000).toFixed(2)}M
+              </span>
+              <span className="text-muted-foreground/50">·</span>
+              <span
+                className="flex items-center gap-1.5"
+                title={`${liveKpis.totalTasks} total · ${liveKpis.completedTasks} done · ${liveKpis.criticalTasks} critical`}
+              >
+                <Activity className="h-3.5 w-3.5" />
+                {liveKpis.totalTasks} tasks · {liveKpis.criticalTasks} crit
+              </span>
+              <span className="text-muted-foreground/50">·</span>
+              <span
+                className="flex items-center gap-1.5"
+                title="Overall progress (average % across all tasks)"
+              >
+                <Gauge className="h-3.5 w-3.5" />
+                {liveKpis.overallProgress}%
               </span>
             </div>
             <Button variant="outline" size="sm" onClick={() => navigateToModule('daily-ops')}>

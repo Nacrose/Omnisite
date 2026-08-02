@@ -58,9 +58,15 @@ export async function uploadFile(
       .createSignedUrl(data.path, SIGNED_URL_TTL)
 
     if (signedError || !signedData) {
-      // Fallback to public URL if signed URL fails (better than no URL)
-      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path)
-      return { url: urlData.publicUrl, path: data.path, signed: false }
+      // Sensitive bucket — do NOT fall back to a public URL, which would
+      // bypass the per-project access control. Return an error so callers
+      // can surface it instead of silently exposing the file publicly.
+      return {
+        url: '',
+        path: data.path,
+        signed: false,
+        error: `Failed to generate signed URL for sensitive bucket "${bucket}": ${signedError?.message || 'unknown error'}. The file was uploaded but cannot be displayed without a valid signed URL.`,
+      }
     }
 
     return { url: signedData.signedUrl, path: data.path, signed: true }

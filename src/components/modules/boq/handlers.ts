@@ -3,7 +3,13 @@ import type React from 'react'
 import { produce } from 'immer'
 import { undoableToast } from '@/components/ui/confirm-dialog'
 import { BOQ_DATA, type BoqItem } from './types'
-import { flattenTree, rebuildTreeFromRows, findItemAndParent, updateLevels } from '@/lib/tree-utils'
+import {
+  flattenTree,
+  rebuildTreeFromRows,
+  findItemAndParent,
+  updateLevels,
+  createTreeRebuilder,
+} from '@/lib/tree-utils'
 
 // Deep-clone helper using immer's produce() with a no-op recipe.
 // Intentionally used instead of structuredClone() for undo/redo snapshots:
@@ -43,28 +49,27 @@ function normalizeBoqRow(row: Record<string, unknown>): BoqItem {
  *
  * Falls back to a deep clone of BOQ_DATA when rows is empty or yields no
  * roots, so the UI always has something to render.
+ *
+ * Implemented via the shared `createTreeRebuilder` factory so the
+ * rebuild-or-fallback pattern is identical to the Financials module.
  */
-export function rebuildBoqTree(rows: BoqItem[] | null | undefined): BoqItem[] {
-  if (!rows || rows.length === 0) return deepClone(BOQ_DATA)
-  const hasChildren = rows.some(
-    (r) => Array.isArray((r as BoqItem).children) && (r as BoqItem).children!.length > 0
-  )
-  if (hasChildren) return rows
-  // Normalize DB column names → app fields, then rebuild the tree using the
-  // shared tree-utils helper.
-  const normalized = (rows as unknown as Record<string, unknown>[]).map(
-    normalizeBoqRow
-  ) as unknown as Record<string, any>[]
-  const tree = rebuildTreeFromRows(normalized, 'id', 'parentId')
-  return tree.length > 0 ? (tree as unknown as BoqItem[]) : deepClone(BOQ_DATA)
-}
+export const rebuildBoqTree = createTreeRebuilder<BoqItem>({
+  seed: BOQ_DATA,
+  cloneSeed: deepClone,
+  idKey: 'id',
+  parentKey: 'parentId',
+  normalize: normalizeBoqRow,
+})
 
 /**
  * Flatten a BoqItem tree for DB storage. Strips `children` and sets
  * `parentId` on each row.
  */
 export function flattenBoqTree(items: BoqItem[], parentId: string | null = null): BoqItem[] {
-  return flattenTree(items as unknown as Record<string, any>[], parentId) as unknown as BoqItem[]
+  return flattenTree(
+    items as unknown as Record<string, unknown>[],
+    parentId
+  ) as unknown as BoqItem[]
 }
 
 // ─── Handler context ──────────────────────────────────────────────────────
@@ -175,8 +180,10 @@ export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
             if (it.id === id) {
               // Deep-clone the matched item (with its subtree) and stamp a new
               // id/code/desc, then splice it in immediately after the original.
+              // Use crypto.randomUUID() for collision-free IDs — Date.now()
+              // can collide if two duplicates are created in the same ms.
               const copy = produce(it, (d) => {
-                d.id = `${it.id}-copy-${Date.now().toString(36)}`
+                d.id = `${it.id}-copy-${crypto.randomUUID()}`
                 d.code = `${it.code}-copy`
                 d.desc = `${it.desc} (Copy)`
               }) as BoqItem
@@ -226,7 +233,10 @@ export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
 /** Add a new child item under the given parent. Auto-expands the parent
  *  and selects the new item. */
 export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
-  const newId = `${parentId}.${Date.now().toString(36)}`
+  // crypto.randomUUID() is collision-free across rapid successive calls,
+  // whereas Date.now() can return the same ms when addChildItem is invoked
+  // twice in quick succession (e.g. user double-clicking the menu item).
+  const newId = `${parentId}.${crypto.randomUUID()}`
   commitBoqData(
     (prev) =>
       produce(prev, (draft) => {
@@ -271,7 +281,7 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
 
   // Find the dragged item — primarily for the cycle check below.
   const dragInfo = findItemAndParent(
-    ctx.boqData as unknown as Record<string, any>[],
+    ctx.boqData as unknown as Record<string, unknown>[],
     draggedId,
     'id'
   )
@@ -321,13 +331,13 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
       // Step 2: Find target heading and add the moved item
       if (movedItem) {
         const target = findItemAndParent(
-          cleaned as unknown as Record<string, any>[],
+          cleaned as unknown as Record<string, unknown>[],
           targetHeadingId,
           'id'
         )
         const targetLevel = target?.depth ?? 0
         movedItem = updateLevels(
-          movedItem as unknown as Record<string, any>,
+          movedItem as unknown as Record<string, unknown>,
           targetLevel + 1
         ) as unknown as BoqItem
         const addToTarget = (items: BoqItem[]): boolean => {

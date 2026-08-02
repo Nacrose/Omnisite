@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,8 +45,9 @@ export function FinancialsModule() {
     }
   )
 
-  // Rebuild tree from flat rows
-  const cbsData = rebuildTreeFromRows(cbsRows)
+  // Rebuild tree from flat rows. Memoized so the tree isn't rebuilt on
+  // every render — only when the underlying flat rows actually change.
+  const cbsData = useMemo(() => rebuildTreeFromRows(cbsRows), [cbsRows])
 
   // Wrapper setter that flattens before saving.
   // Uses a functional update on setCbsRows so the latest committed state
@@ -128,7 +129,18 @@ export function FinancialsModule() {
       leftPane={
         <>
           <PaneHeader title="CBS Tree">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info('CBS node creation coming soon', {
+                  description:
+                    'New CBS nodes should mirror the BOQ WBS — add them via the BOQ module and they will propagate here.',
+                })
+              }
+              title="Add CBS node (via BOQ WBS)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>
@@ -259,7 +271,17 @@ export function FinancialsModule() {
                 }
               }}
             />
-            <Button size="sm" className="h-7 gap-1.5 text-xs" disabled title="Coming soon">
+            <Button
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() =>
+                toast.info('Quick expense coming soon', {
+                  description:
+                    'Use the CBS grid below to record an actual on the relevant leaf node, or upload an RA bill via the button on the left.',
+                })
+              }
+              title="Quick expense (coming soon)"
+            >
               <Plus className="h-3.5 w-3.5" />
               Quick Expense
             </Button>

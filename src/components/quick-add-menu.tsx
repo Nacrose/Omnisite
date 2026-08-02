@@ -2,6 +2,7 @@
 
 import { useApp, type ModuleId } from '@/lib/app-store'
 import { useRouter } from 'next/navigation'
+import { useRef } from 'react'
 import {
   X,
   ClipboardList,
@@ -13,6 +14,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useFocusTrap } from '@/lib/use-focus-trap'
 
 const ACTIONS: {
   id: string
@@ -83,6 +85,8 @@ const ACTIONS: {
 export function QuickAddMenu() {
   const { quickAddOpen, setQuickAddOpen } = useApp()
   const router = useRouter()
+  const modalRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(modalRef, quickAddOpen)
   const navigateToModule = (id: string) => {
     router.push(`/${id}`)
     setQuickAddOpen(false)
@@ -96,13 +100,20 @@ export function QuickAddMenu() {
           onClick={() => setQuickAddOpen(false)}
         >
           <div
+            ref={modalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-add-title"
             className="pane animate-in fade-in slide-in-from-top-4 w-full max-w-md overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] px-4">
-              <div className="text-sm font-semibold">Quick Add</div>
+              <div id="quick-add-title" className="text-sm font-semibold">
+                Quick Add
+              </div>
               <button
                 onClick={() => setQuickAddOpen(false)}
+                aria-label="Close Quick Add menu"
                 className="hover:bg-accent text-muted-foreground rounded p-1"
               >
                 <X className="h-4 w-4" />

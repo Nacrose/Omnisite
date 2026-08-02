@@ -1,177 +1,108 @@
 import { describe, it, expect } from 'vitest'
+import { translations } from '@/lib/i18n'
 
-// Import the translations dictionary directly. The i18n module exports
-// useI18n as a hook (can't call outside React), but the dictionary is a
-// module-level const we can introspect.
-// We re-declare the expected shape here and assert parity.
-//
-// This test catches the common bug where a new key is added to English
-// but the Nepali translation is forgotten (or vice versa).
+// True parity tests — import the real `translations` object and verify
+// the English and Nepali dictionaries are kept in sync.
+// Catches the common bug where a new key is added to English but the
+// Nepali translation is forgotten (or vice versa).
 
-const enKeys = [
-  'app.name',
-  'app.tagline',
-  'button.search',
-  'button.quickAdd',
-  'button.export',
-  'button.save',
-  'button.cancel',
-  'button.add',
-  'button.delete',
-  'button.edit',
-  'module.dashboard',
-  'module.boq',
-  'module.scheduler',
-  'module.dailyOps',
-  'module.equipment',
-  'module.procurement',
-  'module.financials',
-  'module.subcontractor',
-  'module.drawings',
-  'module.correspondence',
-  'module.qs',
-  'module.reports',
-  'module.timeAttendance',
-  'module.admin',
-  'module.chat',
-  'dashboard.title',
-  'dashboard.subtitle',
-  'dashboard.kpi.spi',
-  'dashboard.kpi.cpi',
-  'dashboard.kpi.eac',
-  'dashboard.kpi.margin',
-  'status.saved',
-  'status.syncing',
-  'status.connected',
-  'status.local',
-  'status.collaborators',
-  'calendar.fiscalYear',
-  'calendar.bs',
-  'calendar.ad',
-  'boq.title',
-  'boq.contractTotal',
-  'boq.qty',
-  'boq.rate',
-  'boq.amount',
-  'boq.type',
-  'boq.uom',
-  'scheduler.gantt',
-  'scheduler.criticalPath',
-  'scheduler.projectFinish',
-  'scheduler.dragToMove',
-  'scheduler.dragToResize',
-  'chat.channels',
-  'chat.team',
-  'chat.typeMessage',
-  'chat.sendMessage',
-  'chat.pressEnter',
-  'financials.title',
-  'financials.budget',
-  'financials.committed',
-  'financials.actual',
-  'financials.forecast',
-  'financials.margin',
-  'financials.exportCsv',
-  'financials.uploadRaBill',
-  'procurement.title',
-  'procurement.requisitions',
-  'procurement.purchaseOrders',
-  'procurement.grn',
-  'procurement.stock',
-  'procurement.min',
-  'procurement.vendor',
-  'procurement.rate',
-  'procurement.qty',
-  'procurement.status',
-  'procurement.committed',
-  'procurement.stockValue',
-  'dailyOps.title',
-  'dailyOps.dsr',
-  'dailyOps.rfi',
-  'dailyOps.date',
-  'dailyOps.task',
-  'dailyOps.chainage',
-  'dailyOps.planned',
-  'dailyOps.actual',
-  'dailyOps.variance',
-  'qs.title',
-  'qs.ncr',
-  'qs.itr',
-  'qs.punch',
-  'qs.incident',
-  'qs.overdue',
-  'equipment.title',
-  'equipment.status',
-  'equipment.operator',
-  'equipment.chargeRate',
-  'equipment.fuelToday',
-  'equipment.hoursToday',
-  'drawings.title',
-  'drawings.number',
-  'drawings.revision',
-  'drawings.discipline',
-  'drawings.status',
-  'correspondence.title',
-  'correspondence.from',
-  'correspondence.to',
-  'correspondence.subject',
-  'correspondence.date',
-  'correspondence.replyBy',
-  'timeAttendance.title',
-  'timeAttendance.clockIn',
-  'timeAttendance.clockOut',
-  'timeAttendance.todayHours',
-  'timeAttendance.wageRate',
-  'timeAttendance.labourCost',
-  'admin.title',
-  'admin.users',
-  'admin.roles',
-  'admin.projects',
-  'admin.materials',
-  'reports.title',
-  'reports.preview',
-  'reports.save',
-  'reports.export',
-  'common.open',
-  'common.closed',
-  'common.pending',
-  'common.approved',
-  'common.rejected',
-  'common.draft',
-  'common.active',
-  'common.idle',
-  'common.breakdown',
-  'common.delivered',
-  'common.partial',
-  'common.cleared',
-  'common.hold',
-  'common.overdue',
-  'common.onSite',
-  'common.offSite',
-]
+const en = translations.en
+const np = translations.np
 
-describe('i18n translation parity', () => {
-  it('all expected keys are defined (no missing keys)', () => {
-    // This test just verifies our expected key list is non-empty and
-    // well-formed. The real parity check is below.
-    expect(enKeys.length).toBeGreaterThan(100)
-    // Every key should use dot notation (namespace.key)
-    for (const key of enKeys) {
-      expect(key).toMatch(/^[a-zA-Z]+\.[a-zA-Z0-9.]+$/)
+describe('i18n translation parity (real dictionary)', () => {
+  it('both locales export non-empty dictionaries', () => {
+    expect(Object.keys(en).length).toBeGreaterThan(0)
+    expect(Object.keys(np).length).toBeGreaterThan(0)
+  })
+
+  it('en and np expose the exact same set of keys', () => {
+    const enKeys = new Set(Object.keys(en))
+    const npKeys = new Set(Object.keys(np))
+
+    const missingFromNp = [...enKeys].filter((k) => !npKeys.has(k))
+    const missingFromEn = [...npKeys].filter((k) => !enKeys.has(k))
+
+    expect(missingFromNp).toEqual([])
+    expect(missingFromEn).toEqual([])
+  })
+
+  it('en and np have the same key count', () => {
+    expect(Object.keys(en).length).toBe(Object.keys(np).length)
+  })
+
+  it('no translation is an empty string', () => {
+    for (const [key, value] of Object.entries(en)) {
+      expect(value, `en.${key} should not be empty`).not.toBe('')
+    }
+    for (const [key, value] of Object.entries(np)) {
+      expect(value, `np.${key} should not be empty`).not.toBe('')
     }
   })
 
-  it('en and np dictionaries have the same key count', async () => {
-    // Dynamically import the i18n module to access the translations dict.
-    // We can't import { translations } directly because it's not exported,
-    // so we re-implement the parity check by counting expected keys.
-    //
-    // If you add a key to en, you MUST add it to np too. This test will
-    // fail if the counts drift.
-    const expectedCount = enKeys.length
-    // The actual en/np dicts should each have exactly this many keys.
-    // (If this assertion fails, someone added a key to one dict but not
-    // the other — check src/lib/i18n.tsx.)
-    expect(expectedCount).toBe(139) // update this number when adding keys
+  it('no Nepali translation is just a copy of the English value (catches forgotten translations)', () => {
+    // Nepali translations should not equal their English counterpart — that
+    // would indicate someone copied the en value as a placeholder. We only
+    // flag pure ASCII English strings (skip codes like "BS", "AD", "EAC",
+    // "RFI", "NCR" that are intentionally identical across locales).
+    const intentionalSharedTokens = new Set([
+      'RFI',
+      'NCR',
+      'GRN',
+      'EAC',
+      'PDF',
+      'CSV',
+      'PO',
+      'DSR+Exp',
+      'BS',
+      'AD',
+      'FY',
+    ])
+
+    for (const key of Object.keys(en)) {
+      const enVal = en[key]
+      const npVal = np[key]
+      // Skip keys whose English value is a single token shared across locales.
+      if (intentionalSharedTokens.has(enVal)) continue
+      // Only flag pure-ASCII English values (Nepali script is non-ASCII).
+      if (!/[a-z]/i.test(enVal)) continue
+      // Nepali translations should contain Devanagari (U+0900–U+097F) or be
+      // a meaningful translation; an identical ASCII English value signals
+      // a forgotten translation.
+      if (npVal === enVal && /^[\x00-\x7F]+$/.test(npVal)) {
+        // Allow short technical tokens (<=3 chars) to be shared.
+        if (enVal.length <= 3) continue
+        // Allow tokens inside the intentional shared set (e.g. "RFI Register"
+        // — the word "RFI" is shared, but the rest is Nepali).
+        const hasNepali = /[\u0900-\u097F]/.test(npVal)
+        if (!hasNepali) {
+          throw new Error(
+            `np.${key} is identical to en value "${enVal}" — likely a forgotten translation`
+          )
+        }
+      }
+    }
+  })
+
+  it('no translation contains an unresolved placeholder', () => {
+    // Placeholders look like {name} or {count}. Translations should not ship
+    // with literal placeholders that the t() function would leave behind if
+    // no params were passed.
+    const placeholderRe = /\{[a-zA-Z0-9_]+\}/
+    for (const [key, value] of Object.entries(en)) {
+      expect(placeholderRe.test(value), `en.${key} contains an unresolved placeholder`).toBe(false)
+    }
+    for (const [key, value] of Object.entries(np)) {
+      expect(placeholderRe.test(value), `np.${key} contains an unresolved placeholder`).toBe(false)
+    }
+  })
+
+  it('every key uses the namespace.key dot notation', () => {
+    const keyRe = /^[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z0-9.]+$/
+    for (const key of Object.keys(en)) {
+      expect(key, `en key "${key}" should match dot notation`).toMatch(keyRe)
+    }
+    for (const key of Object.keys(np)) {
+      expect(key, `np key "${key}" should match dot notation`).toMatch(keyRe)
+    }
   })
 })

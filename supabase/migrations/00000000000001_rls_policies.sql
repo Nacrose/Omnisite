@@ -28,50 +28,35 @@ CREATE TABLE IF NOT EXISTS user_projects (
 ALTER TABLE user_projects ENABLE ROW LEVEL SECURITY;
 
 -- Users can read their own project assignments.
--- PMs can read all assignments.
+-- PMs can read assignments for projects they are PM on (per-project, not global).
 DROP POLICY IF EXISTS "users_read_own_assignments" ON user_projects;
 CREATE POLICY "users_read_own_assignments" ON user_projects
   FOR SELECT USING (
     auth.uid() = user_id
-    OR EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
+    OR user_has_pm_access(project_id)
   );
 
--- Users can be assigned to projects only by PMs.
+-- Users can be assigned to projects only by PMs of THAT project.
 DROP POLICY IF EXISTS "pms_insert_assignments" ON user_projects;
 CREATE POLICY "pms_insert_assignments" ON user_projects
   FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
+    user_has_pm_access(project_id)
   );
 
--- Only PMs can delete assignments.
+-- Only PMs of THAT project can delete assignments.
 DROP POLICY IF EXISTS "pms_delete_assignments" ON user_projects;
 CREATE POLICY "pms_delete_assignments" ON user_projects
   FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
+    user_has_pm_access(project_id)
   );
 
--- PMs can update assignments (e.g. change a user's role on a project).
+-- PMs of THAT project can update assignments (e.g. change a user's role on a project).
 DROP POLICY IF EXISTS "pms_update_assignments" ON user_projects;
 CREATE POLICY "pms_update_assignments" ON user_projects
   FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
+    user_has_pm_access(project_id)
   ) WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
+    user_has_pm_access(project_id)
   );
 
 -- ─── 2. Helper function: check if user has access to a project ─────────────
@@ -82,7 +67,7 @@ BEGIN
   RETURN EXISTS (
     SELECT 1 FROM user_projects
     WHERE user_id = auth.uid()
-    AND (project_id = project_uuid OR role = 'PM')
+    AND project_id = project_uuid
   );
 END;
 $$ LANGUAGE plpgsql;
@@ -98,10 +83,6 @@ BEGIN
     SELECT 1 FROM user_projects
     WHERE user_id = auth.uid()
     AND project_id = project_uuid
-    AND role = 'PM'
-  ) OR EXISTS (
-    SELECT 1 FROM user_projects
-    WHERE user_id = auth.uid()
     AND role = 'PM'
   );
 END;
@@ -131,20 +112,15 @@ CREATE POLICY "projects_select_assigned" ON projects
     user_has_project_access(id)
   );
 
--- Only PMs can create/update/delete projects.
+-- Only PMs of THIS project can update/delete it. (Project creation is handled
+-- separately by the service_role via the projects API route — there is no
+-- per-row PM check possible at INSERT time because the user_projects row for
+-- the new project doesn't exist yet.)
 DROP POLICY IF EXISTS "projects_pms_write" ON projects;
-CREATE POLICY "projects_pms_write" ON projects
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
-  ) WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
-  );
+CREATE POLICY "projects_pms_update" ON projects
+  FOR UPDATE USING (user_has_pm_access(id)) WITH CHECK (user_has_pm_access(id));
+CREATE POLICY "projects_pms_delete" ON projects
+  FOR DELETE USING (user_has_pm_access(id));
 
 -- ─── 5. Business table policies (repeated pattern) ────────────────────────
 -- For each business table: SELECT/INSERT/UPDATE/DELETE are allowed only if
@@ -389,11 +365,7 @@ CREATE POLICY "audit_service_insert" ON audit_log
 DROP POLICY IF EXISTS "audit_select_assigned" ON audit_log;
 CREATE POLICY "audit_select_assigned" ON audit_log
   FOR SELECT USING (
-    -- PMs can read all audit entries
-    EXISTS (
-      SELECT 1 FROM user_projects up
-      WHERE up.user_id = auth.uid() AND up.role = 'PM'
-    )
+    project_id IS NOT NULL AND user_has_project_access(project_id)
   );
 
 -- No UPDATE or DELETE policies → audit_log is immutable for non-service roles.

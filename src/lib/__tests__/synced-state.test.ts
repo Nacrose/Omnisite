@@ -1,18 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { snakeToCamel, camelToSnake } from '@/lib/use-synced-state'
 
 // ─── Tests for use-synced-state transform functions ─────────────────────────
-// These test the pure transform logic (fromDb/toDb) and the race-condition
-// fix (functional setState) without needing a React renderer.
-
-// We test the transform functions by extracting them and testing the logic
-// directly, since they're defined inside the hook but are pure functions.
+// These test the pure transform logic (snakeToCamel / camelToSnake) by
+// importing the real functions from the production module — so they fail
+// if the regex is ever changed in a way that breaks the contract.
 
 describe('useSyncedState transform logic', () => {
-  // Replicate the snakeToCamel / camelToSnake functions for testing
-  const snakeToCamel = (s: string): string => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
-
-  const camelToSnake = (s: string): string => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
-
   describe('snakeToCamel', () => {
     it('converts simple snake_case', () => {
       expect(snakeToCamel('has_ra')).toBe('hasRa')
@@ -39,6 +33,13 @@ describe('useSyncedState transform logic', () => {
     it('handles leading underscore', () => {
       expect(snakeToCamel('_private')).toBe('Private')
     })
+
+    it('handles consecutive underscores (only the first converts)', () => {
+      // The regex `_([a-z])` matches `_x` (underscore followed by lowercase).
+      // For '__foo', the first `_` is followed by another `_` (not [a-z]),
+      // so it stays. The second `_` is followed by 'f', so it converts.
+      expect(snakeToCamel('__foo')).toBe('_Foo')
+    })
   })
 
   describe('camelToSnake', () => {
@@ -62,6 +63,13 @@ describe('useSyncedState transform logic', () => {
     it('passes through simple lowercase', () => {
       expect(camelToSnake('code')).toBe('code')
       expect(camelToSnake('name')).toBe('name')
+    })
+
+    it('converts a leading uppercase character with a leading underscore', () => {
+      // 'Camel' → '_camel' (the leading C becomes _c). Documenting the
+      // behaviour: callers should not pass PascalCase strings through this
+      // helper without expecting a leading underscore.
+      expect(camelToSnake('Camel')).toBe('_camel')
     })
   })
 

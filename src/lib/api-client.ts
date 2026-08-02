@@ -77,6 +77,42 @@ export function buildApiUrl(endpoint: string, query?: Record<string, string>): s
 }
 
 /**
+ * In-flight GET request cache. Keyed by full URL string.
+ *
+ * When `fetchPaginated` is called and there's already a Promise for the
+ * same URL in flight, the existing Promise is returned instead of firing
+ * a new fetch — so two components mounting at the same time that ask for
+ * the same data only produce one network request.
+ *
+ * Entries are cleared when the promise settles (success OR failure) so
+ * the cache only holds truly-concurrent requests, not stale snapshots.
+ *
+ * Writes ({@link upsertOne}, {@link deleteOne}) call
+ * {@link invalidateReads} to drop any in-flight reads for that endpoint
+ * so the next read sees the new write instead of returning a pre-write
+ * snapshot.
+ */
+const inflightReads = new Map<string, Promise<unknown>>()
+
+/**
+ * Drop all in-flight GET requests whose URL targets the given endpoint.
+ * Called after writes so the next read fires a fresh fetch instead of
+ * returning a stale pre-write snapshot (or joining an in-flight pre-write
+ * read).
+ *
+ * @param endpoint  Either `boq` or `/api/boq` — both work.
+ */
+export function invalidateReads(endpoint: string): void {
+  const prefix = endpoint.startsWith('/api/') ? endpoint : `/api/${endpoint}`
+  for (const url of inflightReads.keys()) {
+    // Match either exactly `/api/{endpoint}` or `/api/{endpoint}?...`
+    if (url === prefix || url.startsWith(`${prefix}?`)) {
+      inflightReads.delete(url)
+    }
+  }
+}
+
+/**
  * Fetch all rows from `GET /api/{endpoint}`.
  *
  * Supports optional pagination via `query.limit` and `query.cursor`.
@@ -148,18 +184,38 @@ export async function fetchPaginated<T>(
   query?: Record<string, string>
 ): Promise<{ data: T[]; nextCursor: string | null }> {
   const url = buildApiUrl(endpoint, query)
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: { Accept: 'application/json', ...authHeaders },
-    cache: 'no-store',
+
+  // Deduplicate concurrent reads for the same URL — two components
+  // mounting at the same time and asking for the same data share one
+  // network request. The cache entry is removed when the promise settles
+  // so subsequent reads always fire a fresh fetch.
+  const existing = inflightReads.get(url) as
+    Promise<{ data: T[]; nextCursor: string | null }> | undefined
+  if (existing) return existing
+
+  const promise = (async () => {
+    const authHeaders = await getAuthHeaders()
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...authHeaders },
+      cache: 'no-store',
+    })
+    if (!res.ok) throw new ApiClientError(await readError(res, endpoint), res.status, endpoint)
+    const json = await res.json()
+    if (Array.isArray(json)) return { data: json as T[], nextCursor: null }
+    if (json && Array.isArray(json.data))
+      return { data: json.data as T[], nextCursor: json.nextCursor ?? null }
+    return { data: json ? [json as T] : [], nextCursor: null }
+  })()
+
+  inflightReads.set(url, promise)
+  // Clear the entry once the promise settles. We compare against the
+  // captured `promise` reference in case `invalidateReads` already removed
+  // the entry between settle-time and the microtask firing.
+  void promise.finally(() => {
+    if (inflightReads.get(url) === promise) inflightReads.delete(url)
   })
-  if (!res.ok) throw new ApiClientError(await readError(res, endpoint), res.status, endpoint)
-  const json = await res.json()
-  if (Array.isArray(json)) return { data: json as T[], nextCursor: null }
-  if (json && Array.isArray(json.data))
-    return { data: json.data as T[], nextCursor: json.nextCursor ?? null }
-  return { data: json ? [json as T] : [], nextCursor: null }
+  return promise
 }
 
 /**
@@ -197,6 +253,9 @@ export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undef
     throw new ApiClientError(message, res.status, endpoint)
   }
   const data = await res.json()
+  // Drop any in-flight reads for this endpoint so the next GET fires a
+  // fresh fetch reflecting the just-committed write.
+  invalidateReads(endpoint)
   if (Array.isArray(data)) return data[0] as T | undefined
   return data as T | undefined
 }
@@ -232,4 +291,7 @@ export async function deleteOne(endpoint: string, id: string): Promise<void> {
   } catch {
     /* server may return empty body on DELETE — ignore */
   }
+  // Drop any in-flight reads for this endpoint so the next GET reflects
+  // the deletion rather than serving a cached pre-delete snapshot.
+  invalidateReads(endpoint)
 }

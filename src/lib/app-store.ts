@@ -22,9 +22,16 @@ export type ModuleId =
 
 interface AppState {
   activeModule: ModuleId
-  activeProject: string
-  activeProjectId: string
-  activeProjectDbId: string
+  /**
+   * Default to `null` so fresh installs don't pretend to know which project
+   * is active. The ProjectSwitcher falls back to the first project for
+   * display, but no project_id is sent to Supabase queries until the user
+   * explicitly picks one — preventing accidental cross-project data leaks
+   * on first load.
+   */
+  activeProject: string | null
+  activeProjectId: string | null
+  activeProjectDbId: string | null
   setActiveModule: (m: ModuleId) => void
   setActiveProject: (p: string, id: string, dbId: string) => void
   // Persisted pane state
@@ -47,9 +54,9 @@ export const useApp = create<AppState>()(
   persist(
     (set, get) => ({
       activeModule: 'dashboard',
-      activeProject: 'Kathmandu Ring Road Expansion — Package 3',
-      activeProjectId: 'p1',
-      activeProjectDbId: '00000000-0000-0000-0000-000000000001',
+      activeProject: null,
+      activeProjectId: null,
+      activeProjectDbId: null,
       setActiveModule: (m) => {
         set({ activeModule: m })
         // Track recent — dedupe and prepend, cap at 5

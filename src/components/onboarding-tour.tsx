@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { X, ChevronRight, ChevronLeft, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useFocusTrap } from '@/lib/use-focus-trap'
 
 const ONBOARDED_KEY = 'omnisite-onboarded'
 
@@ -68,6 +69,8 @@ const STEPS: TourStep[] = [
 export function OnboardingTour() {
   const [show, setShow] = useState(false)
   const [step, setStep] = useState(0)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, show)
 
   useEffect(() => {
     // Only show on first visit (not onboarded yet).
@@ -123,6 +126,10 @@ export function OnboardingTour() {
           >
             {/* Modal */}
             <motion.div
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="onboarding-title"
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -158,7 +165,9 @@ export function OnboardingTour() {
               {/* Content */}
               <div className="px-5 py-6 text-center">
                 <div className="mb-4 text-4xl">{current.icon}</div>
-                <h2 className="mb-2 text-lg font-bold">{current.title}</h2>
+                <h2 id="onboarding-title" className="mb-2 text-lg font-bold">
+                  {current.title}
+                </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   {current.description}
                 </p>

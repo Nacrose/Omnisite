@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Keyboard, Command, ArrowLeft, ArrowRight } from 'lucide-react'
 import { useApp, KEYBOARD_SHORTCUTS, MODULES } from '@/lib/app-store'
 import { ModuleIcon } from '@/components/module-icon'
 import { cn } from '@/lib/utils'
+import { useFocusTrap } from '@/lib/use-focus-trap'
 
 const GLOBAL_SHORTCUTS = [
   { keys: ['⌘', 'K'], label: 'Open Command Palette', desc: 'Search modules, actions, documents' },
@@ -21,6 +22,8 @@ const BOQ_SHORTCUTS = [
 
 export function HelpModal() {
   const [open, setOpen] = useState(false)
+  const modalRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(modalRef, open)
 
   // ? key opens the help modal; Escape closes (also handled by the overlay)
   useEffect(() => {
@@ -48,6 +51,10 @@ export function HelpModal() {
       onClick={() => setOpen(false)}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-modal-title"
         className="pane flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -55,10 +62,13 @@ export function HelpModal() {
         <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] px-4">
           <div className="flex items-center gap-2">
             <Keyboard className="text-primary h-4 w-4" />
-            <span className="text-sm font-semibold">Keyboard Shortcuts</span>
+            <span id="help-modal-title" className="text-sm font-semibold">
+              Keyboard Shortcuts
+            </span>
           </div>
           <button
             onClick={() => setOpen(false)}
+            aria-label="Close help dialog"
             className="hover:bg-accent text-muted-foreground rounded p-1"
           >
             <X className="h-4 w-4" />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 /**
  * A drop-in replacement for useState that persists to localStorage.
@@ -33,14 +33,25 @@ export function usePersistentState<T>(
     return typeof initial === 'function' ? (initial as () => T)() : initial
   })
 
-  // Write to localStorage whenever state changes
+  // Write to localStorage whenever state changes — debounced by 500ms so
+  // rapid edits (e.g. dragging a column-width handle, typing in a cell)
+  // don't thrash the main thread with JSON.stringify + setItem on every
+  // keystroke. The latest state is always read from `stateRef.current`
+  // when the timer fires, so coalesced updates land as a single write.
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
   useEffect(() => {
     if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(key, JSON.stringify(state))
-    } catch (e) {
-      console.warn(`usePersistentState: failed to write "${key}" to localStorage`, e)
-    }
+    const handle = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(stateRef.current))
+      } catch (e) {
+        console.warn(`usePersistentState: failed to write "${key}" to localStorage`, e)
+      }
+    }, 500)
+    return () => window.clearTimeout(handle)
   }, [key, state])
 
   return [state, setState]

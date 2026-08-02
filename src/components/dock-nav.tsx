@@ -239,6 +239,8 @@ function DockIcon({
             : 'bg-secondary/40 hover:bg-accent text-foreground'
         )}
         title={item.name}
+        aria-label={item.name}
+        aria-current={isActive ? 'page' : undefined}
       >
         <motion.div
           style={{ width: size, height: size }}
@@ -260,6 +262,8 @@ function DockIcon({
           isActive ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-foreground'
         )}
         title={item.name}
+        aria-label={item.name}
+        aria-current={isActive ? 'page' : undefined}
       >
         <ModuleIcon name={item.icon} className="h-5 w-5" />
         {isActive && (

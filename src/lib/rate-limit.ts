@@ -49,14 +49,16 @@ function getRatelimit(): Ratelimit {
  */
 function resolveIdentifier(req: NextRequest, userId?: string): string {
   if (userId) return userId
-
   if (process.env.TRUST_PROXY === 'true') {
     const xff = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    if (xff) return xff
+    if (xff) return `ip:${xff}`
   }
-  // No reliable client identifier available — bucket together so the limiter
-  // still applies a global cap rather than allowing unbounded traffic.
-  return 'anonymous'
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return 'anonymous'
+  }
+  const realIp = req.headers.get('x-real-ip')
+  if (realIp) return `ip:${realIp}`
+  return 'anonymous-unauth'
 }
 
 /**

@@ -1,35 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { calculateCpm } from '@/lib/cpm'
 import type { CpmTask } from '@/lib/cpm'
+import { recomputeCbsParent } from '@/components/modules/financials/hooks'
+import type { CbsNode } from '@/components/modules/financials/types'
 
 // ─── CBS Rollup Aggregation Tests ───────────────────────────────────────────
 // Tests the Financials module's parent re-aggregation logic: when a leaf
 // node's committed/actual/forecast is edited, the parent's values should
 // be recomputed as the sum of children.
+//
+// Imports the real `recomputeCbsParent` from the production module — so
+// this test fails if the rollup formula in hooks.ts is ever broken.
 
 describe('CBS rollup aggregation', () => {
-  // Simulate the walk-back-up re-aggregation logic from financials.tsx updateNode
-  interface CbsNode {
-    code: string
-    name: string
-    budget: number
-    committed: number
-    actual: number
-    forecast: number
-    marginPct: number
-    level: number
-    children?: CbsNode[]
-  }
-
-  function recomputeParent(node: CbsNode): void {
-    if (!node.children || node.children.length === 0) return
-    node.budget = node.children.reduce((s, c) => s + c.budget, 0)
-    node.committed = node.children.reduce((s, c) => s + c.committed, 0)
-    node.actual = node.children.reduce((s, c) => s + c.actual, 0)
-    node.forecast = node.children.reduce((s, c) => s + c.forecast, 0)
-    node.marginPct = node.budget > 0 ? ((node.budget - node.forecast) / node.budget) * 100 : 0
-  }
-
   it('parent totals = sum of children after leaf edit', () => {
     const tree: CbsNode = {
       code: '1',
@@ -65,7 +48,7 @@ describe('CBS rollup aggregation', () => {
     }
     // Edit leaf 1.1's actual from 48 to 50
     tree.children![0].actual = 50
-    recomputeParent(tree)
+    recomputeCbsParent(tree)
     expect(tree.actual).toBe(114) // 50 + 64
     expect(tree.budget).toBe(196) // 84 + 112
     expect(tree.committed).toBe(190) // 82 + 108
@@ -97,7 +80,7 @@ describe('CBS rollup aggregation', () => {
     }
     // Edit leaf 1.1's forecast from 95 to 110 (over budget)
     tree.children![0].forecast = 110
-    recomputeParent(tree)
+    recomputeCbsParent(tree)
     expect(tree.forecast).toBe(110)
     expect(tree.budget).toBe(100)
     expect(tree.marginPct).toBe(-10) // (100-110)/100 * 100
@@ -126,8 +109,28 @@ describe('CBS rollup aggregation', () => {
         },
       ],
     }
-    recomputeParent(tree)
+    recomputeCbsParent(tree)
     expect(tree.marginPct).toBe(0) // no NaN/Infinity
+  })
+
+  it('is a no-op when the node has no children (leaf)', () => {
+    const leaf: CbsNode = {
+      code: '1.1',
+      name: 'Leaf',
+      budget: 100,
+      committed: 90,
+      actual: 50,
+      forecast: 95,
+      marginPct: 5,
+      level: 1,
+    }
+    recomputeCbsParent(leaf)
+    // All values are unchanged.
+    expect(leaf.budget).toBe(100)
+    expect(leaf.committed).toBe(90)
+    expect(leaf.actual).toBe(50)
+    expect(leaf.forecast).toBe(95)
+    expect(leaf.marginPct).toBe(5)
   })
 })
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,8 @@ import {
   StickyTableBody,
   type ColumnDef,
 } from '@/components/ui/table-utils'
+import { uploadFile, STORAGE_BUCKETS } from '@/lib/storage'
+import { useApp } from '@/lib/app-store'
 
 interface Dwg {
   id: string
@@ -126,10 +128,60 @@ const DWS: Dwg[] = [
 const DISCIPLINES = ['All', ...Array.from(new Set(DWS.map((d) => d.discipline)))]
 
 export function DrawingsModule() {
+  const { activeProjectDbId } = useApp()
   const [selectedId, setSelectedId] = useState('DWG-001')
   const [discipline, setDiscipline] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const selected = DWS.find((d) => d.id === selectedId) ?? DWS[0]
+
+  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024 // 25 MB
+  const ACCEPTED_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+  const ACCEPTED_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp']
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // Always reset the input value so the same file can be picked again later.
+    if (e.target) e.target.value = ''
+    if (!file) return
+
+    const lowerName = file.name.toLowerCase()
+    const extOk = ACCEPTED_EXTS.some((ext) => lowerName.endsWith(ext))
+    if (!extOk || !ACCEPTED_TYPES.includes(file.type)) {
+      toast.error('Unsupported file type', {
+        description: 'Allowed types: PDF, PNG, JPEG, WebP.',
+      })
+      return
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('File too large', {
+        description: `Max size is 25 MB (received ${(file.size / 1024 / 1024).toFixed(1)} MB).`,
+      })
+      return
+    }
+
+    setUploading(true)
+    try {
+      const result = await uploadFile(
+        STORAGE_BUCKETS.DRAWINGS,
+        file,
+        activeProjectDbId ?? 'unscoped'
+      )
+      if (result.error) {
+        toast.error('Upload failed', { description: result.error })
+      } else {
+        toast.success('Drawing uploaded', {
+          description: `${file.name} stored in the drawings bucket.`,
+        })
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      toast.error('Upload failed', { description: msg })
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const filtered = DWS.filter((d) => {
     if (discipline !== 'All' && d.discipline !== discipline) return false
@@ -204,15 +256,23 @@ export function DrawingsModule() {
       centerPane={
         <>
           <PaneHeader title={`Drawings Register · ${filtered.length} of ${DWS.length}`}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              className="hidden"
+              onChange={handleUpload}
+            />
             <Button
               variant="ghost"
               size="sm"
               className="h-7 gap-1.5 text-xs"
-              disabled
-              title="Coming soon"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload a drawing (PDF, PNG, JPEG, WebP — max 25 MB)"
             >
               <Upload className="h-3.5 w-3.5" />
-              Upload
+              {uploading ? 'Uploading…' : 'Upload'}
             </Button>
             <Button
               variant="ghost"

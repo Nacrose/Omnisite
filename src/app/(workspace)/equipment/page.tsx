@@ -1,4 +1,12 @@
-import { EquipmentModule } from '@/components/modules/equipment'
+'use client'
+
+import dynamic from 'next/dynamic'
+import { ModuleLoadingFallback } from '@/components/modules/module-loading'
+
+const EquipmentModule = dynamic(
+  () => import('@/components/modules/equipment').then((m) => m.EquipmentModule),
+  { loading: () => <ModuleLoadingFallback />, ssr: false }
+)
 
 export default function Page() {
   return <EquipmentModule />

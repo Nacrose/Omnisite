@@ -7,6 +7,7 @@ import { Search, CornerDownLeft, Hash, ArrowRight } from 'lucide-react'
 import { ModuleIcon } from '@/components/module-icon'
 import { searchAll, SearchResult, type SearchDataSources } from '@/lib/search-index'
 import { cn } from '@/lib/utils'
+import { useFocusTrap } from '@/lib/use-focus-trap'
 
 type CmdEntry = { id: string; label: string; hint?: string; icon: string; action: () => void }
 
@@ -34,6 +35,8 @@ export function CommandPalette() {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(modalRef, commandOpen)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -202,6 +205,10 @@ export function CommandPalette() {
       onClick={() => setCommandOpen(false)}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         className="pane w-full max-w-xl overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -210,6 +217,13 @@ export function CommandPalette() {
           <Search className="text-muted-foreground h-4 w-4" />
           <input
             ref={inputRef}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="command-palette-results"
+            aria-expanded="true"
+            aria-activedescendant={
+              selected >= 0 && selected < allItems.length ? `cmd-item-${selected}` : undefined
+            }
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -224,7 +238,12 @@ export function CommandPalette() {
           </kbd>
         </div>
 
-        <div className="max-h-[420px] overflow-y-auto py-2">
+        <div
+          id="command-palette-results"
+          role="listbox"
+          aria-label="Command palette results"
+          className="max-h-[420px] overflow-y-auto py-2"
+        >
           {/* No results */}
           {allItems.length === 0 && (
             <div className="px-4 py-12 text-center">
@@ -253,6 +272,9 @@ export function CommandPalette() {
                     return (
                       <button
                         key={r.id}
+                        id={`cmd-item-${idx}`}
+                        role="option"
+                        aria-selected={isSelected}
                         onMouseEnter={() => setSelected(idx)}
                         onClick={() => navigateToModule(r.module)}
                         className={cn(
@@ -295,6 +317,9 @@ export function CommandPalette() {
                 return (
                   <button
                     key={a.id}
+                    id={`cmd-item-${idx}`}
+                    role="option"
+                    aria-selected={isSelected}
                     onMouseEnter={() => setSelected(idx)}
                     onClick={() => a.action()}
                     className={cn(

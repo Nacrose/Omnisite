@@ -14,14 +14,10 @@ export function StatusBar() {
   const { activeModule } = useApp()
   const { users, isConnected } = usePresence()
   const { isDemo } = useAuth()
-  const { locale, calendar, setLocale, setCalendar } = useI18n()
+  const { locale, calendar, setLocale, setCalendar, t } = useI18n()
 
   const handleReset = () => {
-    if (
-      confirm(
-        'Reset all data to defaults? This will clear all your edits to BOQ, Schedule, and Financials.'
-      )
-    ) {
+    if (confirm(t('status.resetConfirm'))) {
       clearAllPersistentState()
       try {
         localStorage.removeItem('omnisite-app-store')
@@ -33,7 +29,7 @@ export function StatusBar() {
       } catch (e) {
         /* ignore */
       }
-      toast.success('Data reset to defaults', { description: 'Page reloading…' })
+      toast.success(t('status.resetSuccess'), { description: t('status.resetSuccessDesc') })
       setTimeout(() => window.location.reload(), 800)
     }
   }
@@ -46,7 +42,7 @@ export function StatusBar() {
   // Honest static mode label — no fake "syncing" animation. Demo mode
   // (no Supabase env vars) is the most specific truth; otherwise we
   // fall back to "Local mode" since the app is local-first.
-  const modeLabel = isDemo ? 'Demo mode' : 'Local mode'
+  const modeLabel = isDemo ? t('status.local') : t('status.saved')
 
   return (
     <footer className="vibrancy text-muted-foreground flex h-6 flex-shrink-0 items-center gap-4 border-t border-[var(--pane-divider)] px-3 text-[10px]">
@@ -71,7 +67,7 @@ export function StatusBar() {
             )}
           />
         </div>
-        <span>{isConnected ? 'Cloud sync active' : 'Local mode'}</span>
+        <span>{isConnected ? t('status.connected') : t('status.local')}</span>
       </span>
 
       <div className="h-3 w-px bg-[var(--pane-divider)]" />
@@ -79,8 +75,8 @@ export function StatusBar() {
       {/* Collaborators — now reflects real presence */}
       <span className="flex items-center gap-1.5">
         <Users className="h-3 w-3" />
-        <span>
-          {collaboratorCount} collaborator{collaboratorCount !== 1 ? 's' : ''}
+        <span aria-live="polite" aria-label={`${collaboratorCount} ${t('status.collaborators')}`}>
+          {collaboratorCount} {t('status.collaborators')}
         </span>
         {/* Avatar dots — us + remote users */}
         <div className="ml-1 flex -space-x-1.5">
@@ -172,10 +168,10 @@ export function StatusBar() {
       <button
         onClick={handleReset}
         className="hover:text-foreground flex items-center gap-1 transition-colors"
-        title="Reset all data to defaults"
+        title={t('status.resetTitle')}
       >
         <RotateCcw className="h-3 w-3" />
-        <span>Reset</span>
+        <span>{t('status.reset')}</span>
       </button>
 
       <div className="h-3 w-px bg-[var(--pane-divider)]" />

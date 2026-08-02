@@ -43,13 +43,41 @@ interface ChatMessage {
   created_at: string
 }
 
-const CHANNELS = [
+/**
+ * A chat channel shown in the sidebar's "Channels" group.
+ *
+ * `icon` is a lucide-react component so callers can override the icon when
+ * supplying custom channels (e.g. an `Inbox` icon for a DM channel).
+ */
+export interface ChatChannel {
+  id: string
+  name: string
+  desc: string
+  icon: typeof Hash
+}
+
+/** A team member shown in the sidebar's "Team" group. */
+export interface TeamMember {
+  id: string
+  name: string
+  initials: string
+  color: string
+  role: string
+}
+
+// ─── Default channel + team seed data ───────────────────────────────────────
+//
+// Exported as `DEFAULT_CHANNELS` / `DEFAULT_TEAM_MEMBERS` so callers can
+// import and extend them (e.g. add an org-specific channel list) or pass
+// their own via the `ChatModule` props.
+
+export const DEFAULT_CHANNELS: ChatChannel[] = [
   { id: 'general', name: 'general', desc: 'Project-wide announcements', icon: Hash },
   { id: 'site', name: 'site', desc: 'Site execution & daily ops', icon: Hash },
   { id: 'management', name: 'management', desc: 'PM & management discussions', icon: Hash },
 ]
 
-const TEAM_MEMBERS = [
+export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   {
     id: 'u-arjun',
     name: 'Site Engineer',
@@ -64,7 +92,16 @@ const TEAM_MEMBERS = [
 
 // ─── Main Module ─────────────────────────────────────────────────────────────
 
-export function ChatModule() {
+export interface ChatModuleProps {
+  /** Override the default channel list. Defaults to `DEFAULT_CHANNELS`. */
+  channels?: ChatChannel[]
+  /** Override the default team member list. Defaults to `DEFAULT_TEAM_MEMBERS`. */
+  teamMembers?: TeamMember[]
+}
+
+export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
+  const channelsList = channels ?? DEFAULT_CHANNELS
+  const teamMembersList = teamMembers ?? DEFAULT_TEAM_MEMBERS
   const [activeChannel, setActiveChannel] = usePersistentState('omnisite-chat-channel', 'general')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(true)
@@ -145,13 +182,13 @@ export function ChatModule() {
   }, [messages, activeChannel])
 
   const channelMessages = messages.filter((m) => m.channel_id === activeChannel)
-  const activeChannelInfo = CHANNELS.find((c) => c.id === activeChannel) || CHANNELS[0]
+  const activeChannelInfo = channelsList.find((c) => c.id === activeChannel) || channelsList[0]
 
   // Filter channels and team members by the search query (matches channel
   // name/desc/last-message or member name/role).
   const q = searchQuery.trim().toLowerCase()
   const visibleChannels = q
-    ? CHANNELS.filter((ch) => {
+    ? channelsList.filter((ch) => {
         if (ch.name.toLowerCase().includes(q) || ch.desc.toLowerCase().includes(q)) return true
         return messages.some(
           (m) =>
@@ -159,12 +196,12 @@ export function ChatModule() {
             (m.content.toLowerCase().includes(q) || m.sender_name.toLowerCase().includes(q))
         )
       })
-    : CHANNELS
+    : channelsList
   const visibleTeamMembers = q
-    ? TEAM_MEMBERS.filter(
+    ? teamMembersList.filter(
         (m) => m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q)
       )
-    : TEAM_MEMBERS
+    : teamMembersList
 
   const sendMessage = async () => {
     if (!input.trim()) return
@@ -355,7 +392,11 @@ export function ChatModule() {
           </div>
 
           {/* Messages area */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+            aria-live="polite"
+            aria-label="Chat messages"
+          >
             {loading ? (
               <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
                 Loading messages…

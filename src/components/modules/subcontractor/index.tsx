@@ -75,7 +75,18 @@ export function SubcontractorModule() {
         leftPane={
           <>
             <PaneHeader title="Subcontractors">
-              <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                onClick={() =>
+                  toast.info('Subcontractor creation requires PM role', {
+                    description:
+                      'Open the Admin module → Vendors to create a new subcontractor record.',
+                  })
+                }
+                title="Add subcontractor (Admin module)"
+              >
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             </PaneHeader>

@@ -161,16 +161,31 @@ function BoqRow({
   } = props
   const vis = props.isVisible ?? (() => true)
   const cw = props.colWidths || {}
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Mirror onClick behaviour for keyboard users. Stop propagation so the
+    // toggle/checkbox inputs inside the row don't double-fire.
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      e.stopPropagation()
+      onSelectId(item.id)
+    }
+  }
+
   return (
     <div
+      role="row"
+      tabIndex={0}
+      aria-selected={isSelected}
       onClick={() => onSelectId(item.id)}
+      onKeyDown={handleKeyDown}
       onContextMenu={(e) => {
         e.preventDefault()
         onSelectId(item.id)
         onContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id })
       }}
       className={cn(
-        'row-hover flex h-9 cursor-pointer items-center border-b border-[var(--pane-divider)] text-xs transition-colors',
+        'row-hover focus-visible:ring-primary flex h-9 cursor-pointer items-center border-b border-[var(--pane-divider)] text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none',
         isSelected && 'bg-accent',
         isHeading && !isSelected && 'bg-secondary/20'
       )}

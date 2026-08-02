@@ -180,7 +180,18 @@ export function TimeAttendanceModule() {
       leftPane={
         <>
           <PaneHeader title="Trades">
-            <Button variant="ghost" size="sm" className="h-7" disabled title="Coming soon">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() =>
+                toast.info('Worker creation coming soon', {
+                  description:
+                    'Workers are created via the Admin module — open Admin → Workforce to add a new worker.',
+                })
+              }
+              title="Add worker (Admin module)"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </PaneHeader>

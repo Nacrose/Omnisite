@@ -23,7 +23,7 @@ const I18nContext = createContext<I18nContextValue>({
 })
 
 // Translation dictionary — English + Nepali
-const translations: Record<Locale, Record<string, string>> = {
+export const translations: Record<Locale, Record<string, string>> = {
   en: {
     // Common
     'app.name': 'OmniSite',
@@ -66,6 +66,12 @@ const translations: Record<Locale, Record<string, string>> = {
     'status.connected': 'Cloud sync active',
     'status.local': 'Local mode',
     'status.collaborators': 'collaborators',
+    'status.reset': 'Reset',
+    'status.resetTitle': 'Reset all data to defaults?',
+    'status.resetConfirm':
+      'Reset all data to defaults? This will clear all your edits to BOQ, Schedule, and Financials.',
+    'status.resetSuccess': 'Data reset to defaults',
+    'status.resetSuccessDesc': 'Page reloading…',
     // Calendar
     'calendar.fiscalYear': 'FY',
     'calendar.bs': 'BS',
@@ -226,6 +232,12 @@ const translations: Record<Locale, Record<string, string>> = {
     'status.connected': 'क्लाउड सिंक सक्रिय',
     'status.local': 'स्थानीय मोड',
     'status.collaborators': 'सहयोगीहरू',
+    'status.reset': 'रिसेट',
+    'status.resetTitle': 'सबै डाटा डिफल्टमा फर्काउने?',
+    'status.resetConfirm':
+      'सबै डाटा डिफल्टमा फर्काउने? यसले BOQ, अनुसूची र वित्तीयमा गरेका सम्पादनहरू मेटाउँछ।',
+    'status.resetSuccess': 'डाटा डिफल्टमा फर्काइयो',
+    'status.resetSuccessDesc': 'पृष्ठ पुनः लोड हुँदै…',
     // Calendar
     'calendar.fiscalYear': 'वित्तीय वर्ष',
     'calendar.bs': 'बि सं',

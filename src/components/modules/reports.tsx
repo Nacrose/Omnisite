@@ -1,26 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
   Plus,
   FileText,
-  Image,
+  Image as ImageIcon,
   BarChart3,
   Calendar,
+  Clock,
   Cloud,
   Table,
   Type,
   Download,
   Save,
   Eye,
-  Layout,
+  Trash2,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { usePersistentState } from '@/lib/use-persistent-state'
 
 const TEMPLATES = [
   { id: 't1', name: 'Weekly Progress Report', pages: 4, lastUsed: '3 days ago' },
@@ -29,21 +31,96 @@ const TEMPLATES = [
   { id: 't4', name: 'Safety Monthly Summary', pages: 3, lastUsed: '5 days ago' },
 ]
 
-const WIDGETS = [
-  { id: 'w1', name: 'S-Curve', icon: BarChart3, cat: 'Chart' },
-  { id: 'w2', name: 'BOQ Table', icon: Table, cat: 'Data' },
-  { id: 'w3', name: 'Photo Gallery', icon: Image, cat: 'Visual' },
-  { id: 'w4', name: 'Weather Log', icon: Cloud, cat: 'Data' },
-  { id: 'w5', name: 'Manpower Summary', icon: BarChart3, cat: 'Chart' },
-  { id: 'w6', name: 'Mini-Gantt', icon: Layout, cat: 'Chart' },
-  { id: 'w7', name: 'Cash Flow', icon: BarChart3, cat: 'Chart' },
-  { id: 'w8', name: 'Heading', icon: Type, cat: 'Text' },
-  { id: 'w9', name: 'Paragraph', icon: Type, cat: 'Text' },
-  { id: 'w10', name: 'Date/Time', icon: Calendar, cat: 'Text' },
+// Widget library — `type` drives how the canvas renders the placed widget.
+// `cat` is just for grouping in the library pane.
+type WidgetType =
+  's-curve' | 'boq-table' | 'photo-gallery' | 'weather' | 'heading' | 'paragraph' | 'datetime'
+
+interface WidgetDef {
+  type: WidgetType
+  name: string
+  icon: typeof BarChart3
+  cat: string
+}
+
+const WIDGETS: WidgetDef[] = [
+  { type: 's-curve', name: 'S-Curve', icon: BarChart3, cat: 'Chart' },
+  { type: 'boq-table', name: 'BOQ Table', icon: Table, cat: 'Data' },
+  { type: 'photo-gallery', name: 'Photo Gallery', icon: ImageIcon, cat: 'Visual' },
+  { type: 'weather', name: 'Weather Log', icon: Cloud, cat: 'Data' },
+  { type: 'heading', name: 'Heading', icon: Type, cat: 'Text' },
+  { type: 'paragraph', name: 'Paragraph', icon: FileText, cat: 'Text' },
+  { type: 'datetime', name: 'Date/Time', icon: Calendar, cat: 'Text' },
 ]
 
+interface PlacedWidget {
+  /** Stable client-side id (so dragging/clearing works smoothly). */
+  id: string
+  type: WidgetType
+  /** User-facing label set when the widget is dropped. */
+  label: string
+  /** Optional text content for text widgets (Heading / Paragraph). */
+  text?: string
+}
+
+const DEFAULT_LAYOUT: PlacedWidget[] = []
+
+function makeId(): string {
+  return `pw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function ReportsModule() {
-  const [selectedWidget, setSelectedWidget] = useState<string | null>('w2')
+  // Canvas layout — persisted to localStorage so reloads restore the designer's work.
+  const [layout, setLayout] = usePersistentState<PlacedWidget[]>(
+    'omnisite-reports-layout',
+    () => DEFAULT_LAYOUT
+  )
+  // The currently selected widget — drives the right inspector pane.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const selectedWidget = useMemo(
+    () => layout.find((w) => w.id === selectedId) ?? null,
+    [layout, selectedId]
+  )
+
+  const addWidget = (def: WidgetDef) => {
+    const placed: PlacedWidget = {
+      id: makeId(),
+      type: def.type,
+      label: def.name,
+      text: def.type === 'heading' ? 'Section Heading' : def.type === 'paragraph' ? '' : undefined,
+    }
+    setLayout((prev) => [...prev, placed])
+    setSelectedId(placed.id)
+    toast.success(`${def.name} added`, { description: 'Layout auto-saved to localStorage.' })
+  }
+
+  const removeWidget = (id: string) => {
+    setLayout((prev) => prev.filter((w) => w.id !== id))
+    if (selectedId === id) setSelectedId(null)
+  }
+
+  const clearCanvas = () => {
+    if (layout.length === 0) {
+      toast.info('Canvas is already empty')
+      return
+    }
+    setLayout([])
+    setSelectedId(null)
+    toast.success('Canvas cleared', { description: 'Layout auto-saved to localStorage.' })
+  }
+
+  const updateWidgetText = (id: string, text: string) => {
+    setLayout((prev) => prev.map((w) => (w.id === id ? { ...w, text } : w)))
+  }
+
+  const saveLayout = () => {
+    // Layout is already persisted by usePersistentState, but show a toast so
+    // the user gets explicit feedback that their work is safe.
+    toast.success('Layout saved', {
+      description: `${layout.length} widget${layout.length === 1 ? '' : 's'} stored locally.`,
+    })
+  }
 
   return (
     <Workspace3Pane
@@ -81,16 +158,17 @@ export function ReportsModule() {
                 const Icon = w.icon
                 return (
                   <button
-                    key={w.id}
+                    key={w.type}
                     draggable
-                    onDragStart={(e) => e.dataTransfer.setData('widget', w.id)}
-                    onClick={() => setSelectedWidget(w.id)}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('widget-type', w.type)
+                      e.dataTransfer.effectAllowed = 'copy'
+                    }}
+                    onClick={() => addWidget(w)}
                     className={cn(
-                      'flex flex-col items-start gap-1 rounded-md border p-2 text-left transition-colors',
-                      selectedWidget === w.id
-                        ? 'border-primary bg-accent'
-                        : 'hover:bg-accent/50 border-[var(--pane-divider)]'
+                      'hover:bg-accent/50 flex flex-col items-start gap-1 rounded-md border border-[var(--pane-divider)] p-2 text-left transition-colors'
                     )}
+                    title={`Add ${w.name} to canvas`}
                   >
                     <Icon className="text-primary h-4 w-4" />
                     <div className="text-[10px] leading-tight font-medium">{w.name}</div>
@@ -104,7 +182,9 @@ export function ReportsModule() {
       }
       centerPane={
         <>
-          <PaneHeader title="PDF Canvas · A4 Portrait">
+          <PaneHeader
+            title={`PDF Canvas · A4 Portrait · ${layout.length} widget${layout.length === 1 ? '' : 's'}`}
+          >
             <Button
               variant="ghost"
               size="sm"
@@ -119,11 +199,21 @@ export function ReportsModule() {
               variant="ghost"
               size="sm"
               className="h-7 gap-1.5 text-xs"
-              disabled
-              title="Coming soon"
+              onClick={saveLayout}
+              title="Layout auto-saves to localStorage"
             >
               <Save className="h-3.5 w-3.5" />
               Save
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={clearCanvas}
+              title="Remove all widgets"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear
             </Button>
             <Button
               size="sm"
@@ -140,10 +230,20 @@ export function ReportsModule() {
             </Button>
           </PaneHeader>
           <PaneBody className="bg-secondary/20 flex justify-center p-6">
-            {/* A4 mock canvas */}
             <div
               className="print-report-canvas relative rounded-sm bg-white shadow-lg"
               style={{ width: '595px', minHeight: '842px' }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'copy'
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                const type = e.dataTransfer.getData('widget-type') as WidgetType
+                if (!type) return
+                const def = WIDGETS.find((w) => w.type === type)
+                if (def) addWidget(def)
+              }}
             >
               {/* Org header */}
               <div className="border-b-2 border-slate-900 p-6">
@@ -154,7 +254,7 @@ export function ReportsModule() {
                     </div>
                     <div className="text-lg font-bold text-slate-900">Weekly Progress Report</div>
                     <div className="text-[10px] text-slate-500">
-                      Kathmandu Ring Road Expansion — Package 3 · Wk 28
+                      Kathmandu Ring Road Expansion — Package 3
                     </div>
                   </div>
                   <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-900 text-xs font-bold text-white">
@@ -163,135 +263,43 @@ export function ReportsModule() {
                 </div>
               </div>
 
-              {/* Drop zones */}
+              {/* Canvas body */}
               <div className="space-y-3 p-6">
-                <div className="text-[10px] tracking-wider text-slate-400 uppercase">
-                  Section 1 — Project Summary
-                </div>
-
-                {/* S-Curve widget */}
-                <div
-                  className="cursor-move rounded-md border border-slate-200 p-3 hover:border-slate-400"
-                  onClick={() => setSelectedWidget('w1')}
-                >
-                  <div className="mb-2 text-[10px] font-semibold text-slate-700">
-                    S-Curve · Planned vs Earned
+                {layout.length === 0 ? (
+                  <div
+                    className="rounded-md border-2 border-dashed border-slate-300 p-12 text-center text-[10px] text-slate-400"
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'copy'
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const type = e.dataTransfer.getData('widget-type') as WidgetType
+                      if (!type) return
+                      const def = WIDGETS.find((w) => w.type === type)
+                      if (def) addWidget(def)
+                    }}
+                  >
+                    Drag a widget here — or click one in the library — to add it to the canvas.
                   </div>
-                  <div className="flex h-32 items-end gap-1">
-                    {Array.from({ length: 12 }).map((_, i) => {
-                      const planned = 5 + i * 5
-                      const earned = Math.max(0, planned - 3)
-                      return (
-                        <div key={i} className="flex flex-1 flex-col gap-0.5">
-                          <div
-                            className="rounded-t bg-slate-300"
-                            style={{ height: `${planned * 1.5}px` }}
-                          />
-                          <div
-                            className="rounded-b bg-blue-600"
-                            style={{ height: `${earned * 1.5}px` }}
-                          />
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* BOQ table widget */}
-                <div
-                  className="cursor-move rounded-md border border-slate-200 p-3 hover:border-slate-400"
-                  onClick={() => setSelectedWidget('w2')}
-                >
-                  <div className="mb-2 text-[10px] font-semibold text-slate-700">
-                    BOQ Progress Summary
-                  </div>
-                  <table className="w-full text-[10px] text-slate-700">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="p-1 text-left">Code</th>
-                        <th className="p-1 text-left">Description</th>
-                        <th className="p-1 text-right">Planned</th>
-                        <th className="p-1 text-right">Actual</th>
-                        <th className="p-1 text-right">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        ['1.1.1', 'Excavation in ordinary soil', '1,240', '1,240', '100'],
-                        ['1.1.3', 'PCC M15 below footing', '145', '87', '60'],
-                        ['2.1.1', 'Excavation for road formation', '18,500', '14,200', '77'],
-                      ].map((r) => (
-                        <tr key={r[0]} className="border-t border-slate-100">
-                          <td className="p-1 font-mono">{r[0]}</td>
-                          <td className="p-1">{r[1]}</td>
-                          <td className="p-1 text-right">{r[2]}</td>
-                          <td className="p-1 text-right">{r[3]}</td>
-                          <td className="p-1 text-right font-medium">{r[4]}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Photo gallery widget */}
-                <div
-                  className="cursor-move rounded-md border border-slate-200 p-3 hover:border-slate-400"
-                  onClick={() => setSelectedWidget('w3')}
-                >
-                  <div className="mb-2 text-[10px] font-semibold text-slate-700">
-                    Photo Gallery · Week 28
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div
-                        key={i}
-                        className="aspect-square rounded bg-gradient-to-br from-slate-300 to-slate-400"
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Weather widget */}
-                <div
-                  className="cursor-move rounded-md border border-slate-200 p-3 hover:border-slate-400"
-                  onClick={() => setSelectedWidget('w4')}
-                >
-                  <div className="mb-2 text-[10px] font-semibold text-slate-700">Weather Log</div>
-                  <div className="grid grid-cols-7 gap-1 text-center text-[9px]">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
-                      <div key={i} className="rounded bg-slate-50 p-1">
-                        <div className="font-medium">{d}</div>
-                        <div className="text-slate-500">{24 + i}°</div>
-                        <div className="text-slate-400">{i < 5 ? '☀' : '☂'}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Drop target */}
-                <div
-                  className="rounded-md border-2 border-dashed border-slate-300 p-6 text-center text-[10px] text-slate-400"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    const id = e.dataTransfer.getData('widget')
-                    const w = WIDGETS.find((x) => x.id === id)
-                    if (w) {
-                      setSelectedWidget(id)
-                      toast.success(`${w.name} added`, {
-                        description: 'Widget dropped onto the canvas.',
-                      })
-                    }
-                  }}
-                >
-                  Drag a widget here to add it to the page
-                </div>
+                ) : (
+                  layout.map((w) => (
+                    <WidgetRenderer
+                      key={w.id}
+                      widget={w}
+                      selected={selectedId === w.id}
+                      onSelect={() => setSelectedId(w.id)}
+                      onRemove={() => removeWidget(w.id)}
+                      onTextChange={(text) => updateWidgetText(w.id, text)}
+                    />
+                  ))
+                )}
               </div>
 
               {/* Page footer */}
               <div className="absolute right-0 bottom-0 left-0 flex items-center justify-between border-t border-slate-200 px-6 py-3 text-[9px] text-slate-400">
-                <span>OmniSite · Weekly Progress Report · Wk 28</span>
-                <span>Page 1 of 4 · Generated 30 Jul 2026</span>
+                <span>OmniSite · Weekly Progress Report</span>
+                <span>Page 1 of 1</span>
               </div>
             </div>
           </PaneBody>
@@ -305,15 +313,61 @@ export function ReportsModule() {
               <div className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
                 Selected widget
               </div>
-              <div className="border-primary/40 bg-primary/5 rounded-md border p-2.5">
-                <div className="font-medium">
+              <div
+                className={cn(
+                  'rounded-md border p-2.5',
+                  selectedWidget
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'bg-secondary/40 border-[var(--pane-divider)]'
+                )}
+              >
+                <div className="font-medium">{selectedWidget?.label ?? 'None'}</div>
+                <div className="text-muted-foreground text-[10px]">
                   {selectedWidget
-                    ? (WIDGETS.find((w) => w.id === selectedWidget)?.name ?? 'None')
-                    : 'None'}
+                    ? `${selectedWidget.type} · ${selectedWidget.id}`
+                    : 'Click a widget to select it'}
                 </div>
-                <div className="text-muted-foreground text-[10px]">Section 1 · Page 1</div>
               </div>
             </div>
+
+            {selectedWidget && (
+              <>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground text-[10px]">Widget actions</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => removeWidget(selectedWidget.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Remove
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {(selectedWidget?.type === 'heading' || selectedWidget?.type === 'paragraph') &&
+              selectedWidget && (
+                <>
+                  <Separator />
+                  <div>
+                    <div className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
+                      Text content
+                    </div>
+                    <textarea
+                      className="bg-background min-h-[80px] w-full rounded-md border border-[var(--pane-divider)] p-2 text-xs"
+                      value={selectedWidget.text ?? ''}
+                      onChange={(e) => updateWidgetText(selectedWidget.id, e.target.value)}
+                      placeholder={
+                        selectedWidget.type === 'heading' ? 'Section heading…' : 'Body paragraph…'
+                      }
+                    />
+                  </div>
+                </>
+              )}
+
             <Separator />
             <div>
               <div className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
@@ -348,73 +402,12 @@ export function ReportsModule() {
                     <option>Delayed</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground w-12 text-[10px]">Discipline</span>
-                  <select className="bg-background h-7 flex-1 rounded border border-[var(--pane-divider)] px-2 text-xs">
-                    <option>All</option>
-                    <option>Bridge</option>
-                    <option>Roads</option>
-                    <option>Drainage</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <Separator />
-            <div>
-              <div className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
-                Columns (toggle)
-              </div>
-              <div className="space-y-1">
-                {[
-                  'Code',
-                  'Description',
-                  'UOM',
-                  'Planned Qty',
-                  'Actual Qty',
-                  '% Done',
-                  'Variance',
-                  'RA Rate',
-                  'Amount',
-                ].map((c, i) => (
-                  <label key={c} className="flex items-center gap-2">
-                    <input type="checkbox" defaultChecked={i < 6} className="h-3.5 w-3.5" />
-                    <span className="text-[11px]">{c}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <Separator />
-            <div>
-              <div className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
-                Conditional Formatting
-              </div>
-              <div className="space-y-1.5">
-                <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-[11px]">
-                  <div className="font-medium">Delayed items</div>
-                  <div className="text-muted-foreground">
-                    Highlight row in red if variance &lt; -10%
-                  </div>
-                </div>
-                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2 text-[11px]">
-                  <div className="font-medium">Completed items</div>
-                  <div className="text-muted-foreground">Green badge if % done = 100</div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 w-full gap-1 text-xs"
-                  disabled
-                  title="Coming soon"
-                >
-                  <Plus className="h-3 w-3" />
-                  Add rule
-                </Button>
               </div>
             </div>
             <Separator />
             <div className="text-muted-foreground text-[10px]">
-              Uses browser print dialog (Ctrl+P / Cmd+P). Save as PDF from the print dialog for a
-              print-ready output with Org Logo and Page Numbers.
+              Layout auto-saves to localStorage. Use <span className="font-mono">Export PDF</span>{' '}
+              to open the browser print dialog.
             </div>
           </PaneBody>
         </>
@@ -422,5 +415,208 @@ export function ReportsModule() {
       leftPaneWidth="260px"
       rightPaneWidth="340px"
     />
+  )
+}
+
+// ─── Widget renderers ───────────────────────────────────────────────────────
+// Each widget type renders its own body. Selecting a widget highlights it
+// and shows the remove (X) button.
+
+function WidgetRenderer({
+  widget,
+  selected,
+  onSelect,
+  onRemove,
+  onTextChange,
+}: {
+  widget: PlacedWidget
+  selected: boolean
+  onSelect: () => void
+  onRemove: () => void
+  onTextChange: (text: string) => void
+}) {
+  return (
+    <div
+      className={cn(
+        'relative cursor-move rounded-md border p-3 transition-colors',
+        selected
+          ? 'border-primary ring-primary/30 ring-2'
+          : 'border-slate-200 hover:border-slate-400'
+      )}
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect()
+      }}
+    >
+      {/* Selection toolbar */}
+      {selected && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-md"
+          title="Remove widget"
+          aria-label={`Remove ${widget.label}`}
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+
+      <WidgetBody widget={widget} onTextChange={onTextChange} />
+    </div>
+  )
+}
+
+function WidgetBody({
+  widget,
+  onTextChange,
+}: {
+  widget: PlacedWidget
+  onTextChange: (text: string) => void
+}) {
+  switch (widget.type) {
+    case 'heading':
+      return (
+        <input
+          className="w-full bg-transparent text-sm font-bold text-slate-900 outline-none"
+          value={widget.text ?? ''}
+          onChange={(e) => onTextChange(e.target.value)}
+          placeholder="Section heading…"
+        />
+      )
+    case 'paragraph':
+      return (
+        <textarea
+          className="min-h-[60px] w-full bg-transparent text-[11px] leading-relaxed text-slate-700 outline-none"
+          value={widget.text ?? ''}
+          onChange={(e) => onTextChange(e.target.value)}
+          placeholder="Body paragraph…"
+        />
+      )
+    case 'datetime':
+      return <DateTimeWidget />
+    case 's-curve':
+      return <SCurveWidget />
+    case 'boq-table':
+      return <BoqTableWidget />
+    case 'photo-gallery':
+      return <PhotoGalleryWidget />
+    case 'weather':
+      return <WeatherWidget />
+    default:
+      return <div className="text-[10px] text-slate-500">Unknown widget</div>
+  }
+}
+
+function DateTimeWidget() {
+  const now = new Date()
+  return (
+    <div className="flex items-center justify-between text-[10px] text-slate-700">
+      <div className="flex items-center gap-1.5">
+        <Calendar className="h-3 w-3 text-slate-500" />
+        <span className="font-mono">
+          {now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Clock className="h-3 w-3 text-slate-500" />
+        <span className="font-mono">
+          {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function SCurveWidget() {
+  return (
+    <div>
+      <div className="mb-2 text-[10px] font-semibold text-slate-700">
+        S-Curve · Planned vs Earned
+      </div>
+      <div className="flex h-24 items-end gap-1">
+        {Array.from({ length: 12 }).map((_, i) => {
+          const planned = 5 + i * 5
+          const earned = Math.max(0, planned - 3)
+          return (
+            <div key={i} className="flex flex-1 flex-col gap-0.5">
+              <div className="rounded-t bg-slate-300" style={{ height: `${planned * 1.0}px` }} />
+              <div className="rounded-b bg-blue-600" style={{ height: `${earned * 1.0}px` }} />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function BoqTableWidget() {
+  const rows = [
+    ['1.1.1', 'Excavation in ordinary soil', '1,240', '1,240', '100'],
+    ['1.1.3', 'PCC M15 below footing', '145', '87', '60'],
+    ['2.1.1', 'Excavation for road formation', '18,500', '14,200', '77'],
+  ]
+  return (
+    <div>
+      <div className="mb-2 text-[10px] font-semibold text-slate-700">BOQ Progress Summary</div>
+      <table className="w-full text-[10px] text-slate-700">
+        <thead className="bg-slate-50">
+          <tr>
+            <th className="p-1 text-left">Code</th>
+            <th className="p-1 text-left">Description</th>
+            <th className="p-1 text-right">Planned</th>
+            <th className="p-1 text-right">Actual</th>
+            <th className="p-1 text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r[0]} className="border-t border-slate-100">
+              <td className="p-1 font-mono">{r[0]}</td>
+              <td className="p-1">{r[1]}</td>
+              <td className="p-1 text-right">{r[2]}</td>
+              <td className="p-1 text-right">{r[3]}</td>
+              <td className="p-1 text-right font-medium">{r[4]}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function PhotoGalleryWidget() {
+  return (
+    <div>
+      <div className="mb-2 text-[10px] font-semibold text-slate-700">Photo Gallery</div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="bg-muted text-muted-foreground flex aspect-square items-center justify-center rounded"
+          >
+            <ImageIcon className="h-4 w-4 opacity-50" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function WeatherWidget() {
+  return (
+    <div>
+      <div className="mb-2 text-[10px] font-semibold text-slate-700">Weather Log</div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[9px]">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
+          <div key={i} className="rounded bg-slate-50 p-1">
+            <div className="font-medium">{d}</div>
+            <div className="text-slate-500">{24 + i}°</div>
+            <div className="text-slate-400">{i < 5 ? '☀' : '☂'}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useSyncExternalStore } from 'react'
+import { useState } from 'react'
+import { create } from 'zustand'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -128,41 +129,56 @@ const INITIAL_RFIS: Rfi[] = [
   },
 ]
 
-// ─── Shared RFI store (module-level + useSyncExternalStore) ─────────────────
-let _rfis: Rfi[] = [...INITIAL_RFIS]
-const _listeners = new Set<() => void>()
+// ─── Shared RFI store (Zustand) ─────────────────────────────────────────────
+// RFIs need to be mutable so the DSR Inspector can add new drafts that
+// appear in the RFI Register. A Zustand store centralizes the state and
+// notifies all subscribers (RfiTab + DailyOpsModule's open-RFI counter)
+// when addRfi() is called — no prop drilling required.
+//
+// The exported `subscribeRfis` / `getRfis` / `addRfi` helpers below wrap the
+// store for backward compat with the previous hand-rolled useSyncExternalStore
+// API used by `daily-ops/index.tsx`.
 
-function emitChange() {
-  _listeners.forEach((l) => l())
+interface RfiStore {
+  rfis: Rfi[]
+  addRfi: (rfi: Rfi) => void
 }
 
-/** Subscribe to RFI store changes (for useSyncExternalStore). */
+const useRfiStore = create<RfiStore>((set) => ({
+  rfis: [...INITIAL_RFIS],
+  addRfi: (rfi) => set((s) => ({ rfis: [rfi, ...s.rfis] })),
+}))
+
+/**
+ * Subscribe to RFI store changes (for useSyncExternalStore callers).
+ * Wraps Zustand's `subscribe` so existing imports in `daily-ops/index.tsx`
+ * keep working without modification.
+ */
 export function subscribeRfis(listener: () => void): () => void {
-  _listeners.add(listener)
-  return () => _listeners.delete(listener)
+  return useRfiStore.subscribe(listener)
 }
 
-/** Get the current RFI snapshot. */
+/** Get the current RFI snapshot. Wraps Zustand's `getState` for back-compat. */
 export function getRfis(): Rfi[] {
-  return _rfis
+  return useRfiStore.getState().rfis
 }
 
 /** Add a new RFI to the store. Used by the DSR Inspector's saveRfi(). */
 export function addRfi(rfi: Rfi): void {
-  _rfis = [rfi, ..._rfis]
-  emitChange()
+  useRfiStore.getState().addRfi(rfi)
 }
 
 // Re-export RFIS for backward compat (components that read the initial array
-// directly). This is a snapshot — for live updates, use useSyncExternalStore.
+// directly). This is a snapshot — for live updates, use the Zustand store via
+// useRfiStore or the useSyncExternalStore-style wrappers above.
 export const RFIS: Rfi[] = INITIAL_RFIS
 
 // ─── RFI Tab (list + inspector) ─────────────────────────────────────────────
 
 export function RfiTab() {
-  // useSyncExternalStore so the RFI list re-renders when addRfi() is called
-  // from the DSR Inspector.
-  const rfis = useSyncExternalStore(subscribeRfis, getRfis, getRfis)
+  // Subscribe to the Zustand store so the RFI list re-renders when addRfi()
+  // is called from the DSR Inspector.
+  const rfis = useRfiStore((s) => s.rfis)
   const [selectedId, setSelectedId] = useState('r1')
   const [filter, setFilter] = useState<'All' | 'Open' | 'Replied' | 'Closed'>('All')
   const selected = rfis.find((r) => r.id === selectedId) ?? rfis[0]
@@ -431,8 +447,12 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 variant="default"
                 size="sm"
                 className="h-8 w-full justify-start gap-2 text-xs"
-                disabled
-                title="Coming soon"
+                onClick={() =>
+                  toast.info('Consultant reply logging coming soon', {
+                    description: `Once wired, this will capture the reply text, mark ${rfi.number} as Replied, and stamp the replied date.`,
+                  })
+                }
+                title="Log Consultant Reply (coming soon)"
               >
                 <Mail className="h-3.5 w-3.5" />
                 Log Consultant Reply

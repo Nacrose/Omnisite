@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, memo } from 'react'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TOTAL_WEEKS, WEEK_WIDTH, type Task, type DragState } from './types'
@@ -22,6 +23,190 @@ export interface GanttCanvasProps {
   canvasRef: React.RefObject<HTMLDivElement | null>
 }
 
+// ─── Memoized task bar ──────────────────────────────────────────────────────
+//
+// Extracted from the inline JSX so individual bars don't re-render when
+// unrelated state (other bars' hover, selection, drag) changes. Without
+// React.memo, hovering bar A would re-render every bar in the canvas —
+// acceptable at 20 tasks, janky at 100, unusable at 200. With memo, only
+// bar A's props change (isHovered: false → true), so only bar A re-renders.
+//
+// `task` is reference-stable across renders (it comes from the tasks tree,
+// which only changes identity when the underlying data changes), so the
+// shallow prop comparison in memo correctly identifies no-op re-renders.
+
+interface TaskBarProps {
+  task: Task
+  left: number
+  width: number
+  isHovered: boolean
+  isDragging: boolean
+  onBarMouseDown: (e: React.MouseEvent, t: Task) => void
+  onResizeMouseDown: (e: React.MouseEvent, t: Task) => void
+  onHover: (id: string | null) => void
+}
+
+const TaskBar = memo(function TaskBar({
+  task,
+  left,
+  width,
+  isHovered,
+  isDragging,
+  onBarMouseDown,
+  onResizeMouseDown,
+  onHover,
+}: TaskBarProps) {
+  return (
+    <div
+      onMouseDown={(e) => onBarMouseDown(e, task)}
+      onMouseEnter={() => onHover(task.id)}
+      onMouseLeave={() => onHover(null)}
+      className={cn(
+        'group absolute top-1.5 flex h-5 items-center overflow-hidden rounded-sm px-1.5 text-[9px] font-medium text-white shadow-sm transition-shadow',
+        isDragging && 'z-30 scale-y-110 cursor-grabbing shadow-lg ring-2 ring-white/50',
+        !isDragging && 'cursor-grab hover:shadow-md',
+        task.type === 'Summary' && 'bg-muted-foreground/60 cursor-default',
+        task.type === 'Hammock' && 'bg-gradient-to-r from-violet-500 to-purple-500',
+        task.type === 'Work' && (task.critical ? 'bg-red-500' : 'bg-primary')
+      )}
+      // `will-change: transform` promotes each bar to its own compositor
+      // layer so bar moves/resizes paint without triggering layout on the
+      // parent grid. Critical for smooth dragging once we approach ~200
+      // task bars in the canvas.
+      style={{ left, width, willChange: 'transform' }}
+    >
+      <div
+        className="absolute inset-y-0 left-0 bg-black/20"
+        style={{ width: `${task.progress}%` }}
+      />
+      <span className="pointer-events-none relative z-10 truncate">
+        {task.duration}w · {task.progress}%
+      </span>
+      {/* Resize handles — left edge moves, right edge resizes duration */}
+      {task.type !== 'Summary' && (
+        <>
+          <div
+            className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
+            onMouseDown={(e) => onBarMouseDown(e, task)}
+          />
+          <div
+            className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
+            onMouseDown={(e) => onResizeMouseDown(e, task)}
+          />
+        </>
+      )}
+      {/* Hover tooltip */}
+      {isHovered && !isDragging && (
+        <div className="pane text-foreground pointer-events-none absolute -top-7 left-1/2 z-40 -translate-x-1/2 rounded border border-[var(--pane-divider)] px-1.5 py-0.5 text-[9px] whitespace-nowrap shadow-md">
+          Wk {task.start + 1} → Wk {task.start + task.duration + 1} · drag body or left edge to
+          move, right edge to resize
+        </div>
+      )}
+    </div>
+  )
+})
+
+// ─── Memoized layout: visible rows + bar positions + arrow paths ────────────
+//
+// Previously the entire tree walk + position computation + arrow path
+// generation ran inside an IIFE in the JSX on EVERY render — so hovering a
+// single bar would re-walk the whole task tree and re-build every arrow
+// path. The three useMemo calls below split that work by dependency:
+//
+//   visibleRows   depends on (tasks, expanded)
+//   taskPositions depends on (visibleRows)
+//   arrowPaths    depends on (taskPositions, flatTasks)
+//
+// Hover/selection/drag changes no longer invalidate the layout, so they
+// no longer trigger a tree walk or path recomputation.
+
+interface VisibleRow {
+  task: Task
+  depth: number
+  rowIndex: number
+  left: number
+  width: number
+  baseLeft: number
+  baseWidth: number
+  varianceWeeks: number
+}
+
+function buildVisibleRows(tasks: Task[], expanded: Set<string>): VisibleRow[] {
+  const out: VisibleRow[] = []
+  let rowIndex = 0
+  const walk = (items: Task[], depth: number) => {
+    for (const t of items) {
+      const left = t.start * WEEK_WIDTH
+      const width = Math.max(t.duration * WEEK_WIDTH, t.type === 'Milestone' ? 12 : 6)
+      const baseLeft = t.baseline[0] * WEEK_WIDTH
+      const baseWidth = Math.max((t.baseline[1] - t.baseline[0]) * WEEK_WIDTH, 4)
+      const varianceWeeks = t.start - t.baseline[0]
+      out.push({ task: t, depth, rowIndex, left, width, baseLeft, baseWidth, varianceWeeks })
+      rowIndex++
+      if (t.children && t.children.length > 0 && expanded.has(t.id)) {
+        walk(t.children, depth + 1)
+      }
+    }
+  }
+  walk(tasks, 0)
+  return out
+}
+
+interface BarPosition {
+  rowIndex: number
+  barLeft: number
+  barRight: number
+  barTop: number
+}
+
+function buildBarPositions(rows: VisibleRow[]): Map<string, BarPosition> {
+  const m = new Map<string, BarPosition>()
+  // Row height is 32px (h-8); bar vertical center is at rowIndex*32 + 16.
+  for (const r of rows) {
+    m.set(r.task.id, {
+      rowIndex: r.rowIndex,
+      barLeft: r.left,
+      barRight: r.left + r.width,
+      barTop: r.rowIndex * 32 + 16,
+    })
+  }
+  return m
+}
+
+interface ArrowPath {
+  key: string
+  d: string
+  isCritical: boolean
+}
+
+function buildArrowPaths(
+  positions: Map<string, BarPosition>,
+  flatTasks: { task: Task; depth: number }[]
+): ArrowPath[] {
+  const out: ArrowPath[] = []
+  let i = 0
+  for (const [taskId, pos] of positions) {
+    const task = flatTasks.find(({ task }) => task.id === taskId)?.task
+    if (!task?.dependencies) continue
+    for (const dep of task.dependencies) {
+      const predPos = positions.get(dep.predecessorId)
+      if (!predPos) continue
+      const x1 = predPos.barRight
+      const y1 = predPos.barTop
+      const x2 = pos.barLeft
+      const y2 = pos.barTop
+      // Elbow path: right from predecessor finish, down/up to successor row,
+      // left to successor start.
+      const midX = Math.max(x1 + 8, x2 - 8)
+      const d = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
+      out.push({ key: `arrow-${i++}`, d, isCritical: !!task.critical })
+    }
+  }
+  return out
+}
+
+// ─── Main canvas ────────────────────────────────────────────────────────────
+
 export function GanttCanvas({
   tasks,
   flatTasks,
@@ -38,6 +223,21 @@ export function GanttCanvas({
   todayWeek,
   canvasRef,
 }: GanttCanvasProps) {
+  // Only re-walk the task tree when the tasks themselves or the expanded
+  // set changes — NOT on hover/selection/drag updates.
+  const visibleRows = useMemo(() => buildVisibleRows(tasks, expanded), [tasks, expanded])
+
+  // Bar positions are a pure function of the visible rows, so they inherit
+  // the same memoization benefit.
+  const taskPositions = useMemo(() => buildBarPositions(visibleRows), [visibleRows])
+
+  // SVG path data for dependency arrows — only recomputed when bar positions
+  // or the flat task list (used to look up dependencies) change.
+  const arrowPaths = useMemo(
+    () => buildArrowPaths(taskPositions, flatTasks),
+    [taskPositions, flatTasks]
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Gantt canvas */}
@@ -69,239 +269,148 @@ export function GanttCanvas({
 
           {/* Task rows with gantt bars */}
           <div ref={canvasRef} className="relative">
-            {(() => {
-              const rows: React.ReactNode[] = []
-              // Collect task positions during the walk so we can draw
-              // dependency arrows in an SVG overlay after all rows render.
-              const taskPositions = new Map<
-                string,
-                { rowIndex: number; barLeft: number; barRight: number; barTop: number }
-              >()
-              let rowIndex = 0
-              const walk = (items: Task[], depth: number) => {
-                for (const t of items) {
-                  const isExpanded = expanded.has(t.id)
-                  const hasChildren = t.children && t.children.length > 0
-                  const isSelected = t.id === selectedId
-                  const isHovered = hoveredId === t.id
-                  const isDragging = dragging?.id === t.id
-                  const left = t.start * WEEK_WIDTH
-                  const width = Math.max(t.duration * WEEK_WIDTH, t.type === 'Milestone' ? 12 : 6)
-                  const baseLeft = t.baseline[0] * WEEK_WIDTH
-                  const baseWidth = Math.max((t.baseline[1] - t.baseline[0]) * WEEK_WIDTH, 4)
-                  const varianceWeeks = t.start - t.baseline[0]
-                  // Record this task's bar position for dependency arrow rendering.
-                  // Row height is 32px (h-8); bar vertical center is at rowIndex*32 + 16.
-                  taskPositions.set(t.id, {
-                    rowIndex,
-                    barLeft: left,
-                    barRight: left + width,
-                    barTop: rowIndex * 32 + 16,
-                  })
-                  rowIndex++
-                  rows.push(
-                    <div
-                      key={t.id}
-                      onClick={() => onSelect(t.id)}
+            {visibleRows.map((r) => {
+              const t = r.task
+              const isExpanded = expanded.has(t.id)
+              const hasChildren = !!(t.children && t.children.length > 0)
+              const isSelected = t.id === selectedId
+              const isHovered = hoveredId === t.id
+              const isDragging = dragging?.id === t.id
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => onSelect(t.id)}
+                  className={cn(
+                    'row-hover flex cursor-pointer items-stretch border-b border-[var(--pane-divider)] transition-colors',
+                    isSelected && 'bg-accent/40',
+                    t.critical && 'bg-red-500/5'
+                  )}
+                >
+                  <div
+                    className="flex w-[480px] flex-shrink-0 items-center border-r border-[var(--pane-divider)] text-xs"
+                    style={{ paddingLeft: `${r.depth * 16 + 8}px` }}
+                  >
+                    <div className="w-6">
+                      {hasChildren && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onToggleExpand(t.id)
+                          }}
+                          className="p-0.5"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-muted-foreground w-16 font-mono text-[10px]">{t.id}</span>
+                    <span
                       className={cn(
-                        'row-hover flex cursor-pointer items-stretch border-b border-[var(--pane-divider)] transition-colors',
-                        isSelected && 'bg-accent/40',
-                        t.critical && 'bg-red-500/5'
+                        'truncate',
+                        t.type === 'Summary' && 'font-semibold',
+                        t.critical && 'text-red-600 dark:text-red-400'
                       )}
                     >
-                      <div
-                        className="flex w-[480px] flex-shrink-0 items-center border-r border-[var(--pane-divider)] text-xs"
-                        style={{ paddingLeft: `${depth * 16 + 8}px` }}
-                      >
-                        <div className="w-6">
-                          {hasChildren && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onToggleExpand(t.id)
-                              }}
-                              className="p-0.5"
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              ) : (
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                        <span className="text-muted-foreground w-16 font-mono text-[10px]">
-                          {t.id}
-                        </span>
-                        <span
-                          className={cn(
-                            'truncate',
-                            t.type === 'Summary' && 'font-semibold',
-                            t.critical && 'text-red-600 dark:text-red-400'
-                          )}
-                        >
-                          {t.name}
-                        </span>
-                        {varianceWeeks !== 0 && t.type === 'Work' && (
-                          <span
-                            className={cn(
-                              'ml-2 rounded px-1 font-mono text-[9px]',
-                              varianceWeeks > 0
-                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                                : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                            )}
-                          >
-                            {varianceWeeks > 0 ? '+' : ''}
-                            {varianceWeeks}w
-                          </span>
+                      {t.name}
+                    </span>
+                    {r.varianceWeeks !== 0 && t.type === 'Work' && (
+                      <span
+                        className={cn(
+                          'ml-2 rounded px-1 font-mono text-[9px]',
+                          r.varianceWeeks > 0
+                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                            : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                         )}
-                      </div>
-                      <div
-                        className="gantt-grid relative h-8"
-                        style={{ width: TOTAL_WEEKS * WEEK_WIDTH }}
                       >
-                        {/* Baseline ghost */}
-                        <div
-                          className="border-muted-foreground/40 bg-muted-foreground/5 absolute top-2.5 h-3 rounded-sm border border-dashed"
-                          style={{ left: baseLeft, width: baseWidth }}
-                        />
-                        {/* Bar */}
-                        {t.type === 'Milestone' ? (
-                          <div
-                            className="absolute top-1/2 h-0 w-0 -translate-y-1/2"
-                            style={{
-                              left: left - 6,
-                              borderLeft: '6px solid transparent',
-                              borderRight: '6px solid transparent',
-                              borderBottom: '10px solid var(--warning)',
-                            }}
-                          />
-                        ) : (
-                          <div
-                            onMouseDown={(e) => onBarMouseDown(e, t)}
-                            onMouseEnter={() => onHover(t.id)}
-                            onMouseLeave={() => onHover(null)}
-                            className={cn(
-                              'group absolute top-1.5 flex h-5 items-center overflow-hidden rounded-sm px-1.5 text-[9px] font-medium text-white shadow-sm transition-shadow',
-                              isDragging &&
-                                'z-30 scale-y-110 cursor-grabbing shadow-lg ring-2 ring-white/50',
-                              !isDragging && 'cursor-grab hover:shadow-md',
-                              t.type === 'Summary' && 'bg-muted-foreground/60 cursor-default',
-                              t.type === 'Hammock' &&
-                                'bg-gradient-to-r from-violet-500 to-purple-500',
-                              t.type === 'Work' && (t.critical ? 'bg-red-500' : 'bg-primary')
-                            )}
-                            style={{ left, width }}
-                          >
-                            <div
-                              className="absolute inset-y-0 left-0 bg-black/20"
-                              style={{ width: `${t.progress}%` }}
-                            />
-                            <span className="pointer-events-none relative z-10 truncate">
-                              {t.duration}w · {t.progress}%
-                            </span>
-                            {/* Resize handles — left edge moves, right edge resizes duration */}
-                            {t.type !== 'Summary' && (
-                              <>
-                                <div
-                                  className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
-                                  onMouseDown={(e) => onBarMouseDown(e, t)}
-                                />
-                                <div
-                                  className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
-                                  onMouseDown={(e) => onResizeMouseDown(e, t)}
-                                />
-                              </>
-                            )}
-                            {/* Hover tooltip */}
-                            {isHovered && !isDragging && (
-                              <div className="pane text-foreground pointer-events-none absolute -top-7 left-1/2 z-40 -translate-x-1/2 rounded border border-[var(--pane-divider)] px-1.5 py-0.5 text-[9px] whitespace-nowrap shadow-md">
-                                Wk {t.start + 1} → Wk {t.start + t.duration + 1} · drag body or left
-                                edge to move, right edge to resize
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                  if (hasChildren && isExpanded) walk(t.children!, depth + 1)
-                }
-              }
-              walk(tasks, 0)
-
-              // Build dependency arrows as SVG paths. Each arrow connects the
-              // predecessor's finish (right edge) to the successor's start
-              // (left edge) with a right-angle elbow. Critical-path links are
-              // drawn in red; non-critical links in muted gray.
-              const arrows: React.ReactNode[] = []
-              let arrowIndex = 0
-              for (const [taskId, pos] of taskPositions) {
-                const task = flatTasks.find(({ task }) => task.id === taskId)?.task
-                if (!task?.dependencies) continue
-                for (const dep of task.dependencies) {
-                  const predPos = taskPositions.get(dep.predecessorId)
-                  if (!predPos) continue
-                  const successor = task
-                  const x1 = predPos.barRight
-                  const y1 = predPos.barTop
-                  const x2 = pos.barLeft
-                  const y2 = pos.barTop
-                  // Elbow path: right from predecessor finish, down/up to successor row, left to successor start.
-                  const midX = Math.max(x1 + 8, x2 - 8)
-                  const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
-                  const isCritical = successor.critical
-                  arrows.push(
-                    <path
-                      key={`arrow-${arrowIndex++}`}
-                      d={path}
-                      stroke={isCritical ? '#ef4444' : 'rgba(100, 116, 139, 0.4)'}
-                      strokeWidth={isCritical ? 1.5 : 1}
-                      fill="none"
-                      markerEnd={`url(#arrowhead-${isCritical ? 'critical' : 'normal'})`}
-                    />
-                  )
-                }
-              }
-
-              return (
-                <>
-                  {rows}
-                  {/* SVG overlay for dependency arrows. Pointer-events none so
-                      it doesn't intercept bar clicks/drag. */}
-                  <svg
-                    className="pointer-events-none absolute top-0 left-[480px] z-[15]"
-                    width={TOTAL_WEEKS * WEEK_WIDTH}
-                    height={rowIndex * 32}
-                    style={{ overflow: 'visible' }}
+                        {r.varianceWeeks > 0 ? '+' : ''}
+                        {r.varianceWeeks}w
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className="gantt-grid relative h-8"
+                    style={{ width: TOTAL_WEEKS * WEEK_WIDTH }}
                   >
-                    <defs>
-                      <marker
-                        id="arrowhead-critical"
-                        markerWidth="6"
-                        markerHeight="6"
-                        refX="5"
-                        refY="3"
-                        orient="auto"
-                      >
-                        <polygon points="0 0, 6 3, 0 6" fill="#ef4444" />
-                      </marker>
-                      <marker
-                        id="arrowhead-normal"
-                        markerWidth="6"
-                        markerHeight="6"
-                        refX="5"
-                        refY="3"
-                        orient="auto"
-                      >
-                        <polygon points="0 0, 6 3, 0 6" fill="rgba(100, 116, 139, 0.6)" />
-                      </marker>
-                    </defs>
-                    {arrows}
-                  </svg>
-                </>
+                    {/* Baseline ghost */}
+                    <div
+                      className="border-muted-foreground/40 bg-muted-foreground/5 absolute top-2.5 h-3 rounded-sm border border-dashed"
+                      style={{ left: r.baseLeft, width: r.baseWidth }}
+                    />
+                    {/* Bar */}
+                    {t.type === 'Milestone' ? (
+                      <div
+                        className="absolute top-1/2 h-0 w-0 -translate-y-1/2"
+                        style={{
+                          left: r.left - 6,
+                          borderLeft: '6px solid transparent',
+                          borderRight: '6px solid transparent',
+                          borderBottom: '10px solid var(--warning)',
+                          willChange: 'transform',
+                        }}
+                      />
+                    ) : (
+                      <TaskBar
+                        task={t}
+                        left={r.left}
+                        width={r.width}
+                        isHovered={isHovered}
+                        isDragging={isDragging}
+                        onBarMouseDown={onBarMouseDown}
+                        onResizeMouseDown={onResizeMouseDown}
+                        onHover={onHover}
+                      />
+                    )}
+                  </div>
+                </div>
               )
-            })()}
+            })}
+
+            {/* SVG overlay for dependency arrows. Pointer-events none so
+                it doesn't intercept bar clicks/drag. */}
+            <svg
+              className="pointer-events-none absolute top-0 left-[480px] z-[15]"
+              width={TOTAL_WEEKS * WEEK_WIDTH}
+              height={visibleRows.length * 32}
+              style={{ overflow: 'visible' }}
+            >
+              <defs>
+                <marker
+                  id="arrowhead-critical"
+                  markerWidth="6"
+                  markerHeight="6"
+                  refX="5"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 6 3, 0 6" fill="#ef4444" />
+                </marker>
+                <marker
+                  id="arrowhead-normal"
+                  markerWidth="6"
+                  markerHeight="6"
+                  refX="5"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 6 3, 0 6" fill="rgba(100, 116, 139, 0.6)" />
+                </marker>
+              </defs>
+              {arrowPaths.map((a) => (
+                <path
+                  key={a.key}
+                  d={a.d}
+                  stroke={a.isCritical ? '#ef4444' : 'rgba(100, 116, 139, 0.4)'}
+                  strokeWidth={a.isCritical ? 1.5 : 1}
+                  fill="none"
+                  markerEnd={`url(#arrowhead-${a.isCritical ? 'critical' : 'normal'})`}
+                />
+              ))}
+            </svg>
+
             {/* Today vertical line */}
             <div
               className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-red-500"

@@ -1,7 +1,7 @@
 import { produce } from 'immer'
 import { CBS, type CbsNode } from './types'
 import { undoableToast } from '@/components/ui/confirm-dialog'
-import { flattenTree, rebuildTreeFromRows as rebuildTree } from '@/lib/tree-utils'
+import { flattenTree, createTreeRebuilder } from '@/lib/tree-utils'
 
 // Deep-clone helper using immer's produce() with a no-op recipe.
 // Intentionally used instead of structuredClone() for undo/redo snapshots:
@@ -9,6 +9,23 @@ import { flattenTree, rebuildTreeFromRows as rebuildTree } from '@/lib/tree-util
 // leaves changed, the clone is much cheaper (shares unchanged subtrees by
 // reference) than structuredClone which deep-copies everything.
 const deepClone = <T>(obj: T): T => produce(obj, () => {})
+
+// ─── CBS parent re-aggregation ──────────────────────────────────────────────
+// When a leaf's committed/actual/forecast is edited, the parent's totals
+// must be recomputed as the sum of its children. This is the shared
+// aggregation step used by both the walk-back-up logic in createUpdateNode
+// and any caller that needs to recompute a parent after mutating leaves.
+//
+// Exported so the regression test can exercise it without reimplementing
+// the formula locally.
+export function recomputeCbsParent(node: CbsNode): void {
+  if (!node.children || node.children.length === 0) return
+  node.budget = node.children.reduce((s, c) => s + c.budget, 0)
+  node.committed = node.children.reduce((s, c) => s + c.committed, 0)
+  node.actual = node.children.reduce((s, c) => s + c.actual, 0)
+  node.forecast = node.children.reduce((s, c) => s + c.forecast, 0)
+  node.marginPct = node.budget > 0 ? ((node.budget - node.forecast) / node.budget) * 100 : 0
+}
 
 // ─── Field normalization ──────────────────────────────────────────────────
 //
@@ -37,7 +54,7 @@ function normalizeCbsRow(row: Record<string, unknown>): CbsNode {
 // Delegates to the shared `flattenTree` helper, configured for the CbsNode
 // shape: id field is `code`, parent field is `parentCode`.
 export function flattenForSave(items: CbsNode[], parentCode: string | null = null): CbsNode[] {
-  return flattenTree(items as unknown as Record<string, any>[], parentCode, {
+  return flattenTree(items as unknown as Record<string, unknown>[], parentCode, {
     idKey: 'code',
     parentKey: 'parentCode',
   }) as unknown as CbsNode[]
@@ -47,18 +64,15 @@ export function flattenForSave(items: CbsNode[], parentCode: string | null = nul
 // If rows already have children arrays, returns them as-is.
 // Falls back to the CBS constant if rows is empty or yields no roots.
 //
-// Delegates to the shared `rebuildTreeFromRows` helper, configured for the
-// CbsNode shape: id field is `code`, parent field is `parentCode`.
-export function rebuildTreeFromRows(rows: CbsNode[]): CbsNode[] {
-  if (!rows || rows.length === 0) return deepClone(CBS)
-  const hasChildren = rows.some((r) => Array.isArray(r.children) && r.children!.length > 0)
-  if (hasChildren) return rows
-  const normalized = (rows as unknown as Record<string, unknown>[]).map(
-    normalizeCbsRow
-  ) as unknown as Record<string, any>[]
-  const tree = rebuildTree(normalized, 'code', 'parentCode')
-  return tree.length > 0 ? (tree as unknown as CbsNode[]) : deepClone(CBS)
-}
+// Implemented via the shared `createTreeRebuilder` factory so the
+// rebuild-or-fallback pattern is identical to the BOQ module.
+export const rebuildTreeFromRows = createTreeRebuilder<CbsNode>({
+  seed: CBS,
+  cloneSeed: deepClone,
+  idKey: 'code',
+  parentKey: 'parentCode',
+  normalize: normalizeCbsRow,
+})
 
 // Factory: wraps setCbsRows so any updater receives a rebuilt tree and the
 // result is flattened before being persisted.
@@ -104,11 +118,7 @@ export function createUpdateNode(
               return true
             }
             if (n.children && walk(n.children)) {
-              n.actual = n.children.reduce((s, c) => s + c.actual, 0)
-              n.committed = n.children.reduce((s, c) => s + c.committed, 0)
-              n.forecast = n.children.reduce((s, c) => s + c.forecast, 0)
-              n.budget = n.children.reduce((s, c) => s + c.budget, 0)
-              n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
+              recomputeCbsParent(n)
               return true
             }
           }

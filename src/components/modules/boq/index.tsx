@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -54,6 +54,7 @@ import {
   type BoqHandlerCtx,
 } from './handlers'
 import { useBoqDnd } from './dnd'
+import { AuditLogViewer } from '@/components/modules/audit-log-viewer'
 
 export function BoqModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
@@ -75,8 +76,11 @@ export function BoqModule() {
     }
   )
 
-  // Rebuild tree from flat rows (DB stores flat, app needs tree)
-  const boqData = rebuildBoqTree(boqRows)
+  // Rebuild tree from flat rows (DB stores flat, app needs tree).
+  // Memoized so the tree isn't rebuilt on every render — only when the
+  // underlying flat rows actually change. Without this, every setState call
+  // (even for unrelated UI state like `selected`) would re-walk every row.
+  const boqData = useMemo(() => rebuildBoqTree(boqRows), [boqRows])
 
   // Non-persistent UI state
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -122,17 +126,26 @@ export function BoqModule() {
   // Undo/redo history stacks (deep snapshots of boqData)
   const [undoStack, setUndoStack] = useState<BoqItem[][]>([])
   const [redoStack, setRedoStack] = useState<BoqItem[][]>([])
+  // Audit log viewer — opened from the row context menu.
+  const [auditViewer, setAuditViewer] = useState<{
+    recordId: string
+    label: string
+  } | null>(null)
 
   // Convert expanded array to Set for O(1) lookups
   const expanded = new Set(expandedArr)
   const canUndo = undoStack.length > 0
   const canRedo = redoStack.length > 0
 
-  const allFlat = flatten(boqData)
+  // Flatten the tree for O(1) lookups by id. Memoized on boqData so the
+  // flat array isn't rebuilt on every render.
+  const allFlat = useMemo(() => flatten(boqData), [boqData])
 
   // Apply the search filter: when query is non-empty, filter the tree to
   // items whose code or description matches (and their ancestor headings).
-  const filteredBoqData = (() => {
+  // Memoized on [boqData, searchQuery] so re-typing in the search box
+  // re-filters, but unrelated re-renders (e.g. selection changes) don't.
+  const filteredBoqData = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return boqData
     const matches = (item: BoqItem) =>
@@ -149,14 +162,16 @@ export function BoqModule() {
       return out
     }
     return filterTree(boqData)
-  })()
+  }, [boqData, searchQuery])
 
   const selectedLeaf = allFlat.find((i) => i.id === selectedId) ?? allFlat[2]
 
-  // Live contract total — sum of qty × rate for all non-heading items
-  const contractTotal = allFlat
-    .filter((i) => i.type !== 'Heading')
-    .reduce((sum, i) => sum + i.qty * i.rate, 0)
+  // Live contract total — sum of qty × rate for all non-heading items.
+  // Memoized on allFlat so it doesn't recompute on unrelated re-renders.
+  const contractTotal = useMemo(
+    () => allFlat.filter((i) => i.type !== 'Heading').reduce((sum, i) => sum + i.qty * i.rate, 0),
+    [allFlat]
+  )
 
   // Keep a ref to the latest `undo` so async callbacks (e.g. undoableToast
   // undo buttons, which fire seconds later) always invoke the version that
@@ -564,8 +579,14 @@ export function BoqModule() {
             <ContextMenuItem
               icon={<History className="h-3.5 w-3.5" />}
               label="View audit log"
-              disabled
-              onClick={() => setContextMenu(null)}
+              onClick={() => {
+                const item = allFlat.find((i) => i.id === contextMenu.itemId)
+                setAuditViewer({
+                  recordId: contextMenu.itemId,
+                  label: item ? `${item.code} · ${item.desc}` : contextMenu.itemId,
+                })
+                setContextMenu(null)
+              }}
             />
             <div className="my-1 h-px bg-[var(--pane-divider)]" />
             <ContextMenuItem
@@ -579,6 +600,15 @@ export function BoqModule() {
             />
           </div>
         </>
+      )}
+
+      {auditViewer && (
+        <AuditLogViewer
+          tableName="boq_items"
+          recordId={auditViewer.recordId}
+          recordLabel={auditViewer.label}
+          onClose={() => setAuditViewer(null)}
+        />
       )}
     </>
   )

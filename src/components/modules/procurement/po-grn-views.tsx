@@ -5,7 +5,7 @@ import { PaneBody } from '@/components/workspace-3pane'
 import { CheckCircle2, AlertTriangle, Boxes } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, Grn, StockItem } from './types'
+import { Po, Grn, StockItem, INITIAL_MINS } from './types'
 import {
   useColumnVisibility,
   ColumnToggle,
@@ -335,32 +335,7 @@ export function StockCenterView({ stock }: { stock: StockItem[] }) {
 export function MinCenterView() {
   return (
     <PaneBody className="space-y-2 p-4">
-      {[
-        {
-          id: 'MIN-0042',
-          date: '30 Jul',
-          task: 'T-203 PCC M15',
-          items: '392 bags cement, 12.8 cum sand',
-          issued: 'Bikash R.',
-          status: 'Issued',
-        },
-        {
-          id: 'MIN-0041',
-          date: '29 Jul',
-          task: 'T-301 Base slab',
-          items: '3.2 MT steel, 60 sheets ply',
-          issued: 'Bikash R.',
-          status: 'Issued',
-        },
-        {
-          id: 'MIN-0040',
-          date: '29 Jul',
-          task: 'T-201 Excavation',
-          items: '— (no material)',
-          issued: 'Bikash R.',
-          status: 'N/A',
-        },
-      ].map((m) => (
+      {INITIAL_MINS.map((m) => (
         <div
           key={m.id}
           className="hover:bg-accent/30 cursor-pointer rounded-lg border border-[var(--pane-divider)] p-3"

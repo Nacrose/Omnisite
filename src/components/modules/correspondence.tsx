@@ -176,7 +176,17 @@ export function CorrespondenceModule() {
               <Search className="h-3.5 w-3.5" />
               Search
             </Button>
-            <Button size="sm" className="h-7 gap-1.5 text-xs" disabled title="Coming soon">
+            <Button
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() =>
+                toast.info('New letter creation coming soon', {
+                  description:
+                    'Use the API for now — POST to /correspondence with the letter payload.',
+                })
+              }
+              title="New Letter (coming soon)"
+            >
               <Plus className="h-3.5 w-3.5" />
               New Letter
             </Button>
@@ -335,8 +345,13 @@ export function CorrespondenceModule() {
                       size="sm"
                       variant="outline"
                       className="mt-2 h-7 gap-1 text-[10px]"
-                      disabled
-                      title="Coming soon"
+                      onClick={() =>
+                        toast.info('Convert to Variation Order coming soon', {
+                          description:
+                            'Will create a formal VO per FIDIC Clause 13 linked to this Site Instruction.',
+                        })
+                      }
+                      title="Convert to Variation Order (coming soon)"
                     >
                       <ArrowRight className="h-3 w-3" />
                       Convert to Variation Order
@@ -352,8 +367,12 @@ export function CorrespondenceModule() {
                   variant="outline"
                   size="sm"
                   className="h-8 w-full justify-start gap-2 text-xs"
-                  disabled
-                  title="Coming soon"
+                  onClick={() =>
+                    toast.info('PDF viewer coming soon', {
+                      description: `Letter ${selected.number} PDF will be rendered inline once the viewer is wired up.`,
+                    })
+                  }
+                  title="View PDF (coming soon)"
                 >
                   <FileText className="h-3.5 w-3.5" />
                   View PDF
@@ -362,8 +381,12 @@ export function CorrespondenceModule() {
                   variant="outline"
                   size="sm"
                   className="h-8 w-full justify-start gap-2 text-xs"
-                  disabled
-                  title="Coming soon"
+                  onClick={() =>
+                    toast.info('Draft reply coming soon', {
+                      description: `Will open a composer pre-addressed to ${selected.from} with subject RE: ${selected.subject}.`,
+                    })
+                  }
+                  title="Draft Reply (coming soon)"
                 >
                   <Mail className="h-3.5 w-3.5" />
                   Draft Reply
@@ -372,8 +395,13 @@ export function CorrespondenceModule() {
                   variant="outline"
                   size="sm"
                   className="h-8 w-full justify-start gap-2 text-xs"
-                  disabled
-                  title="Coming soon"
+                  onClick={() =>
+                    toast.info('Follow-up scheduling coming soon', {
+                      description:
+                        "Will create a calendar reminder tied to this letter's reply deadline.",
+                    })
+                  }
+                  title="Schedule follow-up (coming soon)"
                 >
                   <Calendar className="h-3.5 w-3.5" />
                   Schedule follow-up

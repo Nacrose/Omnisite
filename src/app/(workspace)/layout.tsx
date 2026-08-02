@@ -135,6 +135,12 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="workspace-bg theme-transition flex h-screen w-screen flex-col overflow-hidden">
+      <a
+        href="#main-content"
+        className="bg-primary text-primary-foreground sr-only z-[100] rounded-md px-4 py-2 text-sm font-medium focus:not-sr-only focus:absolute focus:top-2 focus:left-2"
+      >
+        Skip to content
+      </a>
       <header className="vibrancy flex h-14 flex-shrink-0 items-center gap-2 border-b border-[var(--pane-divider)] px-2 sm:gap-3 sm:px-4">
         <div className="flex flex-shrink-0 items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent-foreground)] shadow-sm">
@@ -261,7 +267,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-hidden">
+      <main id="main-content" className="min-h-0 flex-1 overflow-hidden">
         <ErrorBoundary key={activeModule}>
           <AnimatePresence mode="wait">
             <motion.div

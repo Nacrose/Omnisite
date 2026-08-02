@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,9 @@ import {
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
+import { uploadFile, STORAGE_BUCKETS } from '@/lib/storage'
+import { useApp } from '@/lib/app-store'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 interface Equip {
@@ -279,6 +282,65 @@ export function EquipmentModule() {
 }
 
 function EquipmentInspector({ equip }: { equip: Equip }) {
+  const { activeProjectDbId } = useApp()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  // Reuse the DSR photos bucket for equipment docs — there's no dedicated
+  // equipment-documents bucket yet, and the access semantics (project-scoped,
+  // readable by all project members) match DSR photos closely enough.
+  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024 // 25 MB
+  const ACCEPTED_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp']
+  const ACCEPTED_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (e.target) e.target.value = ''
+    if (!file) return
+
+    const lowerName = file.name.toLowerCase()
+    const extOk = ACCEPTED_EXTS.some((ext) => lowerName.endsWith(ext))
+    if (!extOk || !ACCEPTED_TYPES.includes(file.type)) {
+      toast.error('Unsupported file type', {
+        description: 'Allowed types: PDF, PNG, JPEG, WebP.',
+      })
+      return
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('File too large', {
+        description: `Max size is 25 MB (received ${(file.size / 1024 / 1024).toFixed(1)} MB).`,
+      })
+      return
+    }
+    if (!isSupabaseConfigured()) {
+      toast.error('Storage not configured', {
+        description:
+          'Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable uploads.',
+      })
+      return
+    }
+
+    setUploading(true)
+    try {
+      // Namespace by project + equipment id so docs don't collide across
+      // projects or equipment.
+      const folder = `${activeProjectDbId ?? 'unscoped'}/${equip.id}`
+      const result = await uploadFile(STORAGE_BUCKETS.DSR_PHOTOS, file, folder)
+      if (result.error) {
+        toast.error('Upload failed', { description: result.error })
+      } else {
+        toast.success('Equipment document uploaded', {
+          description: `${file.name} stored under ${equip.id} (dsr-photos bucket).`,
+        })
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      toast.error('Upload failed', { description: msg })
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const burnAlert = equip.burnRate && equip.burnNorm && equip.burnRate > equip.burnNorm
   return (
     <>
@@ -467,12 +529,20 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
                 size="sm"
                 variant="outline"
                 className="h-7 gap-1 text-xs"
-                disabled
-                title="Coming soon"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                title="Upload a document (PDF, PNG, JPEG, WebP — max 25 MB)"
               >
                 <Plus className="h-3 w-3" />
-                Upload
+                {uploading ? 'Uploading…' : 'Upload'}
               </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.webp"
+                className="hidden"
+                onChange={handleUpload}
+              />
             </div>
             {equip.docs.map((d, i) => (
               <div

@@ -117,21 +117,14 @@ export async function verifyProjectAccess(
   projectId: string | undefined | null
 ): Promise<boolean> {
   if (!projectId) return false
-  // PMs have access to all projects (matches the RLS helper).
-  // We don't have the user's role here directly, but the user_projects
-  // query below will return a PM row for any project the user is a PM on.
   const { data, error } = await userClient
     .from('user_projects')
-    .select('role, project_id')
+    .select('project_id')
     .eq('user_id', userId)
-    .limit(100)
-
+    .eq('project_id', projectId)
+    .limit(1)
   if (error || !data) return false
-
-  // PM on any project → access to all projects.
-  if (data.some((row) => row.role === 'PM')) return true
-  // Otherwise, must be explicitly assigned to this project.
-  return data.some((row) => row.project_id === projectId)
+  return data.length > 0
 }
 
 /**
@@ -189,9 +182,11 @@ export async function requireAuth(req: NextRequest): Promise<{
   user: AuthenticatedUser | null
   error: NextResponse | null
 }> {
-  // True demo mode — no Supabase configured at all, or demo mode explicitly
-  // enabled via OMNISITE_DEMO_MODE=true. Safe to allow.
-  if (!isServerSupabaseConfigured() || process.env.OMNISITE_DEMO_MODE === 'true') {
+  // True demo mode — no Supabase configured at all. Safe to allow.
+  // (OMNISITE_DEMO_MODE bypass removed: it allowed PM-level demo access
+  // even when a real Supabase backend was configured, which is a privilege
+  // escalation risk on staging/production deployments.)
+  if (!isServerSupabaseConfigured()) {
     return {
       user: { id: 'demo-user', email: 'demo@omnisite', role: 'PM', accessToken: '' },
       error: null,

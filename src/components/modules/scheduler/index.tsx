@@ -97,12 +97,17 @@ export function SchedulerModule() {
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK)
 
-  const flat = flattenTasks(tasksWithCpm)
+  // Memoize the flatten + visible-filter so they only recompute when
+  // `tasksWithCpm` or `showCriticalOnly` actually change. Without this,
+  // every unrelated re-render (e.g. hovering a task, dragging the gantt
+  // canvas) would re-walk the entire task tree twice.
+  const flat = useMemo(() => flattenTasks(tasksWithCpm), [tasksWithCpm])
   // Apply the "Critical path only" filter so the toggle actually does something.
   // Previously `visible` was declared but never used, and the filter body returned
   // true on every branch.
-  const visible = flat.filter(
-    ({ task }) => !showCriticalOnly || task.critical || task.type === 'Summary'
+  const visible = useMemo(
+    () => flat.filter(({ task }) => !showCriticalOnly || task.critical || task.type === 'Summary'),
+    [flat, showCriticalOnly]
   )
   const selectedTask = flat.find((f) => f.task.id === selectedId)?.task ?? flat[0].task
 

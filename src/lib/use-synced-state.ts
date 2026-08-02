@@ -23,15 +23,35 @@ import { useApp } from '@/lib/app-store'
  * `fieldMap` / `primaryKey` config works for both the legacy direct-Supabase
  * path and the new API path.
  *
- * @returns `[state, setState, loading, truncated]`
+ * @returns `[state, setState, loading, truncated, loadMore]`
  *   - `state`: the current data (Supabase or localStorage-backed)
- *   - `setState`: updater (value or function) — triggers a debounced upsert
+ *   - `setState`: updater (value or function) — queues upserts for a drain
+ *     effect to fire (NOT inside the React updater, so StrictMode-safe).
  *   - `loading`: true while the initial fetch is in flight
  *   - `truncated`: true if the dataset hit the 2000-row MAX_PAGES cap.
  *                  Use this to render a persistent "showing first N rows"
  *                  indicator. The hook also fires a one-shot toast when the
  *                  cap is hit; this flag lets callers show a persistent UI.
+ *   - `loadMore`: fetch the next page when `truncated` is true. Deduplicates
+ *     by PK and appends to state. No-op when there is no next cursor.
  */
+
+/**
+ * Shallow field-by-field equality check for two record-shaped objects.
+ * Used by `setState` to skip unchanged rows before queueing an upsert —
+ * a Map-based replacement for the previous `JSON.stringify` comparison
+ * (which was both slow for large arrays and didn't preserve key insertion
+ * order across runs).
+ */
+function shallowEqualRecords(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) return false
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false
+  }
+  return true
+}
 
 interface SyncConfig {
   /** Map app field names to DB column names. e.g., { desc: 'description', hasRA: 'has_ra' } */
@@ -112,7 +132,7 @@ if (typeof globalThis !== 'undefined') {
  * Convert a snake_case string to camelCase.
  * e.g. 'has_ra' → 'hasRa', 'parent_id' → 'parentId', 'created_at' → 'createdAt'
  */
-function snakeToCamel(s: string): string {
+export function snakeToCamel(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
 }
 
@@ -120,7 +140,7 @@ function snakeToCamel(s: string): string {
  * Convert a camelCase string to snake_case.
  * e.g. 'hasRa' → 'has_ra', 'parentId' → 'parent_id'
  */
-function camelToSnake(s: string): string {
+export function camelToSnake(s: string): string {
   return s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
 }
 
@@ -129,7 +149,7 @@ export function useSyncedState<T>(
   supabaseTable: string,
   initial: T | (() => T),
   config?: SyncConfig
-): [T, (value: T | ((prev: T) => T)) => void, boolean, boolean] {
+): [T, (value: T | ((prev: T) => T)) => void, boolean, boolean, () => Promise<void>] {
   const useSupabase = isSupabaseConfigured()
   const [localState, setLocalState] = usePersistentState(localStorageKey, initial)
   const [supabaseState, setSupabaseState] = useState<T | null>(null)
@@ -138,6 +158,20 @@ export function useSyncedState<T>(
   // Read the active project's DB UUID from the app store so data is scoped per-project.
   // When the user switches projects, this hook re-fetches with the new project_id.
   const { activeProjectDbId } = useApp()
+
+  // Pending upsert queue — populated by `setState` (inside the React updater,
+  // which MUST stay pure) and drained by a separate useEffect that runs after
+  // the state has committed. Side effects inside the updater would double-fire
+  // under React StrictMode in dev, producing duplicate POST requests.
+  const pendingUpsertsRef = useRef<Array<{ id: string; row: Record<string, unknown> }>>([])
+
+  // Pagination cursor for `loadMore()`. When the initial fetch loop bails out
+  // at the MAX_PAGES cap, the next cursor from the last successful page is
+  // stashed here so `loadMore()` can pick up where the initial fetch left off.
+  const nextCursorRef = useRef<string | null>(null)
+  // Runtime flag for whether more pages are available. Mirrors `truncated`
+  // initially, but flips to false as `loadMore()` exhausts the dataset.
+  const [hasMore, setHasMore] = useState(false)
 
   const pk = config?.primaryKey || 'id'
   const fmap = config?.fieldMap || {}
@@ -239,6 +273,10 @@ export function useSyncedState<T>(
         const wasTruncated = page >= MAX_PAGES && cursor
         if (wasTruncated) {
           setTruncated(true)
+          // Stash the cursor so loadMore() can pick up where the initial
+          // fetch left off (without re-walking the already-fetched pages).
+          nextCursorRef.current = cursor
+          setHasMore(true)
           try {
             const { toast } = await import('sonner')
             toast.warning('Dataset truncated', {
@@ -250,6 +288,8 @@ export function useSyncedState<T>(
           }
         } else {
           setTruncated(false)
+          nextCursorRef.current = null
+          setHasMore(false)
         }
 
         if (!mounted) return
@@ -312,37 +352,64 @@ export function useSyncedState<T>(
       }
     }
 
+    // Channel cache key includes the active project's DB UUID so switching
+    // projects creates a new scoped channel (the old channel is left for the
+    // GC sweep to retire once its callback count drops to zero). Without this,
+    // multiple useSyncedState instances on the same table but different
+    // projects would share one channel and receive cross-project notifications.
+    const channelKey = activeProjectDbId ? `${supabaseTable}:${activeProjectDbId}` : supabaseTable
+
+    // Realtime filter — only receive events for rows whose project_id matches
+    // the active project. When there's no active project (e.g. admin views),
+    // fall back to an unfiltered subscription so the hook still works for
+    // cross-project tables (workers, equipment, etc.).
+    //
+    // Explicitly typed so the ternary collapses to a single object type with
+    // an OPTIONAL `filter` — without this, TS widens to a union of two
+    // distinct shapes and the `channel.on('postgres_changes', ...)` overload
+    // can no longer be matched, falling back to the `system` overload and
+    // producing an implicit-any on the callback payload.
+    const filterConfig: {
+      event: '*'
+      schema: 'public'
+      table: string
+      filter?: string
+    } = activeProjectDbId
+      ? {
+          event: '*',
+          schema: 'public',
+          table: supabaseTable,
+          filter: `project_id=eq.${activeProjectDbId}`,
+        }
+      : { event: '*', schema: 'public', table: supabaseTable }
+
     // Register with shared channel cache
-    let entry = channelCache.get(supabaseTable)
+    let entry = channelCache.get(channelKey)
     if (!entry) {
       const channel = supabase
-        .channel(`${supabaseTable}-rt`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: supabaseTable },
-          (payload) => {
-            const e = channelCache.get(supabaseTable)
-            if (e) {
-              e.callbacks.forEach((cb) =>
-                cb({
-                  eventType: payload.eventType,
-                  new: payload.new,
-                  old: payload.old,
-                })
-              )
-            }
+        .channel(`${channelKey}-rt`)
+        .on('postgres_changes', filterConfig, (payload) => {
+          const e = channelCache.get(channelKey)
+          if (e) {
+            e.callbacks.forEach((cb) =>
+              cb({
+                eventType: payload.eventType,
+                new: payload.new,
+                old: payload.old,
+              })
+            )
           }
-        )
+        })
         .subscribe()
       entry = { channel, callbacks: new Set(), lastActivity: Date.now() }
-      channelCache.set(supabaseTable, entry)
+      channelCache.set(channelKey, entry)
     }
     entry.callbacks.add(rtCallback)
     entry.lastActivity = Date.now()
 
     return () => {
       mounted = false
-      const e = channelCache.get(supabaseTable)
+      const e = channelCache.get(channelKey)
       if (e) {
         e.callbacks.delete(rtCallback)
         e.lastActivity = Date.now()
@@ -351,17 +418,22 @@ export function useSyncedState<T>(
         // (e.g. error boundary swallows the unmount).
         if (e.callbacks.size === 0) {
           supabase!.removeChannel(e.channel)
-          channelCache.delete(supabaseTable)
+          channelCache.delete(channelKey)
         }
       }
     }
   }, [supabaseTable, activeProjectDbId])
 
-  // ─── State setter — race-condition-free ───────────────────────────────────
+  // ─── State setter — race-condition-free, StrictMode-safe ─────────────────
   // Uses a FUNCTIONAL setSupabaseState(prev => ...) so the updater always
   // receives the latest committed state, even if multiple setState calls
-  // fire in the same React batch. The diff + upsert logic also runs inside
-  // the functional update so it sees the true `prev`, not a stale closure.
+  // fire in the same React batch.
+  //
+  // IMPORTANT: the updater function passed to setSupabaseState MUST stay
+  // pure. Previously it called `upsertOne()` inline, which fired duplicate
+  // POSTs under React StrictMode (which double-invokes updaters in dev).
+  // Now the updater only pushes changed rows onto `pendingUpsertsRef`, and a
+  // separate useEffect drains the queue after the state has committed.
   const stateRef = useRef(supabaseState)
   useEffect(() => {
     stateRef.current = supabaseState
@@ -382,30 +454,32 @@ export function useSyncedState<T>(
             )
           : value
 
-      // Diff + upsert inside the updater so we use the true `prev`.
+      // Diff against prev using a Map + shallow field-by-field comparison,
+      // then push changed rows onto the pending upsert queue. Side effects
+      // (the actual `upsertOne` POST) are deferred to the drain effect
+      // below — running them here would double-fire under StrictMode.
       if (Array.isArray(newValue)) {
         const prevArr = Array.isArray(prev) ? (prev as unknown[]) : []
-        const prevById = new Map<string, unknown>()
+        const prevById = new Map<string, Record<string, unknown>>()
         for (const p of prevArr) {
           const pid = (p as Record<string, unknown>)[pk] as string | undefined
-          if (pid) prevById.set(pid, p)
+          if (pid) prevById.set(pid, p as Record<string, unknown>)
         }
         for (const item of newValue) {
-          const row = toDb(item as Record<string, unknown>)
-          const id = (item as Record<string, unknown>)[pk] as string | undefined
+          const itemRecord = item as Record<string, unknown>
+          const id = itemRecord[pk] as string | undefined
           if (!id) continue
           const prevItem = prevById.get(id)
-          if (prevItem !== undefined && JSON.stringify(prevItem) === JSON.stringify(item)) {
+          if (prevItem !== undefined && shallowEqualRecords(prevItem, itemRecord)) {
             continue
           }
+          const row = toDb(itemRecord)
           // Use the table's actual primary key (pk), not a hardcoded 'id'.
           // This fixes CBS/Financials sync where cbs_nodes uses 'code' as PK
           // and has no 'id' column — the previous hardcoded { ...row, id }
           // was rejected by PostgREST for the unknown column.
           const dbRow = { ...row, [pk]: id, project_id: activeProjectDbId }
-          upsertOne(apiEndpoint, dbRow).catch((e) => {
-            console.warn(`[useSyncedState] upsert failed for ${supabaseTable}:${id}`, e)
-          })
+          pendingUpsertsRef.current.push({ id, row: dbRow })
         }
       }
 
@@ -416,6 +490,64 @@ export function useSyncedState<T>(
     })
   }
 
+  // Drain the pending upsert queue after `supabaseState` has committed.
+  // Runs whenever `supabaseState` changes (so it sees the latest snapshot).
+  // StrictMode-safe: the effect itself only fires once per commit, even in
+  // dev — and we clear `pendingUpsertsRef.current` BEFORE firing the fetches
+  // so a second drain during the same cycle finds an empty queue.
+  useEffect(() => {
+    if (!useSupabase) return
+    const queue = pendingUpsertsRef.current
+    if (queue.length === 0) return
+    pendingUpsertsRef.current = []
+    for (const { id, row } of queue) {
+      upsertOne(apiEndpoint, row).catch((e) => {
+        console.warn(`[useSyncedState] upsert failed for ${supabaseTable}:${id}`, e)
+      })
+    }
+  }, [supabaseState, useSupabase, apiEndpoint, supabaseTable])
+
+  // Fetch the next page when the initial fetch hit the MAX_PAGES cap.
+  // Deduplicates by primary key (in case the server returned rows we already
+  // have from a previous loadMore call) and appends to state.
+  const loadMore = useCallback(async () => {
+    if (!useSupabase || !supabase) return
+    const cursor = nextCursorRef.current
+    if (!cursor || !hasMore) return
+    try {
+      const query: Record<string, string> = { limit: '200', cursor }
+      if (activeProjectDbId) query.project_id = activeProjectDbId
+      const { data: rows, nextCursor } = await fetchPaginated<Record<string, unknown>>(
+        apiEndpoint,
+        query
+      )
+      if (rows.length === 0) {
+        nextCursorRef.current = null
+        setHasMore(false)
+        setTruncated(false)
+        return
+      }
+      const transformed = rows.map((row) => fromDb(row))
+      setSupabaseState((prev) => {
+        if (!Array.isArray(prev)) return prev
+        const arr = prev as unknown as Record<string, unknown>[]
+        const seenIds = new Set(arr.map((it) => (it as Record<string, unknown>)[pk] as string))
+        const additions = transformed.filter(
+          (t) => !seenIds.has((t as Record<string, unknown>)[pk] as string)
+        )
+        if (additions.length === 0) return prev
+        return [...arr, ...additions] as unknown as T
+      })
+      nextCursorRef.current = nextCursor
+      if (!nextCursor) {
+        setHasMore(false)
+        setTruncated(false)
+      }
+    } catch (e) {
+      console.warn(`[useSyncedState] loadMore failed for ${supabaseTable}:`, e)
+    }
+  }, [useSupabase, apiEndpoint, supabaseTable, activeProjectDbId, pk, fromDb, hasMore])
+
   const currentState = useSupabase
     ? supabaseState !== null
       ? supabaseState
@@ -424,5 +556,5 @@ export function useSyncedState<T>(
         : initial
     : localState
 
-  return [currentState, setState, loading, truncated]
+  return [currentState, setState, loading, truncated, loadMore]
 }

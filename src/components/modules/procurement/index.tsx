@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Workspace2Pane, PaneHeader } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,10 +18,11 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, ReqItem, Grn, StockItem, Tab, STOCK } from './types'
+import { Po, ReqItem, Grn, StockItem, Tab, STOCK, INITIAL_MINS } from './types'
 import { INITIAL_POS, INITIAL_REQS, INITIAL_GRNS, INITIAL_STOCK } from './types'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
+import { useFocusTrap } from '@/lib/use-focus-trap'
 import { ReqCenterView } from './req-view'
 import { PoCenterView, GrnCenterView, StockCenterView, MinCenterView } from './po-grn-views'
 import { ProcurementInspector } from './inspector'
@@ -79,6 +80,8 @@ export function ProcurementModule() {
     lowestRate: number
   } | null>(null)
   const [overrideReason, setOverrideReason] = useState('')
+  const overrideModalRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(overrideModalRef, overrideModal !== null)
 
   // Generate POs from approved requisitions — auto-group by vendor, merge duplicates
   const generatePos = () => {
@@ -252,7 +255,12 @@ export function ProcurementModule() {
                     icon: CheckCircle2,
                   },
                   { id: 'stock' as Tab, name: 'Live Stock', count: stock.length, icon: Boxes },
-                  { id: 'min' as Tab, name: 'Material Issues (MIN)', count: 3, icon: ArrowRight },
+                  {
+                    id: 'min' as Tab,
+                    name: 'Material Issues (MIN)',
+                    count: INITIAL_MINS.length,
+                    icon: ArrowRight,
+                  },
                 ]
                 return (
                   <>
@@ -397,17 +405,24 @@ export function ProcurementModule() {
           onClick={() => setOverrideModal(null)}
         >
           <div
+            ref={overrideModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="override-modal-title"
             className="pane w-full max-w-md overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] bg-amber-500/10 px-4">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="h-4 w-4 text-amber-500" />
-                <span className="text-sm font-semibold">Override Justification Required</span>
+                <span id="override-modal-title" className="text-sm font-semibold">
+                  Override Justification Required
+                </span>
               </div>
               <button
                 onClick={() => setOverrideModal(null)}
                 className="hover:bg-accent text-muted-foreground rounded p-1"
+                aria-label="Close override dialog"
               >
                 <X className="h-4 w-4" />
               </button>
