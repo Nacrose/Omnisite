@@ -24,10 +24,10 @@
 //                  also count toward their parent location.
 //   • QS items   — `useSyncedState('omnisite-qs-items', 'qs_items', …)` —
 //                  we count items of type 'NCR' whose status is not 'Closed'.
-//   • DSR today  — read from the daily-ops seed array (`DSR_ENTRIES`), since
-//                  DSR entries don't yet have their own useSyncedState store
-//                  on the dashboard. Counted when `entry.date === todayISO`
-//                  and `entry.locationId === loc.id`.
+//   • DSR today  — `useSyncedState('omnisite-dsr-entries', 'dsr_entries', …)`
+//                  so the count reflects whatever the Daily Ops module has
+//                  written (Supabase or localStorage). Counted when
+//                  `entry.date === todayISO` and `entry.locationId === loc.id`.
 //
 // Clicking a station raises a toast with the per-location counts — a quick
 // "what's at Pier 3 right now" peek without leaving the dashboard. A full
@@ -47,7 +47,7 @@ import { INITIAL_LOCATIONS } from '@/data/seed/vendors'
 import type { ProjectLocation } from '@/lib/types/vendor'
 import { type Task, TASKS, flattenTasks } from '@/components/modules/scheduler/types'
 import { type QsItem, INITIAL_ITEMS } from '@/components/modules/qs/types'
-import { type DsrEntry, DSR_ENTRIES } from '@/components/modules/daily-ops/types'
+import { type DsrEntry } from '@/components/modules/daily-ops/types'
 
 // ─── Group color tokens ─────────────────────────────────────────────────────
 // Each group gets a tailwind color triplet: dot fill, ring halo, connector
@@ -143,6 +143,16 @@ export function LocationStripMap() {
     }
   )
 
+  // DSR entries — same store the Daily Ops module writes to. The fieldMap
+  // mirrors the camelCase → snake_case columns on the `dsr_entries` table
+  // (has_rfi, has_photos, location_id) so rows from Supabase land correctly
+  // on the DsrEntry shape. We start with an empty array — the daily-ops
+  // module seeds its own store, so by the time the dashboard renders there
+  // is usually data; if not, the DSR today count simply shows 0.
+  const [dsrEntries] = useSyncedState<DsrEntry[]>('omnisite-dsr-entries', 'dsr_entries', () => [], {
+    fieldMap: { hasRfi: 'has_rfi', hasPhotos: 'has_photos', locationId: 'location_id' },
+  })
+
   // Today's date — memoized once per mount so the DSR filter doesn't flicker
   // on re-renders (e.g. the per-second clock tick in the dashboard header).
   // We compare against the YYYY-MM-DD slice the DSR `date` field uses.
@@ -176,13 +186,13 @@ export function LocationStripMap() {
       const ncrs = qsRows.filter(
         (q) => q.type === 'NCR' && q.locationId === loc.id && q.status !== 'Closed'
       ).length
-      const dsrToday = DSR_ENTRIES.filter(
+      const dsrToday = dsrEntries.filter(
         (d: DsrEntry) => d.locationId === loc.id && d.date === todayISO
       ).length
       map.set(loc.id, { tasks, ncrs, dsrToday, total: tasks + ncrs + dsrToday })
     }
     return map
-  }, [sortedLocations, flatTasks, qsRows, todayISO])
+  }, [sortedLocations, flatTasks, qsRows, dsrEntries, todayISO])
 
   // Total counts for the footer roll-up — quick "across all stations" tally.
   const totals = useMemo(() => {

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Search, Mountain, Building2, Package } from 'lucide-react'
+import { Plus, Search, Mountain, Building2, Package, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -30,6 +30,7 @@ import { ScheduleTab } from './schedule-tab'
 import { PerformanceTab } from './performance-tab'
 import { SupplyCatalogTab } from './supply-catalog-tab'
 import { PurchaseHistoryTab } from './purchase-history-tab'
+import { ComplianceDashboard } from './compliance-dashboard'
 
 // ─── Category filter tabs ─────────────────────────────────────────────────────
 
@@ -140,6 +141,11 @@ export function VendorsModule() {
       primaryKey: 'id',
     }
   )
+  // Top-level view: per-vendor inspector vs. cross-vendor compliance dashboard.
+  // The compliance view reuses the same `vendors` array (no second
+  // useSyncedState subscription), so writes from the inspector propagate
+  // immediately to the dashboard.
+  const [topView, setTopView] = useState<'vendors' | 'compliance'>('vendors')
   const [activeTab, setActiveTab] = useState('profile')
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
@@ -180,122 +186,169 @@ export function VendorsModule() {
     setVendors((prev) => prev.map((v) => (v.id === updated.id ? updated : v)))
   }
 
+  // Top-level view toggle. Mirrors the daily-ops module's DSR/RFI header strip
+  // so users get a consistent "module-level view switcher" pattern: a sticky
+  // 44px strip with two buttons, and the active view fills the remaining space.
+  // The Compliance tab passes the same `vendors` array the inspector uses, so
+  // edits in one view show up immediately in the other without a refetch.
+  const headerStrip = (
+    <div className="vibrancy flex h-11 flex-shrink-0 items-center gap-2 border-b border-[var(--pane-divider)] px-3">
+      <Button
+        variant={topView === 'vendors' ? 'default' : 'ghost'}
+        size="sm"
+        className="h-7 gap-1.5 text-xs"
+        onClick={() => setTopView('vendors')}
+      >
+        <Building2 className="h-3.5 w-3.5" />
+        Vendors
+        <span className="bg-secondary text-muted-foreground ml-1 rounded-full px-1 py-0.5 text-[9px] font-semibold">
+          {vendors.length}
+        </span>
+      </Button>
+      <Button
+        variant={topView === 'compliance' ? 'default' : 'ghost'}
+        size="sm"
+        className="h-7 gap-1.5 text-xs"
+        onClick={() => setTopView('compliance')}
+      >
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Compliance
+      </Button>
+    </div>
+  )
+
+  if (topView === 'compliance') {
+    return (
+      <div className="flex h-full w-full flex-col overflow-hidden">
+        {headerStrip}
+        <div className="min-h-0 flex-1">
+          <ComplianceDashboard vendors={vendors} />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <Workspace2Pane
-      leftPane={
-        <>
-          <PaneHeader title="Vendors">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7"
-              onClick={() =>
-                toast.info('Vendor creation requires PM role', {
-                  description: 'Open the Admin module → Vendors to create a new vendor record.',
-                })
-              }
-              title="Add vendor (Admin module)"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </PaneHeader>
-
-          {/* Category filter row */}
-          <div className="border-b border-[var(--pane-divider)] px-2 py-1.5">
-            <div className="flex gap-0.5">
-              {CATEGORY_FILTERS.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setCategoryFilter(c.id)}
-                  className={cn(
-                    'flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors',
-                    categoryFilter === c.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent'
-                  )}
+    <div className="flex h-full w-full flex-col overflow-hidden">
+      {headerStrip}
+      <div className="min-h-0 flex-1">
+        <Workspace2Pane
+          leftPane={
+            <>
+              <PaneHeader title="Vendors">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7"
+                  onClick={() =>
+                    toast.info('Vendor creation requires PM role', {
+                      description: 'Open the Admin module → Vendors to create a new vendor record.',
+                    })
+                  }
+                  title="Add vendor (Admin module)"
                 >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </PaneHeader>
 
-          <div className="border-b border-[var(--pane-divider)] px-3 py-2">
-            <div className="relative">
-              <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-              <Input
-                placeholder="Search vendors…"
-                className="h-8 pl-7 text-xs"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-          <PaneBody className="py-2">
-            {filtered.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setSelectedId(v.id)}
-                className={cn(
-                  'w-full border-l-2 px-3 py-2 text-left',
-                  selectedId === v.id
-                    ? 'bg-accent border-l-primary'
-                    : 'hover:bg-accent/50 border-l-transparent'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground font-mono text-[10px]">{v.id}</span>
-                  <Badge
-                    variant="secondary"
-                    className={cn('text-[9px]', CATEGORY_BADGE_CLASS[v.category])}
-                  >
-                    {v.category === 'supplier' ? (
-                      <Package className="mr-0.5 h-2 w-2" />
-                    ) : (
-                      <Building2 className="mr-0.5 h-2 w-2" />
-                    )}
-                    {CATEGORY_LABEL_SHORT[v.category]}
-                  </Badge>
-                  {v.category === 'subcontractor' && v.isTunneling && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-violet-500/15 text-[9px] text-violet-700 dark:text-violet-300"
+              {/* Category filter row */}
+              <div className="border-b border-[var(--pane-divider)] px-2 py-1.5">
+                <div className="flex gap-0.5">
+                  {CATEGORY_FILTERS.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setCategoryFilter(c.id)}
+                      className={cn(
+                        'flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors',
+                        categoryFilter === c.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-accent'
+                      )}
                     >
-                      <Mountain className="mr-0.5 h-2 w-2" />
-                      Tunneling
-                    </Badge>
-                  )}
-                  <Badge variant="secondary" className="text-[9px]">
-                    {v.status}
-                  </Badge>
+                      {c.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="mt-0.5 truncate text-xs font-medium">{v.name}</div>
-                <div className="text-muted-foreground truncate text-[10px]">
-                  {v.category === 'subcontractor'
-                    ? (v.scope ?? '—')
-                    : (v.tradeName ?? v.materialsSupplied?.[0]?.name ?? '—')}
-                </div>
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <div className="text-muted-foreground px-3 py-6 text-center text-[10px]">
-                No vendors match this filter.
               </div>
-            )}
-          </PaneBody>
-        </>
-      }
-      rightPane={
-        <VendorInspector
-          vendor={selected}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onChange={updateVendor}
+
+              <div className="border-b border-[var(--pane-divider)] px-3 py-2">
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search vendors…"
+                    className="h-8 pl-7 text-xs"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+              <PaneBody className="py-2">
+                {filtered.map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => setSelectedId(v.id)}
+                    className={cn(
+                      'w-full border-l-2 px-3 py-2 text-left',
+                      selectedId === v.id
+                        ? 'bg-accent border-l-primary'
+                        : 'hover:bg-accent/50 border-l-transparent'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground font-mono text-[10px]">{v.id}</span>
+                      <Badge
+                        variant="secondary"
+                        className={cn('text-[9px]', CATEGORY_BADGE_CLASS[v.category])}
+                      >
+                        {v.category === 'supplier' ? (
+                          <Package className="mr-0.5 h-2 w-2" />
+                        ) : (
+                          <Building2 className="mr-0.5 h-2 w-2" />
+                        )}
+                        {CATEGORY_LABEL_SHORT[v.category]}
+                      </Badge>
+                      {v.category === 'subcontractor' && v.isTunneling && (
+                        <Badge
+                          variant="secondary"
+                          className="bg-violet-500/15 text-[9px] text-violet-700 dark:text-violet-300"
+                        >
+                          <Mountain className="mr-0.5 h-2 w-2" />
+                          Tunneling
+                        </Badge>
+                      )}
+                      <Badge variant="secondary" className="text-[9px]">
+                        {v.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-0.5 truncate text-xs font-medium">{v.name}</div>
+                    <div className="text-muted-foreground truncate text-[10px]">
+                      {v.category === 'subcontractor'
+                        ? (v.scope ?? '—')
+                        : (v.tradeName ?? v.materialsSupplied?.[0]?.name ?? '—')}
+                    </div>
+                  </button>
+                ))}
+                {filtered.length === 0 && (
+                  <div className="text-muted-foreground px-3 py-6 text-center text-[10px]">
+                    No vendors match this filter.
+                  </div>
+                )}
+              </PaneBody>
+            </>
+          }
+          rightPane={
+            <VendorInspector
+              vendor={selected}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onChange={updateVendor}
+            />
+          }
+          leftPaneWidth="240px"
+          rightPaneWidth="440px"
         />
-      }
-      leftPaneWidth="240px"
-      rightPaneWidth="440px"
-    />
+      </div>
+    </div>
   )
 }
 
