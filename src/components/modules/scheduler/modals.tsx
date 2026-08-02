@@ -328,8 +328,9 @@ export function CriticalPathBreachModal({
                 <div className="text-sm font-medium">Accelerate (Crash Schedule)</div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
                   Add resources (extra shifts, additional equipment) to recover the {overrunWeeks}
-                  -week overrun. Estimated acceleration cost: NPR{' '}
-                  {(overrunWeeks * 850000).toLocaleString()}. Pushes to Financials as a variation.
+                  -week overrun. Contact the planning team for an acceleration cost estimate — the
+                  real figure depends on task resource rates and availability, which aren't wired
+                  into this view yet. Pushes to Financials as a variation once costed.
                 </div>
               </div>
               <ArrowRight className="text-muted-foreground mt-1 h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />

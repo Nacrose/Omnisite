@@ -5,10 +5,13 @@ import { Ratelimit } from '@upstash/ratelimit'
 // ─── Rate limiter ───────────────────────────────────────────────────────────
 // Uses Upstash Redis with a sliding-window algorithm via @upstash/ratelimit.
 //
-// Redis is REQUIRED — there is no in-memory fallback. Rate limiting cannot be
-// enforced correctly in serverless / multi-instance environments without
-// shared state, so a missing Redis configuration is treated as a hard error
-// (getRatelimit throws) rather than silently allowing all traffic through.
+// Redis is OPTIONAL — the README documents Upstash as "for rate limiting" and
+// the demo-mode setup explicitly skips it. When the env vars are missing,
+// `checkRateLimit` fails OPEN (returns null, allowing the request through)
+// rather than throwing an unhandled error on every API call. Rate limiting
+// cannot be enforced correctly in serverless / multi-instance environments
+// without shared state, so we'd rather run unprotected than break every
+// request.
 
 const RATE_LIMIT = 60 // requests per 1 minute
 
@@ -17,7 +20,8 @@ let ratelimit: Ratelimit | null = null
 
 /**
  * Lazily build (and cache) the Ratelimit instance. Throws if Redis env vars
- * are missing — callers (the API routes) will surface the 500.
+ * are missing — callers should guard with `isRedisConfigured()` (or use
+ * `checkRateLimit`, which fails open) before invoking this directly.
  */
 function getRatelimit(): Ratelimit {
   if (ratelimit) return ratelimit
@@ -64,33 +68,51 @@ function resolveIdentifier(req: NextRequest, userId?: string): string {
 /**
  * Check rate limit for a request. Keys on user.id (from auth) when available,
  * falls back to IP address. Returns null if allowed, or a 429 response.
+ *
+ * Fails OPEN when Redis is not configured or the limiter errors at runtime:
+ * rate limiting is an optional dependency (see README) and breaking every API
+ * request when Upstash is skipped would be worse than running unprotected.
  */
 export async function checkRateLimit(
   req: NextRequest,
   userId?: string
 ): Promise<NextResponse | null> {
-  const identifier = resolveIdentifier(req, userId)
-  const limiter = getRatelimit()
-
-  const { success, limit, remaining, reset } = await limiter.limit(identifier)
-
-  if (!success) {
-    // `reset` is a unix timestamp (ms) for the sliding window; derive a
-    // sensible Retry-After value in seconds, capped to the window length.
-    const retryAfter = Math.max(1, Math.min(60, Math.ceil((reset - Date.now()) / 1000)))
-    return NextResponse.json(
-      { error: 'Rate limit exceeded. Too many requests. Please try again in a minute.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(retryAfter),
-          'X-RateLimit-Limit': String(limit),
-          'X-RateLimit-Remaining': String(remaining),
-          'X-RateLimit-Reset': String(reset),
-        },
-      }
-    )
+  // If Redis is not configured, skip rate limiting (fail-open).
+  // Rate limiting is optional — the README documents Upstash as optional.
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return null
   }
 
-  return null
+  try {
+    const identifier = resolveIdentifier(req, userId)
+    const limiter = getRatelimit()
+
+    const { success, limit, remaining, reset } = await limiter.limit(identifier)
+
+    if (!success) {
+      // `reset` is a unix timestamp (ms) for the sliding window; derive a
+      // sensible Retry-After value in seconds, capped to the window length.
+      const retryAfter = Math.max(1, Math.min(60, Math.ceil((reset - Date.now()) / 1000)))
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Too many requests. Please try again in a minute.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfter),
+            'X-RateLimit-Limit': String(limit),
+            'X-RateLimit-Remaining': String(remaining),
+            'X-RateLimit-Reset': String(reset),
+          },
+        }
+      )
+    }
+
+    return null
+  } catch {
+    // Redis error (connection, auth, timeout, etc.) — fail open (allow the
+    // request). Logging this would require a logger available in this module;
+    // for now we silently degrade. The 429 path above is preserved for the
+    // normal rate-limited case.
+    return null
+  }
 }

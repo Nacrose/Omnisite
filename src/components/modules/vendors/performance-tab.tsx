@@ -5,6 +5,7 @@ import { Calendar, ShieldCheck, Package, Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Subcontractor } from './types'
 import { fmtNPR } from './types'
+import { getMaterialCoefficient } from './material-coefficients'
 
 // ─── Performance Dashboard Tab ───────────────────────────────────────────────
 
@@ -53,9 +54,12 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
   }
   const totalRmt = sc.items.find((i) => i.type === 'composite')?.actualQty || 0
   for (const [, m] of materialMap) {
-    if (m.code === 'M-CEM-OPC') m.theoretical = totalRmt * 5.7
-    else if (m.code === 'M-STEEL-TMT16' || m.code === 'M-STEEL-ISMB150')
-      m.theoretical = totalRmt * 0.095
+    // Shared coefficient lookup — previously this was a stale copy that only
+    // handled cement + steel, so aggregate and sand always showed as 0%
+    // theoretical (and were flagged as 100% over-use). Now matches the
+    // material-tab and running-bill-tab automatically.
+    const coeff = getMaterialCoefficient(m.code, sc)
+    m.theoretical = coeff ? coeff * totalRmt : 0
     const netUsed = m.issued - m.returned
     const variance =
       m.theoretical > 0 ? Math.abs(((netUsed - m.theoretical) / m.theoretical) * 100) : 0

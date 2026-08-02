@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Subcontractor, CustomDeductible } from './types'
 import { fmtNPR } from './types'
+import { getMaterialCoefficient } from './material-coefficients'
 
 // ─── Running Bill Tab (expanded deductibles) ─────────────────────────────────
 
@@ -141,30 +142,14 @@ export function RunningBillTab({
     if (e) e.returned += mr.qty
   }
   const totalRmt = sc.items.find((i) => i.type === 'composite')?.actualQty || 0
-  // Mirror the coefficients used in material-tab.tsx so the two tabs agree.
-  // Previously this version only handled cement and steel, so aggregate and
-  // sand were charged back in full (theoretical=0 → overQty=netUsed).
+  // Theoretical usage uses the shared coefficient lookup so this tab agrees
+  // with material-tab.tsx and performance-tab.tsx by construction. Previously
+  // this was a third copy of the same if/else chain (and an earlier version
+  // only handled cement + steel, leaving aggregate and sand charged back in
+  // full because theoretical stayed at 0).
   for (const [, m] of materialMap) {
-    if (m.code === 'M-CEM-OPC') {
-      m.theoretical = totalRmt * 5.7
-    } else if (m.code === 'M-STEEL-TMT16' || m.code === 'M-STEEL-ISMB150') {
-      m.theoretical = totalRmt * 0.095
-    } else if (m.code === 'M-AGG-20') {
-      m.theoretical = totalRmt * (0.4 * 0.9 + 0.6 * 0.9)
-    } else if (m.code === 'M-SAND-R') {
-      m.theoretical = totalRmt * (0.4 * 0.45 + 0.6 * 0.45)
-    } else if (sc.isTunneling) {
-      // Tunneling-specific materials — use designPattern when available.
-      if (m.code === 'M-SHOTCRETE') {
-        const pattern = sc.items.find((i) => i.code === 'SC-TUN-SHOT')?.designPattern
-        m.theoretical = pattern ? pattern * totalRmt : 0
-      } else if (m.code === 'M-ROCKBOLT3') {
-        const pattern = sc.items.find((i) => i.code === 'SC-TUN-BOLT')?.designPattern
-        m.theoretical = pattern ? pattern * totalRmt : 0
-      } else if (m.code === 'M-STEEL-ISMB150') {
-        m.theoretical = totalRmt * 0.037
-      }
-    }
+    const coeff = getMaterialCoefficient(m.code, sc)
+    m.theoretical = coeff ? coeff * totalRmt : 0
     const netUsed = m.issued - m.returned
     const overQty = Math.max(0, netUsed - m.theoretical)
     materialChargeback += overQty * m.rate
