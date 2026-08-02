@@ -12,7 +12,6 @@ import {
   Plus,
   Save,
   FolderOpen,
-  Zap,
   Edit3,
   CheckCircle2,
   TrendingUp,
@@ -20,6 +19,7 @@ import {
   Link2,
   Layers,
   MapPin,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -167,19 +167,54 @@ export function RaInspector({
     equipment: { on: true, pct: 3.5 },
     tp: { on: false, pct: 0 },
   })
+  // User-added custom indirect-cost rows. The four rows above are kept as
+  // first-class knobs (labour / material / equipment / T&P) because they're
+  // the standard DoR headings; `customPctCosts` is the extension point for
+  // project-specific indirects (insurance, contingency, contractor's profit,
+  // etc.). Each row carries its own base selector so a custom row can be
+  // levied on direct cost OR on any of the three sub-costs — matching how
+  // the built-in rows behave. Previously the "+" button showed a "coming
+  // soon" toast and the user could not add any indirect cost row at all.
+  const [customPctCosts, setCustomPctCosts] = useState<
+    {
+      id: string
+      label: string
+      pct: number
+      on: boolean
+      base: 'direct' | 'labour' | 'material' | 'equipment'
+    }[]
+  >([])
   const [opOnDirect, setOpOnDirect] = useState(true)
   const [opOnPct, setOpOnPct] = useState(true)
   const [opPct, setOpPct] = useState(15)
 
-  // Helper to update a single row's qty or rate.
+  // Helper to update a single row's field. Field is any keyof RaRow so the
+  // inline-editable inputs (code/name/uom) on user-added rows can write back
+  // through the same code path as qty/rate.
   const updateRow = (
     setter: React.Dispatch<React.SetStateAction<RaRow[]>>,
     index: number,
-    field: 'qty' | 'rate',
-    value: number
+    field: keyof RaRow,
+    value: string | number
   ) => {
     setter((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)))
   }
+
+  // Delete a row from a resource section by index.
+  const deleteRow = (setter: React.Dispatch<React.SetStateAction<RaRow[]>>, index: number) => {
+    setter((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // Blank row template for the "Add" button. `source: 'Manual'` makes it
+  // clear in the UI that this row came from the user, not from a rate library.
+  const blankRaRow = (): RaRow => ({
+    code: '',
+    name: '',
+    uom: '',
+    qty: 0,
+    rate: 0,
+    source: 'Manual',
+  })
 
   // Recompute on every render — pure function of state
   const directCost = [...materials, ...labour, ...equipment].reduce((s, r) => s + r.qty * r.rate, 0)
@@ -191,7 +226,25 @@ export function RaInspector({
     (pctCosts.labour.on ? (labourCost * pctCosts.labour.pct) / 100 : 0) +
     (pctCosts.material.on ? (materialCost * pctCosts.material.pct) / 100 : 0) +
     (pctCosts.equipment.on ? (equipCost * pctCosts.equipment.pct) / 100 : 0) +
-    (pctCosts.tp.on ? (directCost * pctCosts.tp.pct) / 100 : 0)
+    (pctCosts.tp.on ? (directCost * pctCosts.tp.pct) / 100 : 0) +
+    // User-added custom indirect-cost rows. Each row's base selects which
+    // sub-cost the percentage is levied on, mirroring the four built-in
+    // rows (labour / material / equipment on their respective sub-costs;
+    // T&P on direct). Without this aggregation, custom rows would be
+    // visible in the UI but silently excluded from the live totals.
+    customPctCosts
+      .filter((r) => r.on)
+      .reduce((sum, r) => {
+        const base =
+          r.base === 'labour'
+            ? labourCost
+            : r.base === 'material'
+              ? materialCost
+              : r.base === 'equipment'
+                ? equipCost
+                : directCost
+        return sum + (base * r.pct) / 100
+      }, 0)
 
   const opBase = (opOnDirect ? directCost : 0) + (opOnPct ? pctCostBase : 0)
   const overheadAmount = opBase * (opPct / 100)
@@ -273,6 +326,8 @@ export function RaInspector({
               rows={materials}
               itemUom={item.uom}
               onUpdate={(i, f, v) => updateRow(setMaterials, i, f, v)}
+              onAdd={() => setMaterials((prev) => [...prev, blankRaRow()])}
+              onDelete={(i) => deleteRow(setMaterials, i)}
             />
             <RaSection
               title="Labour"
@@ -280,6 +335,8 @@ export function RaInspector({
               rows={labour}
               itemUom={item.uom}
               onUpdate={(i, f, v) => updateRow(setLabour, i, f, v)}
+              onAdd={() => setLabour((prev) => [...prev, blankRaRow()])}
+              onDelete={(i) => deleteRow(setLabour, i)}
             />
             <RaSection
               title="Equipment"
@@ -287,6 +344,8 @@ export function RaInspector({
               rows={equipment}
               itemUom={item.uom}
               onUpdate={(i, f, v) => updateRow(setEquipment, i, f, v)}
+              onAdd={() => setEquipment((prev) => [...prev, blankRaRow()])}
+              onDelete={(i) => deleteRow(setEquipment, i)}
             />
 
             {/* % COSTS */}
@@ -298,14 +357,24 @@ export function RaInspector({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 text-xs"
+                  className="h-6 gap-1 text-xs"
                   onClick={() =>
-                    toast.info('Add indirect cost row coming soon', {
-                      description: 'Custom % cost rows will be configurable in a future update.',
-                    })
+                    setCustomPctCosts((prev) => [
+                      ...prev,
+                      {
+                        // crypto.randomUUID() keeps custom row ids collision-free
+                        // even when the user double-clicks Add in quick succession.
+                        id: crypto.randomUUID(),
+                        label: 'Custom Indirect',
+                        pct: 0,
+                        on: true,
+                        base: 'direct',
+                      },
+                    ])
                   }
                 >
                   <Plus className="h-3 w-3" />
+                  Add
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -391,6 +460,82 @@ export function RaInspector({
                   />
                 </label>
               </div>
+              {/* User-added custom indirect-cost rows. Each row is fully
+                  editable (label / base / pct / on / delete). Bases map to
+                  the same four sub-costs the built-in rows use, so a custom
+                  row can be levied on direct OR any sub-cost without changing
+                  the calculation engine. */}
+              {customPctCosts.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {customPctCosts.map((row) => (
+                    <div
+                      key={row.id}
+                      className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-1.5 text-xs"
+                    >
+                      <Checkbox
+                        checked={row.on}
+                        onCheckedChange={(v) =>
+                          setCustomPctCosts((prev) =>
+                            prev.map((r) => (r.id === row.id ? { ...r, on: !!v } : r))
+                          )
+                        }
+                      />
+                      <Input
+                        className="h-6 flex-1 text-xs"
+                        value={row.label}
+                        placeholder="Label (e.g. Insurance)"
+                        onChange={(e) =>
+                          setCustomPctCosts((prev) =>
+                            prev.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r))
+                          )
+                        }
+                      />
+                      <select
+                        className="h-6 rounded border border-[var(--pane-divider)] bg-transparent px-1 text-[11px]"
+                        value={row.base}
+                        onChange={(e) =>
+                          setCustomPctCosts((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id
+                                ? { ...r, base: e.target.value as typeof row.base }
+                                : r
+                            )
+                          )
+                        }
+                        title="Base the percentage is levied on"
+                      >
+                        <option value="direct">on Direct</option>
+                        <option value="labour">on Labour</option>
+                        <option value="material">on Material</option>
+                        <option value="equipment">on Equipment</option>
+                      </select>
+                      <span className="text-muted-foreground">%</span>
+                      <Input
+                        className="h-6 w-12 text-xs"
+                        type="number"
+                        value={row.pct || ''}
+                        placeholder="0"
+                        onChange={(e) =>
+                          setCustomPctCosts((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id ? { ...r, pct: parseFloat(e.target.value) || 0 } : r
+                            )
+                          )
+                        }
+                      />
+                      <button
+                        className="text-muted-foreground rounded p-0.5 hover:text-red-500"
+                        title="Remove row"
+                        onClick={() =>
+                          setCustomPctCosts((prev) => prev.filter((r) => r.id !== row.id))
+                        }
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* O&P */}
@@ -606,6 +751,8 @@ function RaSection({
   rows,
   itemUom,
   onUpdate,
+  onAdd,
+  onDelete,
 }: {
   title: string
   icon: React.ReactNode
@@ -616,7 +763,12 @@ function RaSection({
    *  item can have 'Bag' cement and 'day' labour rows, and the subtotal
    *  shouldn't inherit either of those. */
   itemUom: string
-  onUpdate: (index: number, field: 'qty' | 'rate', value: number) => void
+  onUpdate: (index: number, field: keyof RaRow, value: string | number) => void
+  /** Append a blank row to the section's array. The parent owns the array
+   *  state so the Add button just dispatches the action up. */
+  onAdd: () => void
+  /** Remove the row at the given index. */
+  onDelete: (index: number) => void
 }) {
   const sectionTotal = rows.reduce((s, r) => s + r.qty * r.rate, 0)
   return (
@@ -626,62 +778,73 @@ function RaSection({
           {icon}
           {title}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 gap-1 text-xs"
-          onClick={() =>
-            toast.info(`Add ${title.toLowerCase()} row coming soon`, {
-              description: 'Use the API for now — the UI row-add flow is under construction.',
-            })
-          }
-        >
+        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs" onClick={onAdd}>
           <Plus className="h-3 w-3" />
           Add
         </Button>
       </div>
       <div className="space-y-1.5">
+        {rows.length === 0 && (
+          <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] px-2 py-3 text-center text-[11px]">
+            No {title.toLowerCase()} rows yet — click <span className="font-medium">Add</span> to
+            create one.
+          </div>
+        )}
         {rows.map((r, i) => (
           <div
             key={i}
             className="hover:bg-accent/40 grid grid-cols-12 items-center gap-1.5 rounded p-1.5 text-xs"
           >
-            <div className="col-span-7">
-              <div className="truncate font-medium">{r.name}</div>
-              <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
-                <span className="font-mono">{r.code}</span>
+            {/* Name + source — name is an inline input so the user can fill
+                in newly-added blank rows without a separate edit affordance. */}
+            <div className="col-span-4">
+              <Input
+                className="h-6 px-1 text-xs"
+                value={r.name}
+                placeholder="Resource name"
+                onChange={(e) => onUpdate(i, 'name', e.target.value)}
+              />
+              <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[10px]">
+                <span className="font-mono">{r.code || '—'}</span>
                 <span>·</span>
-                <span>{r.source}</span>
+                <span>{r.source || 'Manual'}</span>
               </div>
             </div>
+            {/* Code — also editable inline for new rows. */}
+            <Input
+              className="col-span-2 h-6 px-1 font-mono text-xs"
+              value={r.code}
+              placeholder="Code"
+              onChange={(e) => onUpdate(i, 'code', e.target.value)}
+            />
+            {/* UOM — short text input. Tight on width but adequate for the
+                typical DoR units (Bag, cum, day, hr, ltr). */}
+            <Input
+              className="col-span-1 h-6 px-1 text-xs"
+              value={r.uom}
+              placeholder="UOM"
+              onChange={(e) => onUpdate(i, 'uom', e.target.value)}
+            />
             <Input
               className="col-span-2 h-6 px-1 text-xs"
               type="number"
               value={r.qty}
               onChange={(e) => onUpdate(i, 'qty', parseFloat(e.target.value) || 0)}
             />
-            <div className="col-span-3 flex items-center gap-1">
-              <span className="text-muted-foreground text-[10px]">{r.uom}</span>
-              <div className="flex flex-1 items-center gap-0.5">
-                <Input
-                  className="h-6 flex-1 px-1 font-mono text-xs"
-                  type="number"
-                  value={r.rate}
-                  onChange={(e) => onUpdate(i, 'rate', parseFloat(e.target.value) || 0)}
-                />
-                <button
-                  className="hover:bg-accent rounded p-0.5"
-                  title="Auto-calc from primary UOM"
-                  onClick={() =>
-                    toast.info('Auto-calc from primary UOM coming soon', {
-                      description:
-                        'Conversion factors between the BOQ item UOM and the resource UOM are not yet wired up.',
-                    })
-                  }
-                >
-                  <Zap className="h-3 w-3 text-amber-500" />
-                </button>
-              </div>
+            <div className="col-span-2 flex items-center gap-0.5">
+              <Input
+                className="h-6 flex-1 px-1 font-mono text-xs"
+                type="number"
+                value={r.rate}
+                onChange={(e) => onUpdate(i, 'rate', parseFloat(e.target.value) || 0)}
+              />
+              <button
+                className="text-muted-foreground rounded p-0.5 hover:text-red-500"
+                title={`Remove ${r.name || 'row'}`}
+                onClick={() => onDelete(i)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </div>
           </div>
         ))}

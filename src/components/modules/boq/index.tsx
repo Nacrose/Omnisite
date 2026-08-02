@@ -57,6 +57,25 @@ import {
 import { useBoqDnd } from './dnd'
 import { AuditLogViewer } from '@/components/modules/audit-log-viewer'
 
+// Column definitions for the BOQ grid. Declared at module scope so the array
+// identity is stable across renders — the column-toggle UI and the visibility
+// hook both reference BOQ_COLS, and a fresh array every render would force
+// both to re-walk the (small but non-zero) column list on every state change.
+// `hideable: false` marks columns the user can't hide (checkbox / expand
+// affordances + the primary description column).
+const BOQ_COLS: ColumnDef[] = [
+  { key: 'checkbox', label: 'Checkbox', hideable: false },
+  { key: 'expand', label: 'Expand', hideable: false },
+  { key: 'code', label: 'Code' },
+  { key: 'desc', label: 'Description', hideable: false },
+  { key: 'qty', label: 'Qty' },
+  { key: 'uom', label: 'UOM' },
+  { key: 'rate', label: 'Rate (NPR)' },
+  { key: 'amount', label: 'Amount (NPR)' },
+  { key: 'type', label: 'Type' },
+  { key: 'ra', label: 'RA' },
+]
+
 export function BoqModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
   const [selectedId, setSelectedId] = usePersistentState('omnisite-boq-selected', '1.1.3')
@@ -94,19 +113,7 @@ export function BoqModule() {
   const [editing, setEditing] = useState<BoqEditingState | null>(null)
   // Search query — filters the tree by code/description.
   const [searchQuery, setSearchQuery] = useState('')
-  // Column visibility
-  const BOQ_COLS: ColumnDef[] = [
-    { key: 'checkbox', label: 'Checkbox', hideable: false },
-    { key: 'expand', label: 'Expand', hideable: false },
-    { key: 'code', label: 'Code' },
-    { key: 'desc', label: 'Description', hideable: false },
-    { key: 'qty', label: 'Qty' },
-    { key: 'uom', label: 'UOM' },
-    { key: 'rate', label: 'Rate (NPR)' },
-    { key: 'amount', label: 'Amount (NPR)' },
-    { key: 'type', label: 'Type' },
-    { key: 'ra', label: 'RA' },
-  ]
+  // Column visibility — BOQ_COLS is declared at module scope (see above).
   const {
     visible: boqColVisible,
     isVisible: boqIsVisible,
@@ -139,8 +146,11 @@ export function BoqModule() {
     label: string
   } | null>(null)
 
-  // Convert expanded array to Set for O(1) lookups
-  const expanded = new Set(expandedArr)
+  // Convert expanded array to Set for O(1) lookups. Memoized on expandedArr
+  // so the Set identity is stable across unrelated re-renders — BoqGrid's
+  // useMemo (flattenVisible) keys on `expanded`, and a fresh Set every render
+  // would force it to re-walk every row even when nothing expanded/collapsed.
+  const expanded = useMemo(() => new Set(expandedArr), [expandedArr])
   const canUndo = undoStack.length > 0
   const canRedo = redoStack.length > 0
 
@@ -170,6 +180,18 @@ export function BoqModule() {
     }
     return filterTree(boqData)
   }, [boqData, searchQuery])
+
+  // When a search query is active, expand every visible row so the user can
+  // see matched descendants without manually expanding each heading. Memoized
+  // on [searchQuery, allFlat] so the Set identity is stable across unrelated
+  // re-renders — BoqGrid's useMemo (flattenVisible) keys on `expanded`, and a
+  // fresh Set every render would force it to re-walk every row. When the
+  // search is cleared, this falls back to the user's manual expansion (the
+  // `expanded` Set above), preserving stable identity for that branch too.
+  const searchExpandedSet = useMemo(
+    () => (searchQuery.trim() ? new Set(allFlat.map((i) => i.id)) : expanded),
+    [searchQuery, allFlat, expanded]
+  )
 
   // Fallback when nothing is selected: pick the first non-Heading item so
   // the inspector has something to render. Falls back to allFlat[0] (which
@@ -291,7 +313,7 @@ export function BoqModule() {
 
   // Guard against an empty BOQ store (e.g. fresh install with no seed data,
   // or all items deleted). Without this, `selectedLeaf` is undefined (the
-  // `allFlat[2]` fallback returns undefined when allFlat is empty) and the
+  // `allFlat[0]` fallback returns undefined when allFlat is empty) and the
   // rightPane below would crash on `selectedLeaf.type`. Placed AFTER all
   // hooks have been called so we don't violate rules-of-hooks.
   if (!selectedLeaf) {
@@ -545,7 +567,7 @@ export function BoqModule() {
                 >
                   <BoqGrid
                     items={filteredBoqData}
-                    expanded={searchQuery.trim() ? new Set(allFlat.map((i) => i.id)) : expanded}
+                    expanded={searchExpandedSet}
                     selectedId={selectedId}
                     selected={selected}
                     editing={editing}
@@ -555,7 +577,9 @@ export function BoqModule() {
                     onContextMenu={setContextMenu}
                     onToggleExpand={toggleExpand}
                     onToggleSelect={handleToggleSelect}
-                    onUpdateItem={(id, field, value) => updateItem(id, field, value, ctx)}
+                    onUpdateItem={(id, field, value, skipUndo) =>
+                      updateItem(id, field, value, ctx, skipUndo)
+                    }
                     onSetEditing={setEditing}
                     isVisible={boqIsVisible}
                     colWidths={colWidths}

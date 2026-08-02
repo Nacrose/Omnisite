@@ -15,13 +15,22 @@ export function exportToCsv(
   rows: (string | number)[][],
   preamble?: string[]
 ) {
-  // Escape values: wrap in quotes if they contain commas, quotes, or newlines
+  // Escape values: wrap in quotes if they contain commas, quotes, or newlines.
+  // Also mitigate CSV injection — Excel and Sheets will execute formulas in
+  // cells starting with =, +, -, or @ when the file is opened. Prefixing a
+  // single quote forces the cell to be treated as text. See OWASP CSV
+  // Injection guidance. The leading-quote is harmless for plain-text cells
+  // because Excel hides it in the rendered value.
   const escape = (val: string | number): string => {
     const s = String(val ?? '')
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return `"${s.replace(/"/g, '""')}"`
+    // Mitigate CSV injection: prefix dangerous leading characters so the
+    // cell is interpreted as text rather than a formula by Excel / Sheets.
+    const dangerous = /^[=+\-@]/
+    const sanitized = dangerous.test(s) ? `'${s}` : s
+    if (sanitized.includes(',') || sanitized.includes('"') || sanitized.includes('\n')) {
+      return `"${sanitized.replace(/"/g, '""')}"`
     }
-    return s
+    return sanitized
   }
 
   const lines = [

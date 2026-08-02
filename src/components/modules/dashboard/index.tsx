@@ -67,7 +67,18 @@ export function DashboardModule() {
     'boq_items',
     () => structuredClone(BOQ_DATA) as typeof BOQ_DATA,
     {
-      fieldMap: { desc: 'description', hasRA: 'has_ra', parentId: 'parent_id' },
+      // `locationId: 'location_id'` mirrors the BOQ module's own fieldMap so
+      // the dashboard's synced store can read the same column the inspector
+      // writes (migration 12 added the FK). Without this, the auto camel→snake
+      // converter would produce `location_id` anyway, but making it explicit
+      // keeps the dashboard in lockstep with the BOQ module's mapping — and
+      // documents the column's existence for future readers.
+      fieldMap: {
+        desc: 'description',
+        hasRA: 'has_ra',
+        parentId: 'parent_id',
+        locationId: 'location_id',
+      },
       primaryKey: 'id',
     }
   )
@@ -152,9 +163,14 @@ export function DashboardModule() {
   // re-renders (e.g. the per-second clock tick) don't re-walk every row.
   const liveKpis = useMemo(() => {
     const flatBoq = flattenBoq(boqRows)
+    // Contract total = sum of qty × rate over LEAF non-Heading items only.
+    // Excluding headings isn't enough: a Priced item with children would
+    // otherwise contribute both itself AND its children's qty × rate,
+    // double-counting the subtree. The leaf check (!children || length===0)
+    // is the same guard the BOQ module's own contractTotal uses.
     const contractTotal = flatBoq
-      .filter((i) => i.type !== 'Heading')
-      .reduce((sum, i) => sum + i.qty * i.rate, 0)
+      .filter((b) => b.type !== 'Heading' && (!b.children || b.children.length === 0))
+      .reduce((sum, b) => sum + b.qty * b.rate, 0)
 
     const flatTasks = flattenTasks(taskRows)
     const totalTasks = flatTasks.length

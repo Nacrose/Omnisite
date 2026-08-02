@@ -26,11 +26,24 @@ export interface BoqGridProps {
   onContextMenu: (e: { x: number; y: number; itemId: string }) => void
   onToggleExpand: (id: string) => void
   onToggleSelect: (id: string, value: boolean) => void
-  onUpdateItem: (id: string, field: 'qty' | 'rate', value: number) => void
+  /** Push an item update to the parent. `skipUndo` (optional) suppresses the
+   *  undo snapshot — used by the grid's debounced keystroke handler so rapid
+   *  edits to the same field collapse into a single undo entry instead of
+   *  one entry per keystroke. */
+  onUpdateItem: (id: string, field: 'qty' | 'rate', value: number, skipUndo?: boolean) => void
   onSetEditing: (e: BoqEditingState | null) => void
   isVisible?: (key: string) => boolean
   colWidths?: Record<string, number>
 }
+
+// Window (in ms) within which two edits to the same item+field are treated as
+// a single "continuation" of the same edit. The first keystroke of a burst
+// pushes an undo snapshot; subsequent ones within this window skip the push
+// so the user's undo history isn't polluted with one entry per keystroke.
+// 1000ms matches typical typing cadence — long enough that a user typing
+// continuously collapses into one undo, short enough that pausing to think
+// starts a fresh undo entry.
+const UNDO_DEBOUNCE_MS = 1000
 
 // ─── Flatten the tree into a visible-rows list (respecting expand state) ────
 
@@ -162,7 +175,39 @@ function BoqRow({
   const vis = props.isVisible ?? (() => true)
   const cw = props.colWidths || {}
 
+  // Track the last qty/rate edit so rapid keystrokes collapse into a single
+  // undo entry. Refs are read inside the change handlers (which fire on the
+  // leading edge of each keystroke) so this never triggers a re-render.
+  const lastEditRef = useRef<{ id: string; field: 'qty' | 'rate'; time: number } | null>(null)
+
+  const handleFieldChange = (id: string, field: 'qty' | 'rate', value: number) => {
+    const now = Date.now()
+    const isContinuation =
+      lastEditRef.current?.id === id &&
+      lastEditRef.current?.field === field &&
+      now - lastEditRef.current.time < UNDO_DEBOUNCE_MS
+    lastEditRef.current = { id, field, time: now }
+    // skipUndo = isContinuation — the first keystroke of a burst pushes a
+    // snapshot (skipUndo=false), every subsequent one within the debounce
+    // window skips the push (skipUndo=true).
+    onUpdateItem(id, field, value, isContinuation)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Don't intercept key events from child inputs / checkboxes / selects:
+    // pressing Enter while editing the qty field, or Space while focused on
+    // the row's checkbox, would otherwise be swallowed by this handler and
+    // preventDefault'd — leaving the input's own onChange / onCommit dead
+    // and forcing the user to click outside the cell to commit a value.
+    const target = e.target as HTMLElement
+    if (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    ) {
+      return
+    }
     // Mirror onClick behaviour for keyboard users. Stop propagation so the
     // toggle/checkbox inputs inside the row don't double-fire.
     if (e.key === 'Enter' || e.key === ' ') {
@@ -247,7 +292,7 @@ function BoqRow({
             <input
               type="number"
               value={item.qty ?? ''}
-              onChange={(e) => onUpdateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleFieldChange(item.id, 'qty', parseFloat(e.target.value) || 0)}
               onFocus={() => onSetEditing({ id: item.id, field: 'qty' })}
               onBlur={() => onSetEditing(null)}
               onClick={(e) => e.stopPropagation()}
@@ -285,7 +330,7 @@ function BoqRow({
             <input
               type="number"
               value={item.rate ?? ''}
-              onChange={(e) => onUpdateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleFieldChange(item.id, 'rate', parseFloat(e.target.value) || 0)}
               onFocus={() => onSetEditing({ id: item.id, field: 'rate' })}
               onBlur={() => onSetEditing(null)}
               onClick={(e) => e.stopPropagation()}

@@ -10,6 +10,7 @@ import {
   updateLevels,
   createTreeRebuilder,
 } from '@/lib/tree-utils'
+import { exportToCsv } from '@/lib/csv-export'
 
 // Deep-clone helper using immer's produce() with a no-op recipe.
 // Intentionally used instead of structuredClone() for undo/redo snapshots:
@@ -131,9 +132,22 @@ export function commitBoqData(updater: (prev: BoqItem[]) => BoqItem[], ctx: BoqH
   // capture the same pre-mutation snapshot multiple times and the second call
   // would mutate an already-mutated tree.
   //
+  // Guard: prevent pushing the same snapshot twice in the same tick. If
+  // commitBoqData is called twice before React commits the state update (e.g.
+  // a batch action, or two separate keystrokes landing in the same batch),
+  // both calls would otherwise read the same `ctx.boqData` from the render
+  // closure and push two identical deep clones onto the undo stack. The
+  // second snapshot is then a no-op when undone. Comparing the JSON-serialized
+  // form against the last pushed snapshot skips the redundant push.
+  //
   // Capture the current tree for the undo stack BEFORE applying the updater.
   const currentTree = ctx.boqData
-  ctx.setUndoStack((u) => [...u, deepClone(currentTree)])
+  const lastSnapshot = ctx.undoStack[ctx.undoStack.length - 1]
+  const isSameAsLast =
+    !!lastSnapshot && JSON.stringify(lastSnapshot) === JSON.stringify(currentTree)
+  if (!isSameAsLast) {
+    ctx.setUndoStack((u) => [...u, deepClone(currentTree)])
+  }
   ctx.setRedoStack([])
   ctx.setBoqRows((prevRows) => {
     // Rebuild the tree from the previous flat rows, apply the updater,
@@ -167,30 +181,50 @@ export function redo(ctx: BoqHandlerCtx): void {
   toast.success('Redo', { description: `${ctx.redoStack.length - 1} actions left` })
 }
 
-/** Update a single BOQ item's qty or rate. */
+/** Update a single BOQ item's qty or rate.
+ *
+ *  `skipUndo` (default false) suppresses the undo snapshot — used by the
+ *  grid's debounced keystroke handler so rapid edits to the same field
+ *  collapse into a single undo entry instead of one per keystroke. The
+ *  first keystroke of a burst pushes a snapshot; subsequent ones within
+ *  ~1s update the row directly without polluting the undo stack. */
 export function updateItem(
   id: string,
   field: 'qty' | 'rate',
   value: number,
-  ctx: BoqHandlerCtx
+  ctx: BoqHandlerCtx,
+  skipUndo = false
 ): void {
-  commitBoqData(
-    (prev) =>
-      produce(prev, (draft) => {
-        const walk = (items: BoqItem[]): boolean => {
-          for (const it of items) {
-            if (it.id === id) {
-              it[field] = Math.max(0, value)
-              return true
-            }
-            if (it.children && walk(it.children)) return true
+  // The mutation recipe is identical for both branches; only the undo
+  // bookkeeping differs. Keeping the recipe in one closure avoids drift
+  // between the undo-pushing and direct-update code paths.
+  const mutate = (prev: BoqItem[]) =>
+    produce(prev, (draft) => {
+      const walk = (items: BoqItem[]): boolean => {
+        for (const it of items) {
+          if (it.id === id) {
+            it[field] = Math.max(0, value)
+            return true
           }
-          return false
+          if (it.children && walk(it.children)) return true
         }
-        walk(draft as BoqItem[])
-      }),
-    ctx
-  )
+        return false
+      }
+      walk(draft as BoqItem[])
+    })
+
+  if (skipUndo) {
+    // Skip the undo stack — just apply the mutation directly so the user's
+    // undo history isn't polluted with one entry per keystroke.
+    ctx.setRedoStack([])
+    ctx.setBoqRows((prevRows) => {
+      const prevTree = rebuildBoqTree(prevRows)
+      const next = mutate(prevTree)
+      return flattenBoqTree(next) as unknown as BoqItem[]
+    })
+  } else {
+    commitBoqData(mutate, ctx)
+  }
 }
 
 /** Duplicate an item — inserts a copy immediately below the original. */
@@ -464,6 +498,10 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
  *
  * The CSV is downloaded as `RA-<code>.csv` in the browser. The caller passes
  * the BoqItem (looked up from allFlat) so we can include its metadata.
+ *
+ * Delegates to `exportToCsv` so the file picks up the BOM (Excel UTF-8
+ * compatibility) and CSV-injection mitigation that the hand-rolled writer
+ * was missing.
  */
 export function exportRa(item: BoqItem | undefined): void {
   if (!item) {
@@ -497,26 +535,6 @@ export function exportRa(item: BoqItem | undefined): void {
     { code: 'E-VIB', name: 'Needle Vibrator 60mm', uom: 'hr', qty: 1.2, rate: 95 },
   ]
 
-  const esc = (v: string | number) => {
-    const s = String(v)
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
-
-  const lines: string[] = []
-  lines.push(['Code', 'Description', 'UOM', 'Qty', 'Rate'].map(esc).join(','))
-  lines.push([item.code, item.desc, item.uom, item.qty, item.rate].map(esc).join(','))
-  lines.push('')
-  lines.push('Section,Code,Name,UOM,Qty,Rate,Amount')
-  const writeSection = (section: string, rows: typeof materials) => {
-    for (const r of rows) {
-      const amount = (r.qty * r.rate).toFixed(2)
-      lines.push([section, r.code, r.name, r.uom, r.qty, r.rate, amount].map(esc).join(','))
-    }
-  }
-  writeSection('Material', materials)
-  writeSection('Labour', labour)
-  writeSection('Equipment', equipment)
-
   const directCost = [...materials, ...labour, ...equipment].reduce((s, r) => s + r.qty * r.rate, 0)
   // Note: this uses DoR default 7.5% additions (2.5% + 1.5% + 3.5%). The RA
   // Inspector allows user-editable percentage costs — those edits are NOT
@@ -530,26 +548,53 @@ export function exportRa(item: BoqItem | undefined): void {
   const margin = contractRate - totalCost
   const marginPct = contractRate > 0 ? (margin / contractRate) * 100 : 0
 
-  lines.push('')
-  lines.push('Summary,Value')
-  lines.push(`Direct Cost,${directCost.toFixed(2)}`)
-  lines.push(`Percentage Additions (7.5%),${pctAdd.toFixed(2)}`)
-  lines.push(`Overhead (15%),${opCost.toFixed(2)}`)
-  lines.push(`Total Cost,${totalCost.toFixed(2)}`)
-  lines.push(`Contract Rate,${contractRate.toFixed(2)}`)
-  lines.push(`Margin,${margin.toFixed(2)}`)
-  lines.push(`Margin %,${marginPct.toFixed(2)}`)
+  // Uniform 7-column table. The first column ("Section") disambiguates the
+  // row kind: 'Item' for the BOQ item being analyzed, 'Material'/'Labour'/
+  // 'Equipment' for resource rows, 'Summary' for the trailing computed
+  // totals. The 'Code' column carries the summary label on Summary rows so
+  // the file stays a single, parser-friendly table — no mixed-shape sections.
+  const headers = ['Section', 'Code', 'Description', 'UOM', 'Qty', 'Rate (NPR)', 'Amount (NPR)']
 
-  const csv = lines.join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `RA-${item.code.replace(/\./g, '-')}.csv`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const rows: (string | number)[][] = [
+    ['Item', item.code, item.desc, item.uom, item.qty, item.rate, item.qty * item.rate],
+    ...materials.map((r) => [
+      'Material',
+      r.code,
+      r.name,
+      r.uom,
+      r.qty,
+      r.rate,
+      (r.qty * r.rate).toFixed(2),
+    ]),
+    ...labour.map((r) => [
+      'Labour',
+      r.code,
+      r.name,
+      r.uom,
+      r.qty,
+      r.rate,
+      (r.qty * r.rate).toFixed(2),
+    ]),
+    ...equipment.map((r) => [
+      'Equipment',
+      r.code,
+      r.name,
+      r.uom,
+      r.qty,
+      r.rate,
+      (r.qty * r.rate).toFixed(2),
+    ]),
+    // Summary rows: label in the Code column, value in the Amount column.
+    ['Summary', 'Direct Cost', '', '', '', '', directCost.toFixed(2)],
+    ['Summary', 'Percentage Additions (7.5%)', '', '', '', '', pctAdd.toFixed(2)],
+    ['Summary', 'Overhead (15%)', '', '', '', '', opCost.toFixed(2)],
+    ['Summary', 'Total Cost', '', '', '', '', totalCost.toFixed(2)],
+    ['Summary', 'Contract Rate', '', '', '', '', contractRate.toFixed(2)],
+    ['Summary', 'Margin', '', '', '', '', margin.toFixed(2)],
+    ['Summary', 'Margin %', '', '', '', '', marginPct.toFixed(2)],
+  ]
+
+  exportToCsv(`RA-${item.code.replace(/\./g, '-')}.csv`, headers, rows)
 
   toast.success('RA exported', { description: `RA-${item.code}.csv downloaded` })
 }

@@ -146,31 +146,38 @@ describe('CSV Export', () => {
     expect(csv.split('\n')[1]).toBe('hello,42,')
   })
 
-  it('documents formula injection as a known gap', () => {
-    // KNOWN GAP: values starting with = + - @ are not currently escaped.
-    // Excel/Sheets will interpret them as formulas when the user opens the
-    // file. This is a real attack surface (CSV injection) — for now, this
-    // test documents the gap so we don't silently regress. When the gap is
-    // fixed, replace this test with an assertion that the leading character
-    // is neutralised (e.g. prefixed with a single quote or wrapped in a
-    // quoted cell with a leading tab).
-    //
-    // Pick a malicious value WITHOUT any comma/quote/newline so the
-    // production escape() returns it as-is — that exposes the gap directly.
-    const maliciousValue = '=2+2'
-    const escape = (val: string | number): string => {
-      const s = String(val ?? '')
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`
-      }
-      return s
+  it('neutralises CSV injection from values starting with = + - @', async () => {
+    // OWASP CSV injection: values starting with =, +, -, or @ are
+    // interpreted as formulas by Excel / Sheets when the file is opened.
+    // exportToCsv prefixes a single quote to such values so the cell is
+    // treated as text. Previously this test documented the gap; it now
+    // guards the fix. All four dangerous characters are exercised in a
+    // single exportToCsv call so the readCsv() helper (which captures the
+    // first call's blob) sees all of them.
+    exportToCsv('test.csv', ['Description'], [['=2+2'], ['+1+1'], ['-1+1'], ['@SUM(A1:A2)']])
+    const { csv } = await readCsv()
+    const stripped = csv.replace(/^\uFEFF/, '')
+    const lines = stripped.split('\n')
+    // Header, then four mitigated data lines.
+    expect(lines[0]).toBe('Description')
+    expect(lines[1]).toBe("'=2+2")
+    expect(lines[2]).toBe("'+1+1")
+    expect(lines[3]).toBe("'-1+1")
+    expect(lines[4]).toBe("'@SUM(A1:A2)")
+    // The dangerous leading character must NOT be at position 0 of the cell
+    // — the single-quote prefix shifts it one position right on every row.
+    for (let i = 1; i <= 4; i++) {
+      expect(lines[i].charAt(0)).toBe("'")
     }
-    const escaped = escape(maliciousValue)
-    // The current escape() does NOT neutralise the leading "=" — it returns
-    // the value as-is because it has no comma/quote/newline.
-    expect(escaped).toBe('=2+2')
-    expect(escaped.charAt(0)).toBe('=')
-    // When this gap is fixed, the assertion above should change to verify
-    // the leading "=" is no longer at position 0 of the cell.
+  })
+
+  it('does not over-escape values that merely contain a hyphen mid-string', async () => {
+    // Sanity check: the CSV-injection regex must only fire on a LEADING
+    // dangerous character. A description like "River Sand - Trishuli" has a
+    // hyphen but starts with "R" — it must be written verbatim, no quote
+    // prefix.
+    exportToCsv('test.csv', ['Description'], [['River Sand - Trishuli']])
+    const { csv } = await readCsv()
+    expect(csv.replace(/^\uFEFF/, '').split('\n')[1]).toBe('River Sand - Trishuli')
   })
 })
