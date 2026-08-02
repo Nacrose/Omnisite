@@ -252,7 +252,6 @@ export function TimeAttendanceModule() {
                   return
                 }
                 const rows: (string | number)[][] = []
-                let grandTotal = 0
                 for (const day of days) {
                   for (const w of workerList) {
                     // We don't have per-day historical attendance yet, so each
@@ -261,7 +260,6 @@ export function TimeAttendanceModule() {
                     // exists, swap this for a lookup keyed by (workerId, day).
                     const hours = w.todayHours ?? 0
                     const p = computeDailyPayroll(w, hours)
-                    grandTotal += p.totalPay
                     rows.push([
                       w.name,
                       w.trade,
@@ -288,13 +286,14 @@ export function TimeAttendanceModule() {
                     'OT Pay',
                     'Total Pay',
                   ],
-                  rows
+                  rows,
+                  [
+                    "# NOTE: Daily hours are estimated from today's snapshot. Per-day attendance tracking is not yet implemented.",
+                    '# Verify and adjust in Excel before finalizing payroll.',
+                  ]
                 )
-                toast.success('Payroll exported', {
-                  description: `${workerList.length} workers × ${days.length} days (${formatPayPeriodLabel(
-                    payPeriodStart,
-                    payPeriodEnd
-                  )}) · Total NPR ${grandTotal.toLocaleString('en-IN')}`,
+                toast.success('Payroll CSV exported', {
+                  description: `${rows.length} rows for ${workerList.length} workers, ${payPeriodStart} to ${payPeriodEnd}. NOTE: Daily hours are estimated from today's snapshot — per-day attendance tracking is not yet implemented. Verify and adjust in Excel before finalizing.`,
                 })
               }}
             >

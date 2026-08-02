@@ -141,6 +141,12 @@ export interface Vendor {
   scope?: string
   agreementValue?: number
   advancePaid?: number
+  /** Cumulative advance amount already recovered across prior bills (SC only).
+   *  Tracked in vendor state because we don't have a bills table yet — each
+   *  `Generate Running Bill` action adds the current bill's recovery to this
+   *  running total, capped at `advancePaid`. Persisted via localStorage
+   *  fallback; not yet a DB column. */
+  advanceRecovered?: number
   reworkCost?: number
   isTunneling?: boolean
 

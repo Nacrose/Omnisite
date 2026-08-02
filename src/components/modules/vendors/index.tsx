@@ -64,6 +64,7 @@ function vendorToSc(v: Vendor): Subcontractor {
     agreementValue: v.agreementValue ?? 0,
     advancePaid: v.advancePaid ?? 0,
     advancePct: v.advancePct ?? 0,
+    advanceRecovered: v.advanceRecovered ?? 0,
     retentionPct: v.retentionPct ?? 0,
     reworkCost: v.reworkCost ?? 0,
     status: v.status === 'active' ? 'active' : 'closed',
@@ -502,6 +503,9 @@ function VendorInspector({
                       ...vendor,
                       customDeductibles: [...(vendor.customDeductibles ?? []), d],
                     })
+                  }
+                  onUpdateAdvanceRecovered={(newTotalRecovered: number) =>
+                    onChange({ ...vendor, advanceRecovered: newTotalRecovered })
                   }
                 />
               </TabsContent>

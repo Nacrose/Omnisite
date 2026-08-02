@@ -40,11 +40,16 @@ const DEDUCTIBLE_TYPES: CustomDeductible['type'][] = [
 export function RunningBillTab({
   sc,
   onAddDeductible,
+  onUpdateAdvanceRecovered,
 }: {
   sc: Subcontractor
   /** Called when the user saves the Add Custom Deductible form. The parent
    *  maps the new CustomDeductible into the vendor's customDeductibles array. */
   onAddDeductible?: (d: CustomDeductible) => void
+  /** Called when a bill is generated with the new cumulative advance-recovery
+   *  total (capped at `sc.advancePaid`). Parent persists this on the vendor
+   *  record so subsequent bills respect the cap. */
+  onUpdateAdvanceRecovered?: (newTotalRecovered: number) => void
 }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [draft, setDraft] = useState<{
@@ -97,7 +102,17 @@ export function RunningBillTab({
     // the rate at which the advance was paid relative to agreement value.
     // Example: 10% advance on a 10M agreement → recover 10% of each bill's
     // earned value, until the cumulative recovery equals the advance paid.
-    const advanceRecovery = earned * (sc.advancePct / 100)
+    //
+    // CAP: cumulative recovery across all bills must not exceed `advancePaid`.
+    // `sc.advanceRecovered` is the running total recovered in prior bills.
+    // Once the cap is hit, recovery for this bill drops to 0 and we surface
+    // "Advance fully recovered" so the operator knows no further recovery
+    // will be deducted.
+    const alreadyRecovered = sc.advanceRecovered ?? 0
+    const proportionalRecovery = earned * (sc.advancePct / 100)
+    const remaining = Math.max(0, sc.advancePaid - alreadyRecovered)
+    const advanceRecovery = Math.min(proportionalRecovery, remaining)
+    const fullyRecovered = sc.advancePaid > 0 && remaining <= 0
     const tds = sc.customDeductibles.find((d) => d.type === 'tds')
     const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
     const otherDeductibles = sc.customDeductibles.filter((d) => d.type !== 'tds')
@@ -105,16 +120,30 @@ export function RunningBillTab({
     const totalDeductions =
       advanceRecovery + retention + sc.reworkCost + tdsAmount + otherDeductibleTotal
     const netPayable = earned - totalDeductions
+    // Persist the new cumulative recovery total so the next bill respects
+    // the cap. Without this callback, every bill would re-compute the full
+    // proportional recovery and over-recover past `advancePaid`.
+    if (!fullyRecovered && advanceRecovery > 0) {
+      onUpdateAdvanceRecovered?.(alreadyRecovered + advanceRecovery)
+    }
     toast.success('Running bill generated', {
-      description: `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)}`,
+      description: fullyRecovered
+        ? `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)} · Advance fully recovered`
+        : `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)}`,
     })
   }
 
   const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
   const retention = earned * (sc.retentionPct / 100)
-  // Advance recovery = advancePct% × earned (proportional per-bill recovery).
-  // See handleGenerateBill for the full rationale.
-  const advanceRecovery = earned * (sc.advancePct / 100)
+  // Advance recovery = advancePct% × earned (proportional per-bill recovery),
+  // CAPPED at the remaining outstanding advance so cumulative recovery
+  // across all bills never exceeds `advancePaid`. See handleGenerateBill
+  // for the full rationale.
+  const alreadyRecovered = sc.advanceRecovered ?? 0
+  const proportionalRecovery = earned * (sc.advancePct / 100)
+  const remainingAdvance = Math.max(0, sc.advancePaid - alreadyRecovered)
+  const advanceRecovery = Math.min(proportionalRecovery, remainingAdvance)
+  const advanceFullyRecovered = sc.advancePaid > 0 && remainingAdvance <= 0
   const tds = sc.customDeductibles.find((d) => d.type === 'tds')
   const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
   const otherDeductibles = sc.customDeductibles.filter((d) => d.type !== 'tds')
@@ -209,13 +238,26 @@ export function RunningBillTab({
           Deductions
         </div>
 
-        {/* Advance recovery — proportional to earned value */}
+        {/* Advance recovery — proportional to earned value, capped at the
+            outstanding advance balance. Shows a "fully recovered" note when
+            the cumulative cap has been hit so the operator understands why
+            the line shows 0. */}
         <BillRow
           icon={Wallet}
-          label={`Advance recovery (${sc.advancePct}% of earned)`}
+          label={
+            advanceFullyRecovered
+              ? `Advance recovery (fully recovered — ${fmtNPR(alreadyRecovered)} of ${fmtNPR(sc.advancePaid)})`
+              : `Advance recovery (${sc.advancePct}% of earned, capped at remaining advance)`
+          }
           amount={-advanceRecovery}
           color="text-red-600"
         />
+        {advanceFullyRecovered && (
+          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="mr-1 inline h-3 w-3" />
+            Advance fully recovered — no further recovery will be deducted.
+          </div>
+        )}
 
         {/* Retention */}
         <BillRow

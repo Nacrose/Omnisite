@@ -18,6 +18,23 @@ const RATE_LIMIT = 60 // requests per 1 minute
 let redis: Redis | null = null
 let ratelimit: Ratelimit | null = null
 
+// ─── Fail-open logging ──────────────────────────────────────────────────────
+// Rate limiting is optional (see README), so `checkRateLimit` fails OPEN when
+// Redis isn't configured or errors at runtime. That's safe but silent — in
+// production this could mean rate limiting quietly stops working with zero
+// signal. `logFailOpen` emits a single `console.warn` per minute per process
+// so the operator gets a signal without log spam on every request.
+let lastFailOpenLog = 0
+const FAIL_OPEN_LOG_INTERVAL = 60_000 // only log once per minute
+
+function logFailOpen(reason: string) {
+  const now = Date.now()
+  if (now - lastFailOpenLog > FAIL_OPEN_LOG_INTERVAL) {
+    console.warn(`[rate-limit] Failing open: ${reason}. Rate limiting is not active.`)
+    lastFailOpenLog = now
+  }
+}
+
 /**
  * Lazily build (and cache) the Ratelimit instance. Throws if Redis env vars
  * are missing — callers should guard with `isRedisConfigured()` (or use
@@ -80,6 +97,7 @@ export async function checkRateLimit(
   // If Redis is not configured, skip rate limiting (fail-open).
   // Rate limiting is optional — the README documents Upstash as optional.
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    logFailOpen('Upstash Redis env vars not configured')
     return null
   }
 
@@ -108,11 +126,12 @@ export async function checkRateLimit(
     }
 
     return null
-  } catch {
+  } catch (e) {
     // Redis error (connection, auth, timeout, etc.) — fail open (allow the
     // request). Logging this would require a logger available in this module;
     // for now we silently degrade. The 429 path above is preserved for the
     // normal rate-limited case.
+    logFailOpen('Redis error: ' + (e instanceof Error ? e.message : String(e)))
     return null
   }
 }

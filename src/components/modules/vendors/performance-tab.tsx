@@ -22,7 +22,14 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
   // and material + consumable chargebacks) so the two tabs agree.
   // Advance recovery is PROPORTIONAL to earned (advancePct% × earned),
   // NOT the full outstanding advance balance — see running-bill-tab.tsx.
-  const advanceRecovery = earned * (sc.advancePct / 100)
+  // CAPPED at the remaining outstanding advance so cumulative recovery
+  // across all bills never exceeds `advancePaid`. `sc.advanceRecovered`
+  // is the running total recovered in prior bills (tracked in vendor
+  // state until a bills table exists).
+  const alreadyRecovered = sc.advanceRecovered ?? 0
+  const proportionalRecovery = earned * (sc.advancePct / 100)
+  const remainingAdvance = Math.max(0, sc.advancePaid - alreadyRecovered)
+  const advanceRecovery = Math.min(proportionalRecovery, remainingAdvance)
   const tds = sc.customDeductibles.find((d) => d.type === 'tds')
   const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
   const otherDeductibleTotal = sc.customDeductibles
@@ -203,6 +210,20 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
             <span className="text-muted-foreground">Advance paid</span>
             <span className="font-mono text-red-600">{fmtNPR(sc.advancePaid)}</span>
           </div>
+          {sc.advancePaid > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Advance recovered</span>
+              <span
+                className={cn(
+                  'font-mono',
+                  alreadyRecovered >= sc.advancePaid ? 'text-emerald-600' : 'text-amber-600'
+                )}
+              >
+                {fmtNPR(alreadyRecovered)}
+                {alreadyRecovered >= sc.advancePaid ? ' · fully recovered' : ''}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Net payable</span>
             <span className="font-mono font-bold text-emerald-600">{fmtNPR(netPayable)}</span>

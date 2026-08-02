@@ -386,7 +386,7 @@ export function QsInspector({
                   Icon: Clock,
                   iconColor: 'text-sky-500',
                   detail:
-                    'NCR cannot be closed until the consultant counter-signs the corrective action plan.',
+                    'NCR cannot be closed until the consultant counter-signs (hardcopy) the corrective action plan.',
                 },
                 'Consultant Sign-off': {
                   border: 'border-violet-500/30',
@@ -396,7 +396,7 @@ export function QsInspector({
                   Icon: Clock,
                   iconColor: 'text-violet-500',
                   detail:
-                    'NCR cannot be closed until the consultant counter-signature is received.',
+                    'NCR cannot be closed until the consultant counter-sign (hardcopy) is received.',
                 },
                 Closed: {
                   border: 'border-emerald-500/30',
@@ -406,7 +406,7 @@ export function QsInspector({
                   Icon: CheckCircle2,
                   iconColor: 'text-emerald-500',
                   detail:
-                    'Consultant sign-off received. Billing hold released — Max Billable Qty restored in Financials.',
+                    'Consultant sign-off received (hardcopy). Billing hold released — Max Billable Qty restored in Financials.',
                 },
               }
               const tone = toneByStatus[item.status]

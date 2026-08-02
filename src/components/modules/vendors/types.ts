@@ -70,6 +70,11 @@ export interface Subcontractor {
   agreementValue: number
   advancePaid: number
   advancePct: number // e.g., 10%
+  /** Cumulative advance amount already recovered across prior bills.
+   *  Tracked in vendor state because we don't have a bills table yet —
+   *  each `Generate Running Bill` action adds the current bill's recovery
+   *  to this running total, capped at `advancePaid`. */
+  advanceRecovered?: number
   retentionPct: number // e.g., 5%
   reworkCost: number
   status: 'active' | 'closed'
