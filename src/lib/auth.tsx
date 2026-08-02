@@ -162,10 +162,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // NO demo bypass. If there's no session, the user must sign in.
     let subscription: Subscription | null = null
 
+    // Safety timeout — if getSession() hangs (network issue, CSP blocking,
+    // misconfigured env), force loading=false after 5 seconds so the Sign In
+    // button becomes clickable.
+    const timeout = setTimeout(() => {
+      if (active) setLoading(false)
+    }, 5000)
+
     supabase!.auth
       .getSession()
       .then(({ data }: { data: { session: Session | null } }) => {
         if (!active) return
+        clearTimeout(timeout)
         const s = data.session
         if (s?.user) {
           setUser(mapSupabaseUser(s.user))
@@ -180,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (!active) return
+        clearTimeout(timeout)
         setLoading(false)
       })
 
