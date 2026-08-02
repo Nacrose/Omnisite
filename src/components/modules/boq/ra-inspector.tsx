@@ -27,6 +27,7 @@ import type { BoqItem } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
 
 interface RaRow {
+  id: string
   code: string
   name: string
   uom: string
@@ -48,6 +49,7 @@ const INITIAL_EQUIPMENT: RaRow[] = []
 // "Load PCC Template" button can call this; not used as the default state.
 export const PCC_TEMPLATE_MATERIALS: RaRow[] = [
   {
+    id: 'pcc-mat-cem',
     code: 'M-CEM-OPC',
     name: 'Cement OPC 53 Grade (Udaipur)',
     uom: 'Bag',
@@ -56,6 +58,7 @@ export const PCC_TEMPLATE_MATERIALS: RaRow[] = [
     source: 'Project Rate Library',
   },
   {
+    id: 'pcc-mat-sand',
     code: 'M-SAND-R',
     name: 'River Sand (Trishuli)',
     uom: 'cum',
@@ -64,6 +67,7 @@ export const PCC_TEMPLATE_MATERIALS: RaRow[] = [
     source: 'Project Rate Library',
   },
   {
+    id: 'pcc-mat-agg',
     code: 'M-AGG-20',
     name: 'Coarse Aggregate 20mm',
     uom: 'cum',
@@ -72,6 +76,7 @@ export const PCC_TEMPLATE_MATERIALS: RaRow[] = [
     source: 'Project Rate Library',
   },
   {
+    id: 'pcc-mat-water',
     code: 'M-WAT',
     name: 'Water (tanker)',
     uom: 'ltr',
@@ -83,6 +88,7 @@ export const PCC_TEMPLATE_MATERIALS: RaRow[] = [
 
 export const PCC_TEMPLATE_LABOUR: RaRow[] = [
   {
+    id: 'pcc-lab-masn',
     code: 'L-MASN',
     name: 'Mason (Skilled Cat. I)',
     uom: 'day',
@@ -91,6 +97,7 @@ export const PCC_TEMPLATE_LABOUR: RaRow[] = [
     source: 'DoR Norm 2075',
   },
   {
+    id: 'pcc-lab-hel',
     code: 'L-HEL',
     name: 'Mazdoor (Unskilled)',
     uom: 'day',
@@ -99,6 +106,7 @@ export const PCC_TEMPLATE_LABOUR: RaRow[] = [
     source: 'DoR Norm 2075',
   },
   {
+    id: 'pcc-lab-mix',
     code: 'L-MIX',
     name: 'Mixer Operator',
     uom: 'day',
@@ -110,6 +118,7 @@ export const PCC_TEMPLATE_LABOUR: RaRow[] = [
 
 export const PCC_TEMPLATE_EQUIPMENT: RaRow[] = [
   {
+    id: 'pcc-eq-mix',
     code: 'E-MIX',
     name: 'Concrete Mixer 0.4 cum',
     uom: 'hr',
@@ -118,6 +127,7 @@ export const PCC_TEMPLATE_EQUIPMENT: RaRow[] = [
     source: 'Equipment Master',
   },
   {
+    id: 'pcc-eq-vib',
     code: 'E-VIB',
     name: 'Needle Vibrator 60mm',
     uom: 'hr',
@@ -141,13 +151,12 @@ export function RaInspector({
   onUpdateLocation?: (locationId: string | null) => void
 }) {
   // NOTE: RA state (materials/labour/equipment/pctCosts) is local useState
-  // seeded from hardcoded constants. It is NOT persisted — switching BOQ
-  // items or reloading discards all edits. This is a known limitation.
-  // The state is also NOT scoped per BOQ item: there is one set of arrays
-  // shared across every item the user inspects, so editing resources on
-  // item A and then selecting item B shows item A's resource rows. The
-  // fix requires persisting the RA rows to the boq_items table (or a
-  // side table keyed by item id) and keying the local state by item.id.
+  // seeded from empty arrays. It is NOT persisted to the database — switching
+  // BOQ items or reloading discards all edits. This is a known limitation.
+  // The state IS scoped per BOQ item via key={selectedLeaf.id} on the
+  // RaInspector mount (index.tsx), so switching items resets the arrays.
+  // Persistence requires adding an ra_data JSONB column to boq_items and
+  // wiring the local state through useSyncedState.
 
   // Local copy of the linked location — the parent owns the source of truth
   // (boqRows via useSyncedState), but the inspector mirrors the selection
@@ -208,6 +217,7 @@ export function RaInspector({
   // Blank row template for the "Add" button. `source: 'Manual'` makes it
   // clear in the UI that this row came from the user, not from a rate library.
   const blankRaRow = (): RaRow => ({
+    id: crypto.randomUUID(),
     code: '',
     name: '',
     uom: '',
@@ -792,7 +802,7 @@ function RaSection({
         )}
         {rows.map((r, i) => (
           <div
-            key={i}
+            key={r.id}
             className="hover:bg-accent/40 grid grid-cols-12 items-center gap-1.5 rounded p-1.5 text-xs"
           >
             {/* Name + source — name is an inline input so the user can fill

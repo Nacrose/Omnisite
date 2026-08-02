@@ -41,6 +41,9 @@ function normalizeBoqRow(row: Record<string, unknown>): BoqItem {
     // re-attach children after a flatten→rebuild round-trip. Without this,
     // every row would become a root after the first edit.
     parentId: (row.parentId ?? row.parent_id ?? undefined) as string | undefined,
+    // Preserve locationId (with snake_case fallback) so the LocationPicker
+    // in RaInspector shows the correct selection after tree rebuilds.
+    locationId: (row.locationId ?? row.location_id ?? undefined) as string | undefined,
   }
 }
 
@@ -596,5 +599,7 @@ export function exportRa(item: BoqItem | undefined): void {
 
   exportToCsv(`RA-${item.code.replace(/\./g, '-')}.csv`, headers, rows)
 
-  toast.success('RA exported', { description: `RA-${item.code}.csv downloaded` })
+  toast.success('RA exported', {
+    description: `RA-${item.code.replace(/\./g, '-')}.csv downloaded`,
+  })
 }
