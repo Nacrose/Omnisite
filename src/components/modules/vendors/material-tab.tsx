@@ -1,11 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus, Package, ArrowLeft } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Plus, Package, ArrowLeft, X, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { Subcontractor } from './types'
+import type { Subcontractor, MaterialIssue } from './types'
 import { fmtNPR } from './types'
+import { MATERIALS } from '@/data/seed/admin'
 import {
   useColumnVisibility,
   ColumnToggle,
@@ -17,7 +21,15 @@ import {
 
 // ─── Material Reconciliation Tab ─────────────────────────────────────────────
 
-export function MaterialTab({ sc }: { sc: Subcontractor }) {
+export function MaterialTab({
+  sc,
+  onAddMaterialIssue,
+}: {
+  sc: Subcontractor
+  /** Called when the user saves the Issue Material form. The parent
+   *  maps the new MaterialIssue into the vendor's materialIssues array. */
+  onAddMaterialIssue?: (issue: MaterialIssue) => void
+}) {
   // Aggregate by material
   const materialMap = new Map<
     string,
@@ -100,6 +112,70 @@ export function MaterialTab({ sc }: { sc: Subcontractor }) {
     [],
     'sc-material-recon'
   )
+
+  // Add-MIN modal state
+  const [modalOpen, setModalOpen] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
+  const [draft, setDraft] = useState<{
+    materialCode: string
+    date: string
+    qty: string
+    issuedBy: string
+    notes: string
+  }>({
+    materialCode: '',
+    date: today,
+    qty: '',
+    issuedBy: '',
+    notes: '',
+  })
+
+  const openModal = () => {
+    setDraft({
+      materialCode: MATERIALS[0]?.code ?? '',
+      date: today,
+      qty: '',
+      issuedBy: '',
+      notes: '',
+    })
+    setModalOpen(true)
+  }
+
+  const selectedMaterial = MATERIALS.find((m) => m.code === draft.materialCode)
+  // Auto-generate MIN id: MIN-YYYYMMDD-NNN where NNN counts existing MINs for that day.
+  const generateMinId = () => {
+    const ymd = draft.date.replace(/-/g, '')
+    const count = sc.materialIssues.filter((mi) => mi.id.includes(`MIN-${ymd}`)).length + 1
+    return `MIN-${ymd}-${String(count).padStart(3, '0')}`
+  }
+
+  const canSave =
+    draft.materialCode.trim().length > 0 &&
+    !!selectedMaterial &&
+    draft.qty.trim() !== '' &&
+    !Number.isNaN(Number(draft.qty)) &&
+    Number(draft.qty) > 0 &&
+    draft.issuedBy.trim().length > 0
+
+  const handleSave = () => {
+    if (!canSave || !selectedMaterial) return
+    const issue: MaterialIssue = {
+      id: generateMinId(),
+      date: draft.date,
+      materialCode: selectedMaterial.code,
+      materialName: selectedMaterial.name,
+      uom: selectedMaterial.uom,
+      qty: Number(draft.qty),
+      rate: selectedMaterial.projectRate ?? selectedMaterial.rate,
+      issuedBy: draft.issuedBy.trim(),
+      notes: draft.notes.trim() || undefined,
+    }
+    onAddMaterialIssue?.(issue)
+    toast.success('Material Issue Note created', {
+      description: `${issue.id} · ${issue.materialName} · ${issue.qty} ${issue.uom}`,
+    })
+    setModalOpen(false)
+  }
 
   return (
     <div className="space-y-3 p-4 text-xs">
@@ -276,12 +352,150 @@ export function MaterialTab({ sc }: { sc: Subcontractor }) {
         variant="outline"
         size="sm"
         className="h-8 w-full gap-1.5 text-xs"
-        disabled
-        title="Coming soon"
+        onClick={openModal}
+        title="Issue Material to SC"
       >
         <Plus className="h-3.5 w-3.5" />
         Issue Material to SC
       </Button>
+
+      {/* Issue Material modal */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sc-material-issue-title"
+            className="pane w-full max-w-md overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] bg-sky-500/5 px-4">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-sky-500" />
+                <span id="sc-material-issue-title" className="text-sm font-semibold">
+                  Issue Material to SC
+                </span>
+              </div>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="hover:bg-accent text-muted-foreground rounded p-1"
+                aria-label="Close dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
+              <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
+                <span className="font-mono">{generateMinId()}</span>
+                <span>·</span>
+                <span>auto-generated MIN id</span>
+              </div>
+
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Material
+                </label>
+                <select
+                  className="border-input bg-background ring-offset-background focus-visible:ring-ring mt-1 flex h-9 w-full rounded-md border px-3 py-1 text-xs shadow-xs outline-none focus-visible:ring-[3px]"
+                  value={draft.materialCode}
+                  onChange={(e) => setDraft((d) => ({ ...d, materialCode: e.target.value }))}
+                >
+                  {MATERIALS.filter((m) => !m.archived).map((m) => (
+                    <option key={m.code} value={m.code}>
+                      {m.code} · {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedMaterial && (
+                <div className="bg-secondary/40 rounded-md p-2 text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Material Name</span>
+                    <span className="font-medium">{selectedMaterial.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">UOM</span>
+                    <span className="font-mono">{selectedMaterial.uom}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Rate</span>
+                    <span className="font-mono">
+                      {fmtNPR(selectedMaterial.projectRate ?? selectedMaterial.rate)}/
+                      {selectedMaterial.uom}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Date
+                  </label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    type="date"
+                    value={draft.date}
+                    onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Qty
+                  </label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    type="number"
+                    placeholder="0"
+                    value={draft.qty}
+                    onChange={(e) => setDraft((d) => ({ ...d, qty: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Issued By
+                </label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  placeholder="e.g. Storekeeper"
+                  value={draft.issuedBy}
+                  onChange={(e) => setDraft((d) => ({ ...d, issuedBy: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Notes
+                </label>
+                <Textarea
+                  className="mt-1 min-h-[50px] text-xs"
+                  placeholder="Optional notes…"
+                  value={draft.notes}
+                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-[var(--pane-divider)] p-3">
+              <Button variant="outline" size="sm" onClick={() => setModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={!canSave} className="gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Save MIN
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

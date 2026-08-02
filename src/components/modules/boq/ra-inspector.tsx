@@ -20,10 +20,12 @@ import {
   History,
   Link2,
   Layers,
+  MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { BoqItem } from './types'
+import { LocationPicker } from '@/components/ui/location-picker'
 
 interface RaRow {
   code: string
@@ -116,6 +118,11 @@ const INITIAL_EQUIPMENT: RaRow[] = [
 ]
 
 export function RaInspector({ item }: { item: BoqItem }) {
+  // Local copy of the linked location — the parent owns the source of truth
+  // (boqRows via useSyncedState), but the inspector mirrors the selection
+  // locally so the UI reflects the change immediately on re-render.
+  const [locationId, setLocationId] = useState<string | undefined>(item.locationId)
+
   // Live state for RA resource rows — drives real-time recalculation of
   // directCost / pctCostBase / totalCost / margin when the user edits a
   // qty or rate cell in the RA Builder tab.
@@ -183,6 +190,30 @@ export function RaInspector({ item }: { item: BoqItem }) {
             </span>
             <span>·</span>
             <span>Rate: NPR {item.rate.toLocaleString()}</span>
+          </div>
+          {/* Location picker — optional FK to project_locations.id */}
+          <div className="mt-2">
+            <label className="text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase">
+              <MapPin className="h-3 w-3" />
+              Work Location
+            </label>
+            <LocationPicker
+              value={locationId}
+              onChange={(locId) => {
+                setLocationId(locId ?? undefined)
+                // Note: the locationId is stored in local state here.
+                // It will be persisted to the DB once a migration adds
+                // the location_id column to boq_items.
+                toast.success('Location linked to BOQ item', {
+                  description: locId
+                    ? `${item.code} → ${locId}`
+                    : `Cleared location on ${item.code}`,
+                })
+              }}
+              allowClear
+              placeholder="Link to a project location…"
+              className="mt-1"
+            />
           </div>
         </div>
 

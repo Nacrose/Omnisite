@@ -1,4 +1,4 @@
-import type { Subcontractor } from '@/components/modules/subcontractor/types'
+import type { Subcontractor } from '@/components/modules/vendors/types'
 
 /**
  * Seed subcontractor list for the demo project.

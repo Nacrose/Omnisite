@@ -267,6 +267,80 @@ export const userProjectSchema = z.object({
   role: z.string().default('FOREMAN'),
 })
 
+// ─── Unified Vendor master (supersedes `subcontractors`) ──────────────────────
+// Mirrors the `vendors` table in supabase/migrations/00000000000010. The
+// JSONB SC-operational arrays (work_items, material_issues, material_returns,
+// consumables, custom_deductibles, assigned_tasks, docs, materials_supplied)
+// are accepted as pre-serialized JSON strings — the client is responsible
+// for JSON.stringify() before POSTing (same pattern the existing routes
+// use for cbs_nodes.children, grns.items, etc.).
+export const vendorSchema = z.object({
+  id: z.string().min(1),
+  project_id: z.string().uuid().optional(),
+  category: z.enum(['supplier', 'subcontractor', 'consultant', 'labour']).default('supplier'),
+  name: z.string().min(1),
+  trade_name: z.string().optional(),
+  status: z.enum(['active', 'closed', 'blacklisted']).default('active'),
+  rating: z.string().default('A'),
+
+  // Legal & compliance
+  pan: z.string().optional(),
+  gst: z.string().optional(),
+  vat_no: z.string().optional(),
+
+  // Contact
+  contact_person: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  address: z.string().optional(),
+
+  // Banking
+  bank_account_name: z.string().optional(),
+  bank_account_no: z.string().optional(),
+  bank_name: z.string().optional(),
+  bank_branch: z.string().optional(),
+  bank_ifsc: z.string().optional(),
+
+  // Payment terms
+  credit_days: z.number().int().min(0).default(30),
+  advance_pct: z.number().default(0),
+  retention_pct: z.number().default(0),
+  tds_section: z.string().optional(),
+  tds_rate: z.number().default(0),
+
+  // Compliance docs + supply catalog + SC operational data (JSONB arrays)
+  docs: z.string().optional(),
+  materials_supplied: z.string().optional(),
+  work_items: z.string().optional(),
+  scope: z.string().optional(),
+  agreement_value: z.number().min(0).default(0),
+  advance_paid: z.number().min(0).default(0),
+  rework_cost: z.number().min(0).default(0),
+  is_tunneling: z.boolean().default(false),
+  material_issues: z.string().optional(),
+  material_returns: z.string().optional(),
+  consumables: z.string().optional(),
+  custom_deductibles: z.string().optional(),
+  assigned_tasks: z.string().optional(),
+  ncr_count: z.number().int().min(0).default(0),
+  incidents: z.number().int().min(0).default(0),
+})
+
+// ─── Project Locations ──────────────────────────────────────────────────────
+// Physical work-face / asset locations scoped to a project (bridge piers,
+// road chainage stretches, site campus areas, batch plant, etc.). Mirrors
+// the `project_locations` table in migration 00000000000010.
+export const projectLocationSchema = z.object({
+  id: z.string().min(1),
+  project_id: z.string().uuid().optional(),
+  name: z.string().min(1),
+  group_name: z.string().default('General'),
+  description: z.string().optional(),
+  status: z.enum(['active', 'closed']).default('active'),
+  assigned_vendor_id: z.string().nullable().optional(),
+  sort_order: z.number().int().default(0),
+})
+
 // ─── Helper: validate and return error response ─────────────────────────────
 
 import { NextResponse } from 'next/server'

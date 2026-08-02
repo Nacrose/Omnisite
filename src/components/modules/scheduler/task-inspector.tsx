@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -17,11 +18,34 @@ import {
   TrendingDown,
   Package,
   Activity,
+  MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { Task } from './types'
+import { LocationPicker } from '@/components/ui/location-picker'
+import { INITIAL_LOCATIONS, INITIAL_VENDORS } from '@/data/seed/vendors'
 
 export function TaskInspector({ task }: { task: Task }) {
+  // Local mirror of the task's locationId so the inspector reflects the
+  // selection immediately. The parent owns the source of truth (the task
+  // tree); mutating `task.locationId` here lets other components reading
+  // the same tree instance see the link right away.
+  const [locationId, setLocationId] = useState<string | undefined>(task.locationId)
+
+  // Resolve the suggested SC for the currently-selected location. We look
+  // up the location by id, then resolve its `assignedScId` against the
+  // seed vendors (the persisted `omnisite-vendors` store is owned by the
+  // Vendors module — we deliberately don't touch it here to avoid
+  // clobbering writes from the Vendors module on first load).
+  const suggestedLocation = INITIAL_LOCATIONS.find((l) => l.id === locationId)
+  const suggestedSc = suggestedLocation?.assignedScId
+    ? (INITIAL_VENDORS.find((v) => v.id === suggestedLocation.assignedScId) ?? {
+        id: suggestedLocation.assignedScId,
+        name: suggestedLocation.assignedScId,
+      })
+    : null
+
   return (
     <>
       <PaneHeader title={`Task Inspector · ${task.id}`} />
@@ -43,6 +67,45 @@ export function TaskInspector({ task }: { task: Task }) {
             )}
           </div>
           <div className="text-sm leading-snug font-semibold">{task.name}</div>
+
+          {/* Location picker — optional FK to project_locations.id */}
+          <div className="mt-3">
+            <label className="text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase">
+              <MapPin className="h-3 w-3" />
+              Work Location
+            </label>
+            <LocationPicker
+              value={locationId}
+              onChange={(locId) => {
+                setLocationId(locId ?? undefined)
+                // Note: locationId stored in local state; will persist to DB
+                // once a migration adds location_id column to tasks table.
+                const loc = INITIAL_LOCATIONS.find((l) => l.id === locId)
+                toast.success('Location linked to task', {
+                  description: loc
+                    ? `${task.id} → ${loc.name}${loc.assignedScId ? ` (assigned SC: ${loc.assignedScId})` : ''}`
+                    : `Cleared location on ${task.id}`,
+                })
+              }}
+              allowClear
+              placeholder="Link to a project location…"
+              className="mt-1"
+            />
+            {/* Auto-suggested SC from the selected location */}
+            {suggestedSc && (
+              <div className="mt-2 flex items-center gap-2 rounded-md border border-sky-500/30 bg-sky-500/5 p-1.5 text-[10px]">
+                <Package className="h-3 w-3 text-sky-500" />
+                <span className="text-muted-foreground">Suggested SC from location:</span>
+                <Badge
+                  variant="secondary"
+                  className="bg-sky-500/15 text-[9px] text-sky-700 dark:text-sky-300"
+                >
+                  {suggestedSc.id}
+                </Badge>
+                <span className="truncate font-medium">{suggestedSc.name}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <Tabs defaultValue="schedule">

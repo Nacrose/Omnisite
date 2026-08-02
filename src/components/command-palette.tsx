@@ -86,7 +86,14 @@ export function CommandPalette() {
       boqItems: readLocal('omnisite-boq-data'),
       tasks: readLocal('omnisite-scheduler-tasks'),
       cbsNodes: readLocal('omnisite-financials-cbs'),
-      subcontractors: readLocal('omnisite-scs'),
+      // The vendors module persists its full vendor list under 'omnisite-vendors'
+      // (replacing the old 'omnisite-scs' key). Filter to subcontractors so the
+      // existing "Subcontractor" search-result type stays accurate; surfacing
+      // suppliers in the palette is a follow-up.
+      subcontractors: (
+        readLocal('omnisite-vendors') as
+          Array<{ id: string; name?: string; scope?: string; category?: string }> | undefined
+      )?.filter((v) => v.category === 'subcontractor'),
       qsItems: readLocal('omnisite-qs-items'),
     }
     return searchAll(query, sources, 30)

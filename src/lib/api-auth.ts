@@ -35,6 +35,15 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   user_projects: ['PM'],
   grns: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
   stock_items: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  // Unified vendor master (supersedes `subcontractors`). PM-only at the API
+  // layer — the RLS policies in migration 00000000000010 §8 also allow
+  // SITE_ENGINEER for supplier-category rows. Both layers must agree for a
+  // write to go through; the stricter (intersection) wins. Keeping this
+  // PM-only matches the financial-commitment stance of `subcontractors`.
+  vendors: ['PM'],
+  // Project locations (work-face / asset setup). SITE_ENGINEER can write
+  // because field engineers set up locations on site, not just PMs.
+  project_locations: ['PM', 'SITE_ENGINEER'],
 }
 
 /**
@@ -65,6 +74,8 @@ export const TABLE_PRIMARY_KEYS: Record<string, string> = {
   grns: 'id',
   stock_items: 'code', // stock_items uses 'code' as PK
   audit_log: 'id',
+  vendors: 'id',
+  project_locations: 'id',
 }
 
 /** Get the PK column for a table (defaults to 'id'). */
@@ -95,6 +106,8 @@ const PROJECT_SCOPED_TABLES = new Set([
   'chat_messages',
   'grns',
   'stock_items',
+  'vendors',
+  'project_locations',
 ])
 
 /**

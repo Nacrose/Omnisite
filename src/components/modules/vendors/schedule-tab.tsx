@@ -72,8 +72,13 @@ export function ScheduleTab({ sc }: { sc: Subcontractor }) {
         variant="outline"
         size="sm"
         className="h-8 w-full gap-1.5 text-xs"
-        disabled
-        title="Coming soon"
+        onClick={() =>
+          toast.info('Task assignment coming soon', {
+            description:
+              'Use the Scheduler module to assign tasks to this vendor. The Schedule Linkage tab will then reflect the assignment.',
+          })
+        }
+        title="Assign Schedule Task"
       >
         <Plus className="h-3.5 w-3.5" />
         Assign Schedule Task

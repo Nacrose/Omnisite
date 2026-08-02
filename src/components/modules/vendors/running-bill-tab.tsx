@@ -1,6 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import {
   FileText,
@@ -13,15 +16,93 @@ import {
   ShieldCheck,
   Wrench,
   Plus,
+  X,
+  CheckCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { Subcontractor } from './types'
+import type { Subcontractor, CustomDeductible } from './types'
 import { fmtNPR } from './types'
 
 // ─── Running Bill Tab (expanded deductibles) ─────────────────────────────────
 
-export function RunningBillTab({ sc }: { sc: Subcontractor }) {
+const DEDUCTIBLE_TYPES: CustomDeductible['type'][] = [
+  'tds',
+  'equipment',
+  'penalty',
+  'electricity',
+  'insurance',
+  'material_overuse',
+  'other',
+]
+
+export function RunningBillTab({
+  sc,
+  onAddDeductible,
+}: {
+  sc: Subcontractor
+  /** Called when the user saves the Add Custom Deductible form. The parent
+   *  maps the new CustomDeductible into the vendor's customDeductibles array. */
+  onAddDeductible?: (d: CustomDeductible) => void
+}) {
+  const [modalOpen, setModalOpen] = useState(false)
+  const [draft, setDraft] = useState<{
+    type: CustomDeductible['type']
+    label: string
+    amount: string
+    ratePct: string
+    notes: string
+  }>({
+    type: 'tds',
+    label: '',
+    amount: '',
+    ratePct: '',
+    notes: '',
+  })
+
+  const openModal = () => {
+    setDraft({ type: 'tds', label: '', amount: '', ratePct: '', notes: '' })
+    setModalOpen(true)
+  }
+
+  const canSave =
+    draft.label.trim().length > 0 &&
+    draft.amount.trim() !== '' &&
+    !Number.isNaN(Number(draft.amount)) &&
+    Number(draft.amount) >= 0
+
+  const handleSave = () => {
+    if (!canSave) return
+    const d: CustomDeductible = {
+      id: `DED-${Date.now().toString(36)}`,
+      type: draft.type,
+      label: draft.label.trim(),
+      amount: Number(draft.amount),
+      ratePct: draft.ratePct.trim() ? Number(draft.ratePct) : undefined,
+      notes: draft.notes.trim() || undefined,
+    }
+    onAddDeductible?.(d)
+    toast.success('Custom deductible added', {
+      description: `${d.label} · ${fmtNPR(d.amount)} (${d.type})`,
+    })
+    setModalOpen(false)
+  }
+
+  const handleGenerateBill = () => {
+    const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
+    const retention = earned * (sc.retentionPct / 100)
+    const tds = sc.customDeductibles.find((d) => d.type === 'tds')
+    const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
+    const otherDeductibles = sc.customDeductibles.filter((d) => d.type !== 'tds')
+    const otherDeductibleTotal = otherDeductibles.reduce((sum, d) => sum + d.amount, 0)
+    const totalDeductions =
+      sc.advancePaid + retention + sc.reworkCost + tdsAmount + otherDeductibleTotal
+    const netPayable = earned - totalDeductions
+    toast.success('Running bill generated', {
+      description: `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)}`,
+    })
+  }
+
   const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
   const retention = earned * (sc.retentionPct / 100)
   const tds = sc.customDeductibles.find((d) => d.type === 'tds')
@@ -233,7 +314,7 @@ export function RunningBillTab({ sc }: { sc: Subcontractor }) {
         </div>
       </div>
 
-      <Button className="h-9 w-full gap-1.5 text-xs" disabled title="Coming soon">
+      <Button className="h-9 w-full gap-1.5 text-xs" onClick={handleGenerateBill}>
         <FileText className="h-3.5 w-3.5" />
         Generate Running Bill
       </Button>
@@ -243,12 +324,131 @@ export function RunningBillTab({ sc }: { sc: Subcontractor }) {
         variant="outline"
         size="sm"
         className="h-8 w-full gap-1.5 text-xs"
-        disabled
-        title="Coming soon"
+        onClick={openModal}
+        title="Add Custom Deductible"
       >
         <Plus className="h-3.5 w-3.5" />
         Add Custom Deductible
       </Button>
+
+      {/* Add Custom Deductible modal */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sc-deductible-add-title"
+            className="pane w-full max-w-md overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] bg-red-500/5 px-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <span id="sc-deductible-add-title" className="text-sm font-semibold">
+                  Add Custom Deductible
+                </span>
+              </div>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="hover:bg-accent text-muted-foreground rounded p-1"
+                aria-label="Close dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Type
+                </label>
+                <div className="mt-1 grid grid-cols-4 gap-1">
+                  {DEDUCTIBLE_TYPES.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setDraft((d) => ({ ...d, type: t }))}
+                      className={cn(
+                        'h-7 rounded border text-[10px] transition-colors',
+                        draft.type === t
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'hover:bg-accent border-[var(--pane-divider)]'
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Label
+                </label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  placeholder="e.g. TDS @ 1.5% / Equipment rental / Penalty"
+                  value={draft.label}
+                  onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Amount (NPR)
+                  </label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    type="number"
+                    placeholder="0"
+                    value={draft.amount}
+                    onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Rate % (optional)
+                  </label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    type="number"
+                    placeholder="0"
+                    value={draft.ratePct}
+                    onChange={(e) => setDraft((d) => ({ ...d, ratePct: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Notes
+                </label>
+                <Textarea
+                  className="mt-1 min-h-[50px] text-xs"
+                  placeholder="Optional justification / reference…"
+                  value={draft.notes}
+                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-[var(--pane-divider)] p-3">
+              <Button variant="outline" size="sm" onClick={() => setModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={!canSave} className="gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Save Deductible
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

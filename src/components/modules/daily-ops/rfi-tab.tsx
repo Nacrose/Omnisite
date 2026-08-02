@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { LocationPicker } from '@/components/ui/location-picker'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,10 @@ export interface Rfi {
   costImpact?: string
   scheduleImpact?: string
   severity: 'low' | 'medium' | 'high'
+  /** Optional FK to project_locations.id — where the question physically
+   *  applies (e.g. "Pier 3"). Stored in local state for now; the DB column
+   *  will land in a follow-up migration. */
+  locationId?: string
 }
 
 // Fixed "today" reference to avoid hydration mismatch from new Date() during render.
@@ -398,6 +403,30 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
             <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] leading-relaxed">
               {rfi.impact}
             </div>
+          </div>
+
+          {/* Location picker — optional FK to project_locations.id */}
+          <div>
+            <div className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase">
+              Work Location
+            </div>
+            <LocationPicker
+              value={rfi.locationId}
+              onChange={(locationId) => {
+                useRfiStore.setState((s) => ({
+                  rfis: s.rfis.map((r) =>
+                    r.id === rfi.id ? { ...r, locationId: locationId ?? undefined } : r
+                  ),
+                }))
+                toast.success('Location linked to RFI', {
+                  description: locationId
+                    ? `Linked ${rfi.number} → ${locationId}`
+                    : `Cleared location on ${rfi.number}`,
+                })
+              }}
+              allowClear
+              placeholder="Link to a project location…"
+            />
           </div>
 
           {/* Reply */}

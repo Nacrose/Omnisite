@@ -11,7 +11,7 @@ export type ModuleId =
   | 'equipment'
   | 'procurement'
   | 'financials'
-  | 'subcontractor'
+  | 'vendors'
   | 'drawings'
   | 'correspondence'
   | 'admin'
@@ -153,10 +153,10 @@ export const MODULES: {
     group: 'Project Controls',
   },
   {
-    id: 'subcontractor',
-    name: 'Subcontractor Mgmt',
-    shortName: 'Subcontractor',
-    icon: 'Users',
+    id: 'vendors',
+    name: 'Vendors',
+    shortName: 'Vendors',
+    icon: 'Building2',
     group: 'Project Controls',
   },
   {
@@ -207,7 +207,7 @@ export const KEYBOARD_SHORTCUTS: Record<string, ModuleId> = {
   e: 'equipment',
   p: 'procurement',
   f: 'financials',
-  u: 'subcontractor', // 's' taken by scheduler, use 'u' for sUbcontractor
+  v: 'vendors', // 's' taken by scheduler, use 'v' for Vendors
   w: 'drawings', // draWings
   l: 'correspondence', // Letters
   q: 'qs',

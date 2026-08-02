@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Po, ReqItem, Grn, StockItem, Tab, STOCK, INITIAL_MINS } from './types'
+import { Po, ReqItem, Grn, StockItem, Tab, STOCK, INITIAL_MINS, Vendor as BidVendor } from './types'
 import { INITIAL_POS, INITIAL_REQS, INITIAL_GRNS, INITIAL_STOCK } from './types'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
@@ -199,6 +199,18 @@ export function ProcurementModule() {
     )
   }
 
+  // Push a new vendor bid (from the vendor picker) onto a requisition. The
+  // new bid starts unselected — the user still has to click it in the
+  // comparative statement to select it (and trigger the override flow if
+  // it's not the lowest). Duplicates are blocked upstream in the picker.
+  const addVendorBid = (reqId: string, vendor: BidVendor) => {
+    setReqs((prev) =>
+      prev.map((r) =>
+        r.id === reqId ? { ...r, vendors: [...r.vendors, { ...vendor, selected: false }] } : r
+      )
+    )
+  }
+
   const confirmOverride = () => {
     if (!overrideModal) return
     if (!overrideReason.trim()) {
@@ -357,6 +369,7 @@ export function ProcurementModule() {
                 onSelect={setSelectedId}
                 onVendorSelect={selectVendor}
                 onGeneratePos={generatePos}
+                onAddVendorBid={addVendorBid}
               />
             )}
             {tab === 'po' && <PoCenterView pos={pos} />}

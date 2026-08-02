@@ -40,6 +40,12 @@ export interface Task {
    * Empty array means no explicit dependencies (ASAP scheduling).
    */
   dependencies?: TaskDependency[]
+  /**
+   * Optional FK to project_locations.id — the physical work-face / asset
+   * location this task is being executed at (e.g. "Pier 3"). Stored in
+   * local state for now; the DB column will land in a follow-up migration.
+   */
+  locationId?: string
 }
 
 // Re-export the seed data array so existing imports from './types' keep

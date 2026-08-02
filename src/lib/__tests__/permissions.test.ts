@@ -21,7 +21,7 @@ describe('canAccess', () => {
       'equipment',
       'procurement',
       'financials',
-      'subcontractor',
+      'vendors',
       'drawings',
       'correspondence',
       'admin',

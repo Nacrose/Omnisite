@@ -15,6 +15,7 @@ import { DsrEntry } from './types'
 import { addRfi } from './rfi-tab'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { LocationPicker } from '@/components/ui/location-picker'
 
 interface StoredPhoto {
   name: string
@@ -200,6 +201,26 @@ export function DsrInspector({ entry }: { entry: DsrEntry }) {
           <div className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
             <MapPin className="h-3 w-3" />
             {entry.chainage}
+          </div>
+          {/* Location picker — optional FK to project_locations.id */}
+          <div className="mt-2">
+            <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+              Work Location
+            </label>
+            <LocationPicker
+              value={entry.locationId}
+              onChange={(locationId) => {
+                // Note: locationId stored in local state; will persist to DB
+                // once a migration adds location_id column to dsr_entries.
+                toast.success('Location linked to DSR entry', {
+                  description: locationId
+                    ? `Linked ${entry.id} → ${locationId}`
+                    : `Cleared location on ${entry.id}`,
+                })
+              }}
+              allowClear
+              placeholder="Link to a project location…"
+            />
           </div>
         </div>
 

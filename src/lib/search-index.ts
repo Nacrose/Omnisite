@@ -117,9 +117,9 @@ function buildResults(sources: SearchDataSources): SearchResult[] {
         title: s.name || '',
         subtitle: `${s.id} · ${s.scope || ''}`,
         type: 'Subcontractor',
-        module: 'subcontractor',
-        icon: 'Users',
-        keywords: `${s.id} ${s.name} ${s.scope || ''} subcontractor`.toLowerCase(),
+        module: 'vendors',
+        icon: 'Building2',
+        keywords: `${s.id} ${s.name} ${s.scope || ''} subcontractor vendor`.toLowerCase(),
       })
     }
   }

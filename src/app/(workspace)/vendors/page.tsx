@@ -3,11 +3,11 @@
 import dynamic from 'next/dynamic'
 import { ModuleLoadingFallback } from '@/components/modules/module-loading'
 
-const SubcontractorModule = dynamic(
-  () => import('@/components/modules/subcontractor').then((m) => m.SubcontractorModule),
+const VendorsModule = dynamic(
+  () => import('@/components/modules/vendors').then((m) => m.VendorsModule),
   { loading: () => <ModuleLoadingFallback />, ssr: false }
 )
 
 export default function Page() {
-  return <SubcontractorModule />
+  return <VendorsModule />
 }

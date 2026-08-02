@@ -19,6 +19,11 @@ export interface DsrEntry {
    *  Required — every DSR entry must belong to a specific day so users
    *  can navigate between historical reports. */
   date: string
+  /** Optional FK to project_locations.id — the physical work-face / asset
+   *  location this DSR entry pertains to (e.g. "Pier 3" or "0+200 to 0+400").
+   *  Stored in local state for now; the DB column will land in a follow-up
+   *  migration. */
+  locationId?: string
 }
 
 export const DSR_ENTRIES: DsrEntry[] = [

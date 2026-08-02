@@ -1,19 +1,85 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Layers, Mountain, AlertTriangle } from 'lucide-react'
+import { Plus, Layers, Mountain, AlertTriangle, X, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { Subcontractor } from './types'
+import type { Subcontractor, ScItem, ItemType } from './types'
 import { fmtNPR } from './types'
 
 // ─── Sub-BOQ Tab (composite + conditional items + mapping) ───────────────────
 
-export function SubBoqTab({ sc }: { sc: Subcontractor }) {
+export function SubBoqTab({
+  sc,
+  onAddItem,
+}: {
+  sc: Subcontractor
+  /** Called when the user saves the Add SC BOQ Item form. The parent
+   *  maps the new ScItem into the vendor's workItems array. */
+  onAddItem?: (item: ScItem) => void
+}) {
   const compositeItems = sc.items.filter((i) => i.type === 'composite')
   const conditionalItems = sc.items.filter((i) => i.type === 'conditional')
   const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
+
+  // Add-item modal state
+  const [modalOpen, setModalOpen] = useState(false)
+  const [draft, setDraft] = useState<{
+    code: string
+    desc: string
+    uom: string
+    rate: string
+    plannedQty: string
+    type: ItemType
+  }>({
+    code: '',
+    desc: '',
+    uom: 'cum',
+    rate: '',
+    plannedQty: '',
+    type: 'composite',
+  })
+
+  const openModal = () => {
+    setDraft({
+      code: '',
+      desc: '',
+      uom: 'cum',
+      rate: '',
+      plannedQty: '',
+      type: 'composite',
+    })
+    setModalOpen(true)
+  }
+
+  const canSave =
+    draft.code.trim().length > 0 &&
+    draft.desc.trim().length > 0 &&
+    draft.uom.trim().length > 0 &&
+    draft.rate.trim() !== '' &&
+    !Number.isNaN(Number(draft.rate))
+
+  const handleSave = () => {
+    if (!canSave) return
+    const newItem: ScItem = {
+      id: `SC-${Date.now().toString(36)}`,
+      code: draft.code.trim(),
+      desc: draft.desc.trim(),
+      uom: draft.uom.trim(),
+      rate: Number(draft.rate),
+      plannedQty: draft.plannedQty.trim() === '' ? 0 : Number(draft.plannedQty),
+      actualQty: 0,
+      type: draft.type,
+    }
+    onAddItem?.(newItem)
+    toast.success('SC BOQ item added', {
+      description: `${newItem.code} · ${newItem.desc} · ${fmtNPR(newItem.rate)}/${newItem.uom}`,
+    })
+    setModalOpen(false)
+  }
 
   return (
     <div className="space-y-4 p-4 text-xs">
@@ -219,12 +285,141 @@ export function SubBoqTab({ sc }: { sc: Subcontractor }) {
         variant="outline"
         size="sm"
         className="h-8 w-full gap-1.5 text-xs"
-        disabled
-        title="Coming soon"
+        onClick={openModal}
+        title="Add SC BOQ Item"
       >
         <Plus className="h-3.5 w-3.5" />
         Add SC BOQ Item
       </Button>
+
+      {/* Add SC BOQ Item modal */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sc-boq-add-title"
+            className="pane w-full max-w-md overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-primary/5 flex h-12 items-center justify-between border-b border-[var(--pane-divider)] px-4">
+              <div className="flex items-center gap-2">
+                <Layers className="text-primary h-4 w-4" />
+                <span id="sc-boq-add-title" className="text-sm font-semibold">
+                  Add SC BOQ Item
+                </span>
+              </div>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="hover:bg-accent text-muted-foreground rounded p-1"
+                aria-label="Close dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Code
+                </label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  placeholder="e.g. SC-DRAIN-001"
+                  value={draft.code}
+                  onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Description
+                </label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  placeholder="e.g. Drain construction per RMT"
+                  value={draft.desc}
+                  onChange={(e) => setDraft((d) => ({ ...d, desc: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    UOM
+                  </label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    placeholder="cum / RMT / MT"
+                    value={draft.uom}
+                    onChange={(e) => setDraft((d) => ({ ...d, uom: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Rate (NPR)
+                  </label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    type="number"
+                    placeholder="0"
+                    value={draft.rate}
+                    onChange={(e) => setDraft((d) => ({ ...d, rate: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Planned Qty
+                  </label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    type="number"
+                    placeholder="0 (0 = variable)"
+                    value={draft.plannedQty}
+                    onChange={(e) => setDraft((d) => ({ ...d, plannedQty: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Type
+                  </label>
+                  <div className="mt-1 grid grid-cols-2 gap-1">
+                    {(['composite', 'conditional'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, type: t }))}
+                        className={cn(
+                          'h-8 rounded border text-[11px] transition-colors',
+                          draft.type === t
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'hover:bg-accent border-[var(--pane-divider)]'
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-[var(--pane-divider)] p-3">
+              <Button variant="outline" size="sm" onClick={() => setModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={!canSave} className="gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Save Item
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

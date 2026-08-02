@@ -30,6 +30,7 @@ import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { LocationPicker } from '@/components/ui/location-picker'
 
 interface QsItem {
   id: string
@@ -51,6 +52,10 @@ interface QsItem {
   severity?: 'low' | 'medium' | 'high'
   billingHold?: boolean
   cap?: { rootCause: string; action: string; assignee: string; dueDate: string }
+  /** Optional FK to project_locations.id — where the issue was identified.
+   *  Stored in local state for now; the DB column will land in a follow-up
+   *  migration. */
+  locationId?: string
 }
 
 const INITIAL_ITEMS: QsItem[] = [
@@ -212,6 +217,16 @@ export function QsModule() {
     })
   }
 
+  // Set the linked location on a QS item (NCR / ITR / etc.)
+  const setLocation = (id: string, locationId: string | null) => {
+    setItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, locationId: locationId ?? undefined } : it))
+    )
+    toast.success('Location linked', {
+      description: locationId ? `${id} → ${locationId}` : `Cleared location on ${id}`,
+    })
+  }
+
   if (qsLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -297,7 +312,13 @@ export function QsModule() {
         </>
       }
       rightPane={
-        <QsInspector key={selected.id} item={selected} onAdvance={advanceNcr} onSaveCap={saveCap} />
+        <QsInspector
+          key={selected.id}
+          item={selected}
+          onAdvance={advanceNcr}
+          onSaveCap={saveCap}
+          onSetLocation={setLocation}
+        />
       }
       leftPaneWidth="240px"
       rightPaneWidth="380px"
@@ -309,6 +330,7 @@ function QsInspector({
   item,
   onAdvance,
   onSaveCap,
+  onSetLocation,
 }: {
   item: QsItem
   onAdvance: (id: string) => void
@@ -316,6 +338,7 @@ function QsInspector({
     id: string,
     cap: { rootCause: string; action: string; assignee: string; dueDate: string }
   ) => void
+  onSetLocation: (id: string, locationId: string | null) => void
 }) {
   // Local state for CAP form
   const [capForm, setCapForm] = useState({
@@ -495,6 +518,22 @@ function QsInspector({
               <div className="mt-0.5 font-mono font-medium">{item.linkedBoq}</div>
             </div>
           )}
+
+          {/* Location picker — optional FK to project_locations.id */}
+          <div>
+            <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+              Work Location
+            </div>
+            <LocationPicker
+              value={item.locationId}
+              onChange={(locationId) => {
+                onSetLocation(item.id, locationId)
+              }}
+              allowClear
+              placeholder="Link to a project location…"
+              className="mt-1"
+            />
+          </div>
 
           {/* NCR Workflow Stepper */}
           {item.type === 'NCR' && (
