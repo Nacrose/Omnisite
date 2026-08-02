@@ -53,7 +53,13 @@ export function ProcurementModule() {
     () => structuredClone(INITIAL_POS) as typeof INITIAL_POS,
     {
       fieldMap: {
-        hasGrn: 'has_grn',
+        // The app type (Po in procurement/types.ts) uses `grn: boolean` while
+        // the DB column is `has_grn`. The previous `hasGrn: 'has_grn'` entry
+        // was dead — there is no `hasGrn` field on the Po type — so the
+        // camelToSnake auto-convert kicked in and produced `grn: 'grn'`,
+        // which the DB rejected (no such column). The boolean GRN flag was
+        // therefore silently dropped on every POST.
+        grn: 'has_grn',
         reqId: 'req_id',
         materialCode: 'material_code',
         poQty: 'po_qty',

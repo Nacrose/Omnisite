@@ -203,7 +203,12 @@ export function CorrespondenceModule() {
         centerPane={
           <>
             <PaneHeader title={`Correspondence · ${filtered.length} letters`}>
-              <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => toast.info('Use the search box above to filter letters.')}
+              >
                 <Search className="h-3.5 w-3.5" />
                 Search
               </Button>
@@ -313,7 +318,12 @@ export function CorrespondenceModule() {
       centerPane={
         <>
           <PaneHeader title={`Correspondence · ${filtered.length} letters`}>
-            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => toast.info('Use the search box above to filter letters.')}
+            >
               <Search className="h-3.5 w-3.5" />
               Search
             </Button>

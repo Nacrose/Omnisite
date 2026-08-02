@@ -18,7 +18,9 @@ export const boqItemSchema = z.object({
   level: z.number().int().min(0).default(0),
   parent_id: z.string().nullable().optional(),
   sort_order: z.number().int().default(0),
+  // No DB column — sent by client but silently dropped by PostgREST. Kept for forward compat.
   children: z.string().optional(), // serialized JSON
+  // No DB column — sent by client but silently dropped by PostgREST. Kept for forward compat.
   baseline: z.string().optional(), // serialized JSON
   // location_id column added in migration 12 — nullable FK to
   // project_locations(id). Without this entry Zod would strip the field on
@@ -41,7 +43,9 @@ export const taskSchema = z.object({
   constraints: z.string().nullable().optional(),
   parent_id: z.string().nullable().optional(),
   sort_order: z.number().int().default(0),
+  // No DB column — sent by client but silently dropped by PostgREST. Kept for forward compat.
   children: z.string().optional(),
+  // No DB column — sent by client but silently dropped by PostgREST. Kept for forward compat.
   baseline: z.string().optional(),
   // Serialized JSON of TaskDependency[] (predecessorId + linkType + lag).
   // Same pattern as `children` / `baseline` — the client JSON.stringifies
@@ -54,6 +58,12 @@ export const taskSchema = z.object({
   // project_locations(id). Without this entry Zod would strip the field
   // on POST and the task's work-face link would silently disappear.
   location_id: z.string().nullable().optional(),
+  // resources JSONB column added in migration 18 — serialized JSON of the
+  // Task.resources string[] (resource codes assigned to the task). Without
+  // this entry Zod would strip the field on POST, so resource assignments
+  // silently disappeared in Supabase mode and resource leveling's peak
+  // load calc would always report zero (audit H4).
+  resources: z.string().optional(),
 })
 
 // Workers
@@ -69,6 +79,14 @@ export const workerSchema = z.object({
   geo_fence: z.boolean().default(true),
   today_hours: z.number().min(0).default(0),
   allocated: z.string().optional(), // serialized JSON
+  // Wage fields (migration 18) — used by the payroll calculator
+  // (computeDailyPayroll in time-attendance/payroll-calc.ts) to derive
+  // regular vs OT pay. Without these schema entries Zod stripped them on
+  // POST, so wage edits silently vanished in Supabase mode and the
+  // financials labour-cost roll-up went back to its default rate of 0.
+  wage_rate: z.number().min(0).optional(),
+  ot_multiplier: z.number().min(0).default(1.5),
+  standard_hours: z.number().min(0).default(8),
 })
 
 // Equipment
@@ -102,6 +120,7 @@ export const cbsNodeSchema = z.object({
   margin_pct: z.number().default(0),
   level: z.number().int().min(0).default(0),
   parent_code: z.string().nullable().optional(),
+  // No DB column — sent by client but silently dropped by PostgREST. Kept for forward compat.
   children: z.string().optional(),
 })
 
@@ -386,6 +405,10 @@ export const vendorSchema = z.object({
   agreement_value: z.number().min(0).default(0),
   advance_paid: z.number().min(0).default(0),
   rework_cost: z.number().min(0).default(0),
+  // Cumulative advance recovered across prior bills — persisted so the
+  // running-bill tab's recovery tally survives a reload in Supabase mode.
+  // Column added in migration 18.
+  advance_recovered: z.number().default(0),
   is_tunneling: z.boolean().default(false),
   material_issues: z.string().optional(),
   material_returns: z.string().optional(),

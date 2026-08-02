@@ -146,6 +146,15 @@ export function TimeAttendanceModule() {
         clockOut: 'clock_out',
         geoFence: 'geo_fence',
         todayHours: 'today_hours',
+        // Wage fields (migration 20) — without these the wageRate /
+        // otMultiplier / standardHours edits in the inspector would
+        // silently vanish on reload in Supabase mode (camelToSnake
+        // auto-convert produces matching names for these three, but
+        // listing them here is explicit and matches the pattern used
+        // for the other fields).
+        wageRate: 'wage_rate',
+        otMultiplier: 'ot_multiplier',
+        standardHours: 'standard_hours',
       },
       primaryKey: 'id',
     }

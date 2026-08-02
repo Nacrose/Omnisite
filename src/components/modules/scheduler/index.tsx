@@ -72,6 +72,17 @@ export function SchedulerModule() {
         // work-face link so it persists across reloads and is visible to
         // other modules.
         locationId: 'location_id',
+        // Explicit no-op mapping for `resources` (a string[] on the Task
+        // type). Without this, the camelToSnake auto-convert would still
+        // produce `resources: 'resources'`, but listing it here documents
+        // that the column exists (migration 18) and is round-tripped. The
+        // field is JSON-serialized before POSTing (same pattern as
+        // `dependencies`) so the JSONB column receives a string.
+        // Without a guard, a row that comes back from Supabase with
+        // resources === null (e.g. an old row pre-dating migration 18)
+        // would crash resource leveling (leveling.ts accesses
+        // t.resources.length); leveling now null-guards this.
+        resources: 'resources',
       },
       primaryKey: 'id',
     }

@@ -53,8 +53,15 @@ function flattenLeaves(tasks: Task[]): Task[] {
 function weeklyLoad(leaves: Task[]): number[] {
   const load = new Array(TOTAL_WEEKS).fill(0)
   for (const t of leaves) {
+    // Null guard: rows loaded from Supabase (or a freshly-seeded Task tree
+    // without resources populated) may have `resources === undefined`.
+    // `t.resources.length` would throw "Cannot read properties of
+    // undefined (reading 'length')" — see H4 in the audit. Coalescing to
+    // [] makes the load contribution zero, which is correct (no resources
+    // means no peak contribution).
+    const resources = t.resources ?? []
     for (let w = t.start; w < t.start + t.duration && w < TOTAL_WEEKS; w++) {
-      load[w] += t.resources.length
+      load[w] += resources.length
     }
   }
   return load

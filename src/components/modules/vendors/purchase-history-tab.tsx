@@ -90,7 +90,9 @@ export function PurchaseHistoryTab({ vendorName }: PurchaseHistoryTabProps) {
     () => INITIAL_POS,
     {
       fieldMap: {
-        hasGrn: 'has_grn',
+        // `grn: boolean` on the Po app type maps to the `has_grn` DB column.
+        // (See the matching comment in procurement/index.tsx.)
+        grn: 'has_grn',
         reqId: 'req_id',
         materialCode: 'material_code',
         poQty: 'po_qty',

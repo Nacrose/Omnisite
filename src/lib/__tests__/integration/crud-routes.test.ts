@@ -344,11 +344,28 @@ describe('createCrudHandler routes', () => {
       // config flag is wired through the factory.
       if (spec.name === 'chat-messages') {
         it('POST overrides sender_id / sender_name from the authenticated session', async () => {
+          // Use a realistic email so the sender_name derivation (local-part
+          // split on . _ - then Title-case each token) is exercised:
+          //   `arjun.sharma@omnisite.test` → `Arjun Sharma`
+          // The default mockUser.email (`pm@omnisite.test`) only has one
+          // token in its local part, which would test the Title-case step
+          // but not the split-and-join step.
+          const { requireAuth } = await import('@/lib/api-auth')
+          vi.mocked(requireAuth).mockResolvedValueOnce({
+            user: { ...mockUser, email: 'arjun.sharma@omnisite.test' },
+            error: null,
+          })
+
           const route = await import(spec.modulePath)
           await route.POST(makePostReq(`/api/${spec.name}`, spec.validBody))
           const passedRow = mockUpsertWithAudit.mock.calls[0][1] as Record<string, unknown>
           expect(passedRow.sender_id).toBe(mockUser.id)
-          expect(passedRow.sender_name).toBe(mockUser.email)
+          // sender_name is derived from the email's local part — see
+          // src/app/api/chat-messages/route.ts. This matches what the
+          // client-side mapSupabaseUser() in auth.tsx produces so the name
+          // shown next to a freshly-posted message matches the name shown
+          // on subsequent reloads.
+          expect(passedRow.sender_name).toBe('Arjun Sharma')
         })
       }
 

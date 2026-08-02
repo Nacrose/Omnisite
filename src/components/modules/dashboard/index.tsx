@@ -75,7 +75,15 @@ export function DashboardModule() {
     'omnisite-scheduler-tasks',
     'tasks',
     () => structuredClone(TASKS) as typeof TASKS,
-    { primaryKey: 'id' }
+    {
+      // `start: number` on the Task app type maps to the `start_week` DB
+      // column. Without this fieldMap the camelToSnake auto-convert would
+      // produce `start: 'start'` (no such column) and the task's scheduled
+      // start week would be silently dropped on every POST. The scheduler
+      // module's own useSyncedState call has the same mapping.
+      fieldMap: { start: 'start_week' },
+      primaryKey: 'id',
+    }
   )
   const [cbsRows] = useSyncedState<CbsNode[]>(
     'omnisite-financials-cbs',
@@ -97,7 +105,9 @@ export function DashboardModule() {
     () => structuredClone(INITIAL_POS) as typeof INITIAL_POS,
     {
       fieldMap: {
-        hasGrn: 'has_grn',
+        // `grn: boolean` on the Po app type maps to the `has_grn` DB
+        // column. (See the matching comment in procurement/index.tsx.)
+        grn: 'has_grn',
         reqId: 'req_id',
         materialCode: 'material_code',
         poQty: 'po_qty',

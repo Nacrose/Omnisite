@@ -131,6 +131,10 @@ export function VendorsModule() {
         workItems: 'work_items',
         agreementValue: 'agreement_value',
         advancePaid: 'advance_paid',
+        // Cumulative advance recovered across prior bills (migration 19).
+        // Without this entry the running-bill tab's recovery tally would
+        // silently reset to 0 after every reload in Supabase mode.
+        advanceRecovered: 'advance_recovered',
         reworkCost: 'rework_cost',
         isTunneling: 'is_tunneling',
         materialIssues: 'material_issues',

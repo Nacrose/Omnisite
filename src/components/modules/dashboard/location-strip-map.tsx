@@ -117,12 +117,15 @@ export function LocationStripMap() {
   )
 
   // Tasks (scheduler) — useSyncedState so we read whatever is in the live
-  // store (Supabase or localStorage), not the stale seed array.
+  // store (Supabase or localStorage), not the stale seed array. The fieldMap
+  // mirrors the scheduler module's so `start: number` lands on the
+  // `start_week` DB column (without it the camelToSnake auto-convert would
+  // produce `start: 'start'` and break reads of the project's schedule).
   const [taskRows] = useSyncedState<Task[]>(
     'omnisite-scheduler-tasks',
     'tasks',
     () => structuredClone(TASKS) as typeof TASKS,
-    { primaryKey: 'id' }
+    { fieldMap: { start: 'start_week' }, primaryKey: 'id' }
   )
 
   // QS items — same store the Q&S module reads. The fieldMap mirrors the
