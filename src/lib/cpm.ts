@@ -13,6 +13,14 @@
  * 1. Forward pass: compute ES and EF based on dependency types + lag
  * 2. Backward pass: compute LS and LF based on successor constraints
  * 3. Float = LS - ES (if 0, task is critical)
+ *
+ * Cycle detection: if Kahn's topological sort leaves tasks unsorted (i.e.
+ * sorted.length < tasks.length), the dependency graph contains a cycle.
+ * Those tasks would otherwise default to ES=0/EF=0/LS=0/LF=0/float=0 and
+ * be incorrectly marked critical — masking the real critical path. We
+ * throw a descriptive Error so the caller can surface it (the scheduler
+ * module's cpmResult useMemo catches this and falls back to seed-decorated
+ * critical flags with a console.warn).
  */
 
 export type LinkType = 'FS' | 'SS' | 'FF' | 'SF'
@@ -150,6 +158,19 @@ export function calculateCpm(tasks: CpmTask[]): CpmOutput {
       inDegree.set(successor, (inDegree.get(successor) || 0) - 1)
       if (inDegree.get(successor) === 0) queue.push(successor)
     }
+  }
+
+  // Cycle detection (audit S4): if Kahn's algorithm leaves tasks unsorted,
+  // the dependency graph contains a cycle. Without this check, cyclic tasks
+  // would default to ES=0/EF=0/LS=0/LF=0/float=0 and be incorrectly marked
+  // critical — masking the real critical path. Throw a descriptive Error
+  // listing the cyclic task ids so the user can break the loop.
+  if (sorted.length < taskMap.size) {
+    const cyclic = Array.from(taskMap.keys()).filter((id) => !sorted.includes(id))
+    throw new Error(
+      `CPM cycle detected: ${cyclic.length} task(s) form a dependency loop — ${cyclic.join(', ')}. ` +
+        `Break the cycle (remove one of the dependency links) and re-run.`
+    )
   }
 
   // Forward pass: calculate ES and EF using dependency types + lag

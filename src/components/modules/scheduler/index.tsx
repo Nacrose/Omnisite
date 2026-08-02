@@ -188,7 +188,16 @@ export function SchedulerModule() {
     try {
       const result = calculateCpm(cpmTasks)
       return result
-    } catch {
+    } catch (err) {
+      // CPM threw — most likely a dependency cycle (calculateCpm detects
+      // cycles and throws with a descriptive message). Surface the error
+      // via console.warn so devs can diagnose, and fall back to the
+      // seed-decorated critical flags so the UI doesn't crash. The
+      // fallback isn't correct (the seed flags may be stale), but it's
+      // better than rendering nothing (audit S5 — previously this catch
+      // silently swallowed all errors with no console output).
+      // eslint-disable-next-line no-console
+      console.warn('[Scheduler] CPM calculation failed:', err instanceof Error ? err.message : err)
       return null
     }
   }, [taskTree])
@@ -262,6 +271,28 @@ export function SchedulerModule() {
           for (const t of items) {
             if (t.id === id) {
               t.duration = Math.max(1, Math.min(TOTAL_WEEKS - t.start, newDuration))
+              return true
+            }
+            if (t.children && walk(t.children)) return true
+          }
+          return false
+        }
+        walk(draft as Task[])
+      })
+    )
+  }
+
+  // Update a task's progress from the inspector input. Walks the tree so
+  // nested children are found. Clamps to [0, 100]. Previously progress was
+  // read-only in the inspector — the only way to update it was to drag
+  // bars, which doesn't change progress at all (audit S13).
+  const updateTaskProgress = (id: string, newProgress: number) => {
+    commitTasks((prev) =>
+      produce(prev, (draft) => {
+        const walk = (items: Task[]) => {
+          for (const t of items) {
+            if (t.id === id) {
+              t.progress = Math.max(0, Math.min(100, newProgress))
               return true
             }
             if (t.children && walk(t.children)) return true
@@ -441,13 +472,22 @@ export function SchedulerModule() {
       const flat = flattenTasks(tasksRef.current)
       const updated = flat.find((f) => f.task.id === dragging?.id)?.task
       // Match both the human-readable "Must Finish On: Wk 48" form and
-      // the abbreviated "MFO: Wk 48" form (C20). Seed T-404 uses the
-      // abbreviated form; the inspector constraint picker writes the
-      // long form. Both should trigger the EOT breach detector.
+      // the abbreviated "MFO: Wk 48" / bare "MFO" form (C20 + S1).
+      // Seed T-404 uses the long form; the inspector constraint picker
+      // writes the short form "MFO: Wk N". Both should trigger the EOT
+      // breach detector.
       const hasMFO =
         updated && updated.constraints && /^(MFO|Must Finish On)/i.test(updated.constraints)
-      if (updated && updated.type === 'Hammock' && hasMFO) {
+      // Detect breach on ANY task type with MFO (audit S2 — previously
+      // only Hammock tasks triggered the breach modal, so a Work task
+      // with MFO that overran was silently ignored). Summary tasks are
+      // still excluded because their start/finish are derived from
+      // children, not directly editable by dragging.
+      if (updated && hasMFO && updated.type !== 'Summary') {
         // Extract deadline from constraint string like "Must Finish On: Wk 32"
+        // or "MFO: Wk 32". If the constraint is bare "MFO" with no week
+        // (shouldn't happen post-fix since the inspector always writes
+        // "MFO: Wk N", but be defensive), skip breach detection.
         const match = updated.constraints!.match(/Wk (\d+)/)
         if (match) {
           const deadlineWeek = parseInt(match[1])
@@ -590,6 +630,22 @@ export function SchedulerModule() {
                     toast.success('Resources already level', {
                       description: `Peak load: ${result.peakLoadBefore} resource units/week`,
                     })
+                    // Still surface any pre-existing dependency violations
+                    // even when no shifts were made (audit S10).
+                    if (result.violations.length > 0) {
+                      toast.warning(
+                        `${result.violations.length} pre-existing FS violation${result.violations.length === 1 ? '' : 's'}`,
+                        {
+                          description: result.violations
+                            .slice(0, 3)
+                            .map(
+                              (v) =>
+                                `${v.id} starts wk ${v.taskStart} but ${v.predecessorId} finishes wk ${v.predecessorFinish}`
+                            )
+                            .join(' · '),
+                        }
+                      )
+                    }
                     return
                   }
                   // Snapshot the flat rows BEFORE applying leveling so the
@@ -600,6 +656,25 @@ export function SchedulerModule() {
                   toast.success('Resources leveled', {
                     description: `${result.shifts.length} task${result.shifts.length === 1 ? '' : 's'} shifted · peak ${result.peakLoadBefore} → ${result.peakLoadAfter}`,
                   })
+                  // Surface any pre-existing FS dependency violations that
+                  // leveling couldn't fix (e.g. a task that already started
+                  // before its predecessor finished — we don't move it
+                  // further into violation, but the user should know).
+                  // (audit S10)
+                  if (result.violations.length > 0) {
+                    toast.warning(
+                      `${result.violations.length} FS dependency violation${result.violations.length === 1 ? '' : 's'} detected`,
+                      {
+                        description: result.violations
+                          .slice(0, 3)
+                          .map(
+                            (v) =>
+                              `${v.id} starts wk ${v.taskStart} but predecessor ${v.predecessorId} finishes wk ${v.predecessorFinish}`
+                          )
+                          .join(' · '),
+                      }
+                    )
+                  }
                   undoableToast(
                     'Resource leveling applied',
                     `${result.shifts.length} tasks shifted to smooth peak resource load.`,
@@ -644,6 +719,7 @@ export function SchedulerModule() {
             key={selectedTask.id}
             task={selectedTask}
             onUpdateDuration={updateTaskDuration}
+            onUpdateProgress={updateTaskProgress}
             onUpdateLocation={(locId) => {
               // Propagate the location link into the synced tasks store so
               // it persists to Supabase (location_id column added in

@@ -9,14 +9,24 @@ import type { Task } from './types'
  * the critical path; moving them delays the project).
  *
  * This is a simplified leveling pass:
- *  - Dependencies are NOT re-validated (the caller should re-run CPM after).
+ *  - Dependencies are NOT re-validated — but if a candidate shift would
+ *    move a task to start BEFORE its FS predecessors finish, we skip that
+ *    candidate. This prevents the most common dependency violation (audit
+ *    S10). The caller should still re-run CPM after leveling to recompute
+ *    float/critical flags.
  *  - "Resource load" = count of resource codes assigned to active tasks in
  *    that week (not headcount-weighted). This keeps the heuristic O(n*weeks).
  *  - Hammock / Summary / Milestone tasks are skipped (they don't consume
  *    resources directly).
+ *  - Summary task `start` AND `duration` are recomputed after leveling so
+ *    the summary bar visually covers its shifted children (audit S6 —
+ *    previously only `start` was updated, leaving the summary bar
+ *    disconnected from its children).
  *
- * Returns the leveled task tree (same shape as input) and a log of shifts
- * for the UI to surface to the user.
+ * Returns the leveled task tree (same shape as input), a log of shifts for
+ * the UI to surface to the user, and a list of any dependency violations
+ * that could not be avoided (e.g. a non-critical task whose original start
+ * already violates an FS link — we don't move it further into violation).
  */
 export interface LevelingShift {
   id: string
@@ -26,9 +36,19 @@ export interface LevelingShift {
   deltaWeeks: number
 }
 
+export interface LevelingViolation {
+  id: string
+  name: string
+  predecessorId: string
+  predecessorFinish: number
+  taskStart: number
+  violationWeeks: number
+}
+
 export interface LevelingResult {
   leveledTasks: Task[]
   shifts: LevelingShift[]
+  violations: LevelingViolation[]
   peakLoadBefore: number
   peakLoadAfter: number
 }
@@ -67,10 +87,45 @@ function weeklyLoad(leaves: Task[]): number[] {
   return load
 }
 
+/**
+ * For each leaf task with FS dependencies, compute the latest finish week
+ * of all its FS predecessors. A candidate start is only valid if it's >=
+ * this value (FS = successor starts after predecessor finishes).
+ *
+ * SS/FF/SF links are intentionally NOT enforced here — the leveling
+ * heuristic would need full CPM data to validate them, and we want to
+ * keep leveling O(n*weeks). The CPM re-run after leveling will surface
+ * any remaining violations as negative float.
+ */
+function buildFsPredecessorFinishMap(
+  leaves: Task[]
+): Map<string, { predecessorId: string; finish: number }[]> {
+  const taskById = new Map<string, Task>()
+  for (const l of leaves) taskById.set(l.id, l)
+  const m = new Map<string, { predecessorId: string; finish: number }[]>()
+  for (const l of leaves) {
+    if (!l.dependencies) continue
+    const fsPreds: { predecessorId: string; finish: number }[] = []
+    for (const dep of l.dependencies) {
+      if ((dep.linkType || 'FS') !== 'FS') continue
+      const pred = taskById.get(dep.predecessorId)
+      if (!pred) continue // predecessor not in our leaf set (e.g. Summary) — skip
+      const predFinish = pred.start + pred.duration + (dep.lagWeeks || 0)
+      fsPreds.push({ predecessorId: pred.id, finish: predFinish })
+    }
+    if (fsPreds.length > 0) m.set(l.id, fsPreds)
+  }
+  return m
+}
+
 export function levelResources(tasks: Task[]): LevelingResult {
   const leaves = flattenLeaves(tasks)
   const loadBefore = weeklyLoad(leaves)
   const peakBefore = Math.max(1, ...loadBefore)
+
+  // Map each leaf to its FS predecessors' finish weeks so we can reject
+  // candidate shifts that would violate FS dependencies (audit S10).
+  const fsPredFinishMap = buildFsPredecessorFinishMap(leaves)
 
   // Work on a mutable copy of leaves (shallow clone each leaf so we can
   // reassign .start without mutating the input).
@@ -81,6 +136,12 @@ export function levelResources(tasks: Task[]): LevelingResult {
   workLeaves.sort((a, b) => a.start - b.start)
 
   const shifts: LevelingShift[] = []
+  const violations: LevelingViolation[] = []
+
+  // Build a quick id → workLeaf map so we can read the latest predecessor
+  // finish as we iterate (predecessors may have been shifted earlier in
+  // the loop, so we re-read on every candidate).
+  const workLeafById = new Map(workLeaves.map((l) => [l.id, l]))
 
   for (const leaf of workLeaves) {
     if (leaf.critical) continue
@@ -90,11 +151,47 @@ export function levelResources(tasks: Task[]): LevelingResult {
     let bestStart = originalStart
     let bestPeak = peakBefore
 
+    // FS predecessor finish constraint — candidate start must be >= this.
+    // (Re-read on every candidate because a predecessor earlier in the
+    // loop may have shifted.)
+    const fsPreds = fsPredFinishMap.get(leaf.id) || []
+
+    // Detect pre-existing violations (task already starts before its FS
+    // predecessor finishes). We surface these so the user knows the
+    // schedule has dependency problems that leveling can't fix.
+    for (const pred of fsPreds) {
+      const predLeaf = workLeafById.get(pred.predecessorId)
+      const predFinish = predLeaf != null ? predLeaf.start + predLeaf.duration : pred.finish
+      if (originalStart < predFinish) {
+        violations.push({
+          id: leaf.id,
+          name: leaf.name,
+          predecessorId: pred.predecessorId,
+          predecessorFinish: predFinish,
+          taskStart: originalStart,
+          violationWeeks: predFinish - originalStart,
+        })
+      }
+    }
+
     // Try shifting forward by 0..8 weeks (bounded to avoid infinite loops
     // and to respect the project horizon).
     for (let delta = 0; delta <= 8; delta++) {
       const candidateStart = originalStart + delta
       if (candidateStart + leaf.duration > TOTAL_WEEKS) break
+
+      // Reject candidates that would violate any FS dependency.
+      // (SS/FF/SF not enforced — see buildFsPredecessorFinishMap comment.)
+      let violates = false
+      for (const pred of fsPreds) {
+        const predLeaf = workLeafById.get(pred.predecessorId)
+        const predFinish = predLeaf != null ? predLeaf.start + predLeaf.duration : pred.finish
+        if (candidateStart < predFinish) {
+          violates = true
+          break
+        }
+      }
+      if (violates) continue
 
       // Temporarily move the leaf, recompute load, find the new peak.
       leaf.start = candidateStart
@@ -131,9 +228,18 @@ export function levelResources(tasks: Task[]): LevelingResult {
     items.map((t) => {
       if (t.children && t.children.length > 0) {
         const newChildren = rebuild(t.children)
-        // Summary start = min child start.
+        // Summary start = min child start, duration = max child finish −
+        // min child start (audit S6 — previously only `start` was updated,
+        // leaving the summary bar visually disconnected from its children
+        // after leveling shifted them).
         const minChildStart = Math.min(...newChildren.map((c) => c.start))
-        return { ...t, start: minChildStart, children: newChildren }
+        const maxChildFinish = Math.max(...newChildren.map((c) => c.start + c.duration))
+        return {
+          ...t,
+          start: minChildStart,
+          duration: Math.max(0, maxChildFinish - minChildStart),
+          children: newChildren,
+        }
       }
       const newStart = leafStarts.get(t.id) ?? t.start
       return { ...t, start: newStart }
@@ -143,6 +249,7 @@ export function levelResources(tasks: Task[]): LevelingResult {
   return {
     leveledTasks,
     shifts,
+    violations,
     peakLoadBefore: peakBefore,
     peakLoadAfter: peakAfter,
   }

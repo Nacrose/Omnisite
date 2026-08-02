@@ -268,7 +268,9 @@ export function CriticalPathBreachModal({
               {task.id} — {task.name}
             </div>
             <div className="text-muted-foreground">
-              This Hammock task (quantity-driven) has expanded beyond its Must Finish On deadline.
+              This task has a <span className="font-medium">Must Finish On</span> deadline of Wk{' '}
+              {deadlineWeek} but its forecast finish is Wk {finishWeek}. The deadline is overrun by{' '}
+              {overrunWeeks} week{overrunWeeks === 1 ? '' : 's'}.
             </div>
             <div className="grid grid-cols-3 gap-2 pt-2">
               <div className="text-center">

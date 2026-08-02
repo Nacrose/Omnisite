@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -11,16 +11,103 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Task } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
-import { INITIAL_LOCATIONS, INITIAL_VENDORS } from '@/data/seed/vendors'
+import { useSyncedState } from '@/lib/use-synced-state'
+import { INITIAL_VENDORS } from '@/data/seed/vendors'
+import type { ProjectLocation } from '@/lib/types/vendor'
+
+// ─── Constraint code helpers ────────────────────────────────────────────────
+//
+// Constraints are stored as a single string on the task. The format is
+// "CODE" for non-deadline constraints (ASAP, ALAP, SNET, FNLT) and
+// "CODE: Wk N" for deadline constraints (MFO, MSO). The EOT breach
+// detector in scheduler/index.tsx greps for /Wk (\d+)/ — without the
+// "Wk N" suffix, MFO/MSO tasks never trigger breach detection even when
+// they overrun (audit S1).
+//
+// The code map below lets the inspector both render the active button
+// correctly (matching by prefix, not substring — audit S3) and prompt
+// the user for a deadline week when they pick MFO/MSO.
+
+const CONSTRAINT_LONG_FORM: Record<string, string> = {
+  ASAP: 'ASAP',
+  ALAP: 'ALAP',
+  SNET: 'SNET',
+  FNLT: 'FNLT',
+  MFO: 'MFO',
+  MSO: 'MSO',
+}
+
+/** Constraint codes that require a deadline week suffix. */
+const DEADLINE_CONSTRAINTS = new Set(['MFO', 'MSO'])
+
+/**
+ * Match a stored constraint string against a code, accounting for both
+ * the short form ("MFO") and the long form ("Must Finish On: Wk 32").
+ * Returns true if the stored constraint starts with the code OR with the
+ * long-form name corresponding to the code.
+ */
+function constraintMatches(stored: string | undefined, code: string): boolean {
+  if (!stored) return false
+  const s = stored.trim()
+  if (s.startsWith(code)) return true
+  // Long-form aliases for the deadline codes — the seed data uses these
+  // ("Must Finish On: Wk 32" / "Must Start On: Wk 48"). Treat them as
+  // equivalent to the short code so the active button highlights.
+  const longAliases: Record<string, string[]> = {
+    MFO: ['Must Finish On', 'MFO'],
+    MSO: ['Must Start On', 'MSO'],
+    ASAP: ['ASAP', 'As Soon As Possible'],
+    ALAP: ['ALAP', 'As Late As Possible'],
+    SNET: ['SNET', 'Start No Earlier Than'],
+    FNLT: ['FNLT', 'Finish No Later Than'],
+  }
+  const aliases = longAliases[code]
+  if (aliases) {
+    for (const alias of aliases) {
+      if (s.toLowerCase().startsWith(alias.toLowerCase())) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Extract the deadline week from a constraint string. Returns null if the
+ * constraint has no "Wk N" suffix (e.g. just "MFO" with no week).
+ */
+function extractDeadlineWeek(stored: string | undefined): number | null {
+  if (!stored) return null
+  const m = stored.match(/Wk\s*(\d+)/i)
+  return m ? parseInt(m[1], 10) : null
+}
+
+/**
+ * Build the canonical constraint string for a code. Deadline constraints
+ * (MFO/MSO) require a week number — if `week` is null/undefined, returns
+ * just the code (which the breach detector will silently skip — that's
+ * correct behaviour for a constraint with no deadline).
+ */
+function buildConstraint(code: string, week: number | null | undefined): string {
+  if (DEADLINE_CONSTRAINTS.has(code) && week != null && !Number.isNaN(week)) {
+    return `${code}: Wk ${week}`
+  }
+  return code
+}
 
 export function TaskInspector({
   task,
   onUpdateDuration,
+  onUpdateProgress,
   onUpdateLocation,
   onUpdateConstraint,
 }: {
   task: Task
   onUpdateDuration?: (id: string, newDuration: number) => void
+  /**
+   * Fired when the user edits the progress input. The parent mutates the
+   * synced tasks store so progress persists to Supabase and is visible
+   * across modules (outline, dashboard, reports).
+   */
+  onUpdateProgress?: (id: string, newProgress: number) => void
   /**
    * Fired when the user picks (or clears) a work location in the
    * LocationPicker. The parent uses this to mutate its synced tasks state
@@ -42,18 +129,83 @@ export function TaskInspector({
   // the same tree instance see the link right away.
   const [locationId, setLocationId] = useState<string | undefined>(task.locationId)
 
-  // Resolve the suggested SC for the currently-selected location. We look
-  // up the location by id, then resolve its `assignedScId` against the
-  // seed vendors (the persisted `omnisite-vendors` store is owned by the
-  // Vendors module — we deliberately don't touch it here to avoid
-  // clobbering writes from the Vendors module on first load).
-  const suggestedLocation = INITIAL_LOCATIONS.find((l) => l.id === locationId)
+  // Read the live project-locations store (Supabase when configured, localStorage
+  // otherwise) — same hook the Admin → Locations tab and the LocationPicker use.
+  // Previously this looked up `INITIAL_LOCATIONS` (the seed array) which meant
+  // admin edits to `assignedScId` never propagated to the suggested-SC badge
+  // (audit S8). The seed is still the fallback inside useSyncedState.
+  const [locations] = useSyncedState<ProjectLocation[]>(
+    'omnisite-admin-locations',
+    'project_locations',
+    // Lazy seed — only used when localStorage and Supabase are both empty.
+    () => [] as ProjectLocation[],
+    {
+      fieldMap: {
+        group: 'group_name',
+        assignedScId: 'assigned_vendor_id',
+        sortOrder: 'sort_order',
+      },
+      primaryKey: 'id',
+    }
+  )
+
+  // Resolve the suggested SC for the currently-selected location from the
+  // LIVE locations store (so admin edits propagate in realtime). We look up
+  // the location by id, then resolve its `assignedScId` against the seed
+  // vendors (the persisted `omnisite-vendors` store is owned by the Vendors
+  // module — we deliberately don't touch it here to avoid clobbering writes
+  // from the Vendors module on first load; the SC id is still meaningful as
+  // an opaque identifier even if we can't resolve the human-readable name).
+  const suggestedLocation = useMemo(
+    () => locations.find((l) => l.id === locationId),
+    [locations, locationId]
+  )
   const suggestedSc = suggestedLocation?.assignedScId
     ? (INITIAL_VENDORS.find((v) => v.id === suggestedLocation.assignedScId) ?? {
         id: suggestedLocation.assignedScId,
         name: suggestedLocation.assignedScId,
       })
     : null
+
+  // Currently active constraint code, derived from the stored string via
+  // prefix matching (so both "MFO" and "Must Finish On: Wk 32" map to MFO).
+  const activeConstraintCode = useMemo(() => {
+    if (!task.constraints) return null
+    for (const code of Object.keys(CONSTRAINT_LONG_FORM)) {
+      if (constraintMatches(task.constraints, code)) return code
+    }
+    return null
+  }, [task.constraints])
+
+  // Local input state for the deadline-week picker shown when MFO/MSO is
+  // active. Pre-filled from the stored constraint so existing seed rows
+  // (e.g. "Must Finish On: Wk 32") show their week in the input.
+  const [deadlineWeekInput, setDeadlineWeekInput] = useState<string>(() => {
+    const w = extractDeadlineWeek(task.constraints)
+    return w != null ? String(w) : ''
+  })
+
+  const handleConstraintClick = (code: string) => {
+    if (!onUpdateConstraint) return
+    if (DEADLINE_CONSTRAINTS.has(code)) {
+      // For MFO/MSO, build "CODE: Wk N" using the input value. If the input
+      // is empty, fall back to the task's current finish week so the
+      // constraint is always actionable (the breach detector needs a week).
+      const parsed = parseInt(deadlineWeekInput, 10)
+      const week = Number.isNaN(parsed) ? task.start + task.duration : parsed
+      onUpdateConstraint(buildConstraint(code, week))
+      if (Number.isNaN(parsed)) {
+        // Pre-fill the input with the auto-derived week so the user sees
+        // what was applied.
+        setDeadlineWeekInput(String(week))
+        toast.info(`Defaulted ${code} deadline to current finish (Wk ${week})`, {
+          description: 'Edit the week number to set a different deadline.',
+        })
+      }
+    } else {
+      onUpdateConstraint(buildConstraint(code, null))
+    }
+  }
 
   return (
     <>
@@ -93,7 +245,9 @@ export function TaskInspector({
                 // Without this, the link lived only in this inspector's
                 // local state and was lost on remount / page reload.
                 onUpdateLocation?.(locId)
-                const loc = INITIAL_LOCATIONS.find((l) => l.id === locId)
+                // Look up the location name from the LIVE synced store so
+                // the toast reflects admin edits to location names (audit S8).
+                const loc = locations.find((l) => l.id === locId)
                 toast.success('Location linked to task', {
                   description: loc
                     ? `${task.id} → ${loc.name}${loc.assignedScId ? ` (assigned SC: ${loc.assignedScId})` : ''}`
@@ -160,39 +314,64 @@ export function TaskInspector({
                 </div>
               </div>
             </div>
-            <div>
-              <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
-                Duration (weeks)
-              </label>
-              <Input
-                className="mt-1 h-8 text-xs"
-                type="number"
-                min={1}
-                value={task.duration}
-                onChange={(e) => {
-                  const next = parseInt(e.target.value, 10)
-                  // Only propagate when the user enters a valid positive
-                  // integer. Empty / NaN input is ignored so the field
-                  // doesn't temporarily store garbage in the task tree.
-                  if (!Number.isNaN(next) && next >= 1 && onUpdateDuration) {
-                    onUpdateDuration(task.id, next)
-                  }
-                }}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Duration (weeks)
+                </label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  type="number"
+                  min={1}
+                  value={task.duration}
+                  onChange={(e) => {
+                    const next = parseInt(e.target.value, 10)
+                    // Only propagate when the user enters a valid positive
+                    // integer. Empty / NaN input is ignored so the field
+                    // doesn't temporarily store garbage in the task tree.
+                    if (!Number.isNaN(next) && next >= 1 && onUpdateDuration) {
+                      onUpdateDuration(task.id, next)
+                    }
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Progress (%)
+                </label>
+                <Input
+                  className="mt-1 h-8 text-xs"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={task.progress}
+                  disabled={!onUpdateProgress}
+                  onChange={(e) => {
+                    const next = parseInt(e.target.value, 10)
+                    // Clamp to [0, 100] and propagate. NaN (empty input) is
+                    // ignored so the field doesn't momentarily store garbage
+                    // in the task tree (audit S13 — previously progress was
+                    // read-only with no input at all).
+                    if (!Number.isNaN(next) && next >= 0 && next <= 100 && onUpdateProgress) {
+                      onUpdateProgress(task.id, next)
+                    }
+                  }}
+                />
+              </div>
             </div>
             <div>
               <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
                 Constraint
               </label>
-              <div className="mt-1 grid grid-cols-2 gap-1">
+              <div className="mt-1 grid grid-cols-3 gap-1">
                 {['ASAP', 'ALAP', 'SNET', 'FNLT', 'MFO', 'MSO'].map((c) => (
                   <button
                     key={c}
-                    onClick={() => onUpdateConstraint?.(c)}
+                    onClick={() => handleConstraintClick(c)}
                     disabled={!onUpdateConstraint}
                     className={cn(
-                      'h-7 rounded border text-[11px] transition-colors',
-                      task.constraints?.includes(c)
+                      'h-7 rounded border font-mono text-[10px] transition-colors',
+                      activeConstraintCode === c
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'hover:bg-accent border-[var(--pane-divider)]',
                       !onUpdateConstraint && 'cursor-not-allowed opacity-50'
@@ -202,6 +381,40 @@ export function TaskInspector({
                   </button>
                 ))}
               </div>
+              {/* Deadline-week input — only shown when MFO or MSO is active.
+                  The stored constraint string carries the week as "CODE: Wk N"
+                  so the EOT breach detector can parse it. Editing the week
+                  here rebuilds the constraint string with the new value. */}
+              {activeConstraintCode && DEADLINE_CONSTRAINTS.has(activeConstraintCode) && (
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                    Deadline Wk
+                  </label>
+                  <Input
+                    className="h-7 w-20 text-xs"
+                    type="number"
+                    min={1}
+                    max={52}
+                    value={deadlineWeekInput}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setDeadlineWeekInput(v)
+                      const parsed = parseInt(v, 10)
+                      if (
+                        !Number.isNaN(parsed) &&
+                        parsed >= 1 &&
+                        parsed <= 52 &&
+                        onUpdateConstraint
+                      ) {
+                        onUpdateConstraint(buildConstraint(activeConstraintCode, parsed))
+                      }
+                    }}
+                  />
+                  <span className="text-muted-foreground text-[10px]">
+                    {activeConstraintCode === 'MFO' ? 'must finish by' : 'must start by'} this week
+                  </span>
+                </div>
+              )}
             </div>
             <Separator />
             <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">

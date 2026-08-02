@@ -113,7 +113,16 @@ export const TASKS: Task[] = [
         progress: 25,
         baseline: [15, 20],
         resources: [],
-        constraints: 'FS+5',
+        // Previously 'FS+5' — that's dependency-lag notation, not a
+        // constraint type, and didn't match any constraint button or the
+        // breach detector. The intended meaning was "the curing period
+        // must finish no later than its start + duration (5 weeks of
+        // curing after pouring)", which is just FNLT applied to the
+        // task's existing finish week. The actual 5-week lag between
+        // T-203 (pouring) and T-204 (curing) is correctly modeled by
+        // the FS dependency below — the constraint string was redundant
+        // and semantically wrong (audit S11).
+        constraints: 'FNLT',
         dependencies: [{ taskId: 'T-204', predecessorId: 'T-203', linkType: 'FS', lagWeeks: 0 }],
       },
     ],

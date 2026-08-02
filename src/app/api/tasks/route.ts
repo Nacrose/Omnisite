@@ -8,9 +8,15 @@ import { taskSchema } from '@/lib/validation'
 // Paginating on `id` is monotonic and unique, so the limit+1 / nextCursor
 // trick works regardless of how many tasks share sort_order=0.
 //
-// `sort_order` is still written via the fieldMap in scheduler/index.tsx
-// (sortOrder: 'sort_order') — the column exists and is used for client-side
-// outline ordering; it just isn't suitable as a server-side pagination cursor.
+// NOTE: `sort_order` is a column on the tasks table (with column default 0)
+// but is NOT currently written by the scheduler module — the Task type has
+// no `sortOrder` field, and the fieldMap in scheduler/index.tsx has no
+// `sortOrder: 'sort_order'` entry. The column exists for forward-compat
+// (a future outline-drag-and-drop feature will populate it). The previous
+// comment here claimed the fieldMap wrote it, which was wrong (audit S12).
+// Client-side outline ordering uses the array order of `tasksWithCpm`
+// directly, which is preserved through `rebuildTreeFromRows` from the
+// row order returned by this route (alphabetical by id).
 //
 // POST /api/tasks — upsert a task via upsertWithAudit.
 // DELETE /api/tasks?id=... — delete via deleteWithAudit (pre-flight RLS read).

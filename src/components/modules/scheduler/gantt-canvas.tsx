@@ -82,8 +82,13 @@ const TaskBar = memo(function TaskBar({
       <span className="pointer-events-none relative z-10 truncate">
         {task.duration}w · {task.progress}%
       </span>
-      {/* Resize handles — left edge moves, right edge resizes duration */}
-      {task.type !== 'Summary' && (
+      {/* Resize handles — left edge moves, right edge resizes duration.
+          Hidden on Milestone tasks (duration = 0, no point resizing) and
+          Summary tasks (start/duration derived from children). Previously
+          handles rendered on Milestones too, but `onBarMouseDown` /
+          `onResizeMouseDown` silently returned for them — misleading UX
+          (audit S7). */}
+      {task.type !== 'Summary' && task.type !== 'Milestone' && (
         <>
           <div
             className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize bg-white/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/70"
@@ -432,27 +437,111 @@ export function GanttCanvas({
             </div>
           </div>
 
-          {/* Resource usage panel (toggle)
-              Previously rendered fake sine waves (mason = 30 + 25 * sin(i/3),
-              maz = 50 + 30 * cos(i/4), mx = 10 + 5 * sin(i/2)) — those had no
-              basis in real data. The Task type carries `resources: string[]`
-              (role names) but no per-week hours, so we cannot honestly draw a
-              usage chart yet. Show an honest placeholder until resource
-              assignments (role → person → hours/week) are wired in. */}
-          {showResources && (
-            <div className="bg-secondary/20 border-t-2 border-[var(--pane-divider)]">
-              <div className="text-muted-foreground px-3 py-2 text-[10px] font-semibold tracking-wider uppercase">
-                Resource Usage · Weekly hours
-              </div>
-              <div className="flex items-center justify-center px-4 py-8 text-center">
-                <div className="text-muted-foreground max-w-md text-[11px] leading-relaxed">
-                  Resource usage chart requires task resource assignments — not yet configured.
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Resource usage panel (toggle).
+              Renders an actual per-week bar chart of resource load — the
+              count of resource codes assigned to active tasks in each week
+              (same definition `leveling.ts` uses for its peak-smoothing
+              heuristic). Previously this rendered fake sine waves and was
+              later replaced with an "always placeholder" message — but
+              that meant the toggle did nothing even when tasks had real
+              `resources: ['M-1', 'E-3', ...]` arrays. Now it shows the
+              real load so users can spot over-allocation weeks (audit S9).
+
+              The bars are colored amber when load = peak (so the user can
+              see at a glance which weeks leveling would target). */}
+          {showResources && <ResourceLoadChart tasks={tasks} />}
         </div>
       </div>
     </div>
   )
 }
+
+// ─── Resource load chart ────────────────────────────────────────────────────
+//
+// Renders a per-week bar chart of resource load — the count of resource
+// codes assigned to active tasks in each week. Same definition `leveling.ts`
+// uses for its peak-smoothing heuristic. Bars at peak load are colored
+// amber so the user can spot the weeks leveling would target.
+//
+// Memoized so it only recomputes when the task tree actually changes —
+// hovering / dragging bars doesn't invalidate the chart.
+
+interface ResourceLoadChartProps {
+  tasks: Task[]
+}
+
+function computeWeeklyLoad(tasks: Task[]): { load: number[]; peak: number } {
+  const load = new Array(TOTAL_WEEKS).fill(0)
+  const walk = (items: Task[]) => {
+    for (const t of items) {
+      if (t.type === 'Work' && t.duration > 0) {
+        const resources = t.resources ?? []
+        for (let w = t.start; w < t.start + t.duration && w < TOTAL_WEEKS; w++) {
+          load[w] += resources.length
+        }
+      }
+      if (t.children) walk(t.children)
+    }
+  }
+  walk(tasks)
+  const peak = Math.max(1, ...load)
+  return { load, peak }
+}
+
+export const ResourceLoadChart = memo(function ResourceLoadChart({
+  tasks,
+}: ResourceLoadChartProps) {
+  const { load, peak } = useMemo(() => computeWeeklyLoad(tasks), [tasks])
+  const hasAnyLoad = load.some((v) => v > 0)
+  const barHeight = 32 // px
+
+  return (
+    <div className="bg-secondary/20 border-t-2 border-[var(--pane-divider)]">
+      <div className="text-muted-foreground flex items-center justify-between px-3 py-2 text-[10px] font-semibold tracking-wider uppercase">
+        <span>Resource Load · resource units per week</span>
+        <span className="font-mono normal-case">
+          peak {peak} · {hasAnyLoad ? 'amber = peak weeks' : 'no resources assigned'}
+        </span>
+      </div>
+      {!hasAnyLoad ? (
+        <div className="text-muted-foreground flex items-center justify-center px-4 py-4 text-center text-[11px]">
+          No resource codes assigned to any Work task. Use the inspector&apos;s Assign tab once
+          resource assignments are wired in.
+        </div>
+      ) : (
+        <div
+          className="flex items-end"
+          style={{ width: TOTAL_WEEKS * WEEK_WIDTH, height: barHeight + 8 }}
+        >
+          {/* Spacer aligned with the 480px task-name column */}
+          {load.map((v, i) => {
+            const isPeak = v === peak && v > 0
+            const h = v === 0 ? 1 : Math.max(2, (v / peak) * barHeight)
+            return (
+              <div
+                key={i}
+                className="flex-shrink-0 border-r border-[var(--pane-divider)]"
+                style={{
+                  width: WEEK_WIDTH,
+                  height: barHeight + 8,
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'center',
+                }}
+                title={`Wk ${i + 1}: ${v} resource unit${v === 1 ? '' : 's'}`}
+              >
+                <div
+                  className={cn(
+                    'w-3/4 rounded-t-sm',
+                    isPeak ? 'bg-amber-500/70' : v > 0 ? 'bg-primary/60' : 'bg-transparent'
+                  )}
+                  style={{ height: h }}
+                />
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+})
