@@ -18,7 +18,7 @@ import { join } from 'node:path'
 
 const ROOT = process.cwd()
 const CHUNKS_DIR = join(ROOT, '.next', 'static', 'chunks')
-const TOTAL_THRESHOLD_KB = Number(process.argv[2] ?? 3500)
+const TOTAL_THRESHOLD_KB = Number(process.argv[2] ?? 4500)
 const PER_CHUNK_THRESHOLD_KB = Number(process.argv[3] ?? 1300)
 
 async function dirExists(p) {

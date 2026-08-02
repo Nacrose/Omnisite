@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -39,12 +40,11 @@ import {
   FileWarning,
   Maximize2,
   MessageSquare,
+  Loader2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { toast } from 'sonner'
-import { PdfViewer, type PdfViewerHandle } from './pdf-viewer'
-import { MarkupOverlay, MarkupToolbar, type MarkupOverlayHandle } from './markup-overlay'
 import {
   type AnnotationType,
   type Dwg,
@@ -54,6 +54,31 @@ import {
   formatFileSize,
   isViewerSupported,
 } from './types'
+
+// Lazy-load the PDF viewer and markup overlay so pdfjs-dist (~400KB) and
+// Fabric.js (~300KB) are only downloaded when a user actually opens a
+// PDF drawing. Without this, both libraries would be bundled into the
+// drawings module chunk and push the total over the 3500KB size budget.
+const PdfViewer = dynamic(() => import('./pdf-viewer').then((m) => m.PdfViewer), {
+  ssr: false,
+  loading: () => (
+    <div className="text-muted-foreground flex h-96 items-center justify-center">
+      <Loader2 className="h-5 w-5 animate-spin" />
+      <span className="ml-2 text-sm">Loading PDF viewer…</span>
+    </div>
+  ),
+})
+const MarkupOverlay = dynamic(() => import('./markup-overlay').then((m) => m.MarkupOverlay), {
+  ssr: false,
+})
+const MarkupToolbar = dynamic(() => import('./markup-overlay').then((m) => m.MarkupToolbar), {
+  ssr: false,
+})
+
+// Type imports for the dynamically-loaded components' handles.
+// These are type-only — erased at compile time, no runtime cost.
+import type { PdfViewerHandle } from './pdf-viewer'
+import type { MarkupOverlayHandle } from './markup-overlay'
 
 interface DrawingViewerProps {
   dwg: Dwg
