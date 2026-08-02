@@ -224,6 +224,20 @@ export function levelResources(tasks: Task[]): LevelingResult {
   const loadAfter = weeklyLoad(workLeaves)
   const peakAfter = Math.max(...loadAfter)
 
+  // Dedup violations by task id — if a task has multiple FS predecessors
+  // and more than one violates, we'd get multiple entries for the same
+  // task. Keep only the worst (largest violationWeeks) per task so the
+  // toast's "N violations" count matches the number of distinct tasks
+  // the user needs to fix (audit R4-6).
+  const worstPerTask = new Map<string, LevelingViolation>()
+  for (const v of violations) {
+    const existing = worstPerTask.get(v.id)
+    if (!existing || v.violationWeeks > existing.violationWeeks) {
+      worstPerTask.set(v.id, v)
+    }
+  }
+  const dedupedViolations = Array.from(worstPerTask.values())
+
   // Rebuild the task tree with the updated start weeks. We walk the original
   // tree and replace leaf starts from the workLeaves map.
   const leafStarts = new Map(workLeaves.map((l) => [l.id, l.start]))
@@ -252,7 +266,7 @@ export function levelResources(tasks: Task[]): LevelingResult {
   return {
     leveledTasks,
     shifts,
-    violations,
+    violations: dedupedViolations,
     peakLoadBefore: peakBefore,
     peakLoadAfter: peakAfter,
   }

@@ -110,15 +110,27 @@ export function calculateCpm(tasks: CpmTask[]): CpmOutput {
   }
 
   // Normalize dependencies: merge `predecessors` (FS-only) and `dependencies`
+  // into a single list per task. Skip dependencies whose predecessor is NOT
+  // in the task list — this happens legitimately when the caller filters the
+  // input (e.g. the scheduler passes only Work + Milestone tasks, excluding
+  // Summary and Hammock). A dep on a filtered predecessor would otherwise
+  // contribute a spurious ES=0 constraint in the forward pass (es.get() for
+  // the missing predecessor returns 0) and a spurious LF=projectDuration in
+  // the backward pass. Skipping them is correct and matches MS Project
+  // behavior (audit R4-3).
   const normalizedDeps = new Map<string, CpmDependency[]>()
   for (const t of tasks) {
     const deps: CpmDependency[] = []
     if (t.dependencies && t.dependencies.length > 0) {
-      deps.push(...t.dependencies)
+      for (const dep of t.dependencies) {
+        if (taskMap.has(dep.predecessorId)) deps.push(dep)
+      }
     }
     if (t.predecessors && t.predecessors.length > 0) {
       for (const predId of t.predecessors) {
-        // Don't duplicate if already in dependencies
+        // Don't duplicate if already in dependencies, and skip if the
+        // predecessor isn't in the task list.
+        if (!taskMap.has(predId)) continue
         if (!deps.some((d) => d.predecessorId === predId)) {
           deps.push({ predecessorId: predId, linkType: 'FS', lag: 0 })
         }
@@ -139,17 +151,9 @@ export function calculateCpm(tasks: CpmTask[]): CpmOutput {
   for (const t of tasks) {
     const deps = normalizedDeps.get(t.id) || []
     for (const dep of deps) {
-      // Skip dependencies whose predecessor is NOT in the task list.
-      // This happens legitimately when the caller filters the input —
-      // e.g. the scheduler passes only Work + Milestone tasks to CPM
-      // (Summary and Hammock tasks are excluded because they're roll-ups
-      // / anchors, not duration-based). A Work task that depends on a
-      // Summary task (e.g. T-101 → T-100 in the seed) would otherwise
-      // have its in-degree incremented but never decremented (the Summary
-      // is never enqueued), so it'd be falsely reported as cyclic by the
-      // cycle check below (audit R3-1 — regression introduced by the
-      // cycle detection added in round 2).
-      if (!taskMap.has(dep.predecessorId)) continue
+      // normalizedDeps already filtered out deps whose predecessor isn't
+      // in taskMap (see above), so dep.predecessorId is guaranteed to be
+      // a valid task id here.
       if (!adjList.has(dep.predecessorId)) adjList.set(dep.predecessorId, [])
       adjList.get(dep.predecessorId)!.push(t.id)
       inDegree.set(t.id, (inDegree.get(t.id) || 0) + 1)

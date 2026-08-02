@@ -180,30 +180,45 @@ export function AddTaskModal({
           {/* Preview */}
           <div className="bg-secondary/30 rounded-md p-2.5 text-[11px]">
             <div className="text-muted-foreground mb-1 text-[10px]">Preview</div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground font-mono text-[10px]">T-new</span>
-              <span className="font-medium">{newTask.name || 'New Task'}</span>
-              <span className="text-muted-foreground ml-auto text-[10px]">
-                Wk {newTask.start + 1} → Wk {newTask.start + newTask.duration + 1} ·{' '}
-                {newTask.duration}w
-              </span>
-            </div>
-            {/* Mini bar preview */}
-            <div className="bg-secondary relative mt-2 h-4 overflow-hidden rounded-sm">
-              <div
-                className={cn(
-                  'absolute h-full rounded-sm',
-                  newTask.critical ? 'bg-red-500' : 'bg-primary',
-                  newTask.type === 'Milestone' && 'bg-amber-500',
-                  newTask.type === 'Hammock' && 'bg-violet-500',
-                  newTask.type === 'Summary' && 'bg-muted-foreground/60'
-                )}
-                style={{
-                  left: `${(newTask.start / TOTAL_WEEKS) * 100}%`,
-                  width: `${Math.max((newTask.duration / TOTAL_WEEKS) * 100, 2)}%`,
-                }}
-              />
-            </div>
+            {/* Effective duration — Milestones have duration 0 regardless of
+                the input value (the input is disabled when type=Milestone).
+                Use 0 in the preview so a Milestone shows "Wk 19 · 0w" instead
+                of the stale "Wk 19 → Wk 24 · 5w" (audit R4-2). */}
+            {(() => {
+              const effDuration = newTask.type === 'Milestone' ? 0 : newTask.duration
+              const finishWeek = newTask.start + effDuration
+              return (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground font-mono text-[10px]">T-new</span>
+                    <span className="font-medium">{newTask.name || 'New Task'}</span>
+                    <span className="text-muted-foreground ml-auto text-[10px]">
+                      {newTask.type === 'Milestone'
+                        ? `Wk ${newTask.start + 1} · milestone`
+                        : `Wk ${newTask.start + 1} → Wk ${finishWeek + 1} · ${effDuration}w`}
+                    </span>
+                  </div>
+                  {/* Mini bar preview */}
+                  <div className="bg-secondary relative mt-2 h-4 overflow-hidden rounded-sm">
+                    <div
+                      className={cn(
+                        'absolute h-full rounded-sm',
+                        newTask.critical ? 'bg-red-500' : 'bg-primary',
+                        newTask.type === 'Milestone' && 'bg-amber-500',
+                        newTask.type === 'Hammock' && 'bg-violet-500',
+                        newTask.type === 'Summary' && 'bg-muted-foreground/60'
+                      )}
+                      style={{
+                        left: `${(newTask.start / TOTAL_WEEKS) * 100}%`,
+                        // Milestones render as a thin sliver (2% width) since
+                        // effDuration=0 would make the bar invisible.
+                        width: `${Math.max((effDuration / TOTAL_WEEKS) * 100, newTask.type === 'Milestone' ? 2 : 2)}%`,
+                      }}
+                    />
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
 

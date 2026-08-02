@@ -222,18 +222,10 @@ export function SchedulerModule() {
   const [addTaskOpen, setAddTaskOpen] = useState(false)
   const [newTask, setNewTask] = useState<NewTaskDraft>(EMPTY_NEW_TASK)
 
-  // Memoize the flatten + visible-filter so they only recompute when
-  // `tasksWithCpm` or `showCriticalOnly` actually change. Without this,
-  // every unrelated re-render (e.g. hovering a task, dragging the gantt
-  // canvas) would re-walk the entire task tree twice.
+  // Memoize the flatten so it only recomputes when `tasksWithCpm` actually
+  // changes. Without this, every unrelated re-render (e.g. hovering a task,
+  // dragging the gantt canvas) would re-walk the entire task tree twice.
   const flat = useMemo(() => flattenTasks(tasksWithCpm), [tasksWithCpm])
-  // Apply the "Critical path only" filter so the toggle actually does something.
-  // Previously `visible` was declared but never used, and the filter body returned
-  // true on every branch.
-  const visible = useMemo(
-    () => flat.filter(({ task }) => !showCriticalOnly || task.critical || task.type === 'Summary'),
-    [flat, showCriticalOnly]
-  )
   const selectedTask = flat.find((f) => f.task.id === selectedId)?.task ?? flat[0]?.task ?? null
 
   // Project finish — the latest end-week (start + duration) across all
@@ -311,7 +303,9 @@ export function SchedulerModule() {
     // clash with seed task IDs once the count grew past 100, and would
     // duplicate IDs if tasks were deleted and re-added.
     const newId = `T-${Date.now().toString(36)}`
-    const finishWeek = newTask.start + newTask.duration
+    const isMilestone = newTask.type === 'Milestone'
+    const duration = isMilestone ? 0 : newTask.duration
+    const finishWeek = newTask.start + duration
     // Build the constraint string. For MFO/MSO, auto-default to the task's
     // finish/start week so the breach detector has a week to compare against
     // (audit R3-5 — previously the modal wrote a bare 'MFO' with no week,
@@ -319,20 +313,24 @@ export function SchedulerModule() {
     // and set a week manually). The inspector's deadline-week input will
     // show the auto-defaulted value, and the user can edit it from there.
     let constraints = newTask.constraints
-    if ((constraints === 'MFO' || constraints === 'MSO') && newTask.type !== 'Milestone') {
-      constraints = `${constraints}: Wk ${finishWeek}`
-    } else if (constraints === 'MFO' && newTask.type === 'Milestone') {
-      // Milestones have duration 0, so finish = start. Use start week.
-      constraints = `${constraints}: Wk ${newTask.start}`
+    if (constraints === 'MFO' || constraints === 'MSO') {
+      // For MFO use finish week; for MSO use start week. For Milestones
+      // (duration 0) finish = start, so both use start week.
+      const deadlineWeek = constraints === 'MFO' ? finishWeek : newTask.start
+      constraints = `${constraints}: Wk ${deadlineWeek}`
     }
     const task: Task = {
       id: newId,
       name: newTask.name || 'New Task',
       type: newTask.type,
       start: newTask.start,
-      duration: newTask.type === 'Milestone' ? 0 : newTask.duration,
+      duration,
       progress: 0,
-      baseline: [newTask.start, newTask.start + newTask.duration],
+      // Baseline = [start, finish]. For Milestones (duration 0) this is
+      // [start, start] so the outline doesn't show a misleading strikethrough
+      // duration (audit R4-1 — previously used newTask.duration which was
+      // the stale pre-switch value, e.g. 5, so a Milestone showed "0w ̶5w̶").
+      baseline: [newTask.start, finishWeek],
       resources: [],
       critical: newTask.critical,
       constraints,
@@ -349,9 +347,13 @@ export function SchedulerModule() {
 
   const renderTaskRows = () => {
     const rows: React.ReactNode[] = []
-    // When showCriticalOnly is on, render only the filtered visible list.
     // When searchQuery is non-empty, filter the tree by id/name (keeping ancestors).
-    // Otherwise render the full tree.
+    // The "Critical path only" toggle is handled inside the walk below (we
+    // still render the full tree structure but skip non-critical leaf tasks),
+    // so the user sees the Summary groups with their critical children visible
+    // and non-critical children hidden — much more useful than a flat list
+    // (audit R4-4 — previously the toggle produced a confusing flat list of
+    // Summary + critical tasks with no nesting).
     const q = searchQuery.trim().toLowerCase()
     const filterTree = (items: Task[]): Task[] => {
       if (!q) return items
@@ -368,10 +370,17 @@ export function SchedulerModule() {
       }
       return out
     }
-    const baseItems = showCriticalOnly ? visible.map((v) => v.task) : tasksWithCpm
-    const itemsToRender = filterTree(baseItems)
+    const itemsToRender = filterTree(tasksWithCpm)
     const walk = (items: Task[], depth: number) => {
       for (const t of items) {
+        // "Critical path only" filter: skip non-critical LEAF tasks.
+        // Summary tasks are always rendered (they provide structure).
+        // Critical leaf tasks are rendered. Non-critical leaf tasks are
+        // hidden. This keeps the tree structure intact while focusing on
+        // the critical path (audit R4-4).
+        const isLeaf = !t.children || t.children.length === 0
+        if (showCriticalOnly && isLeaf && !t.critical) continue
+
         const isExpanded = expanded.has(t.id)
         const hasChildren = t.children && t.children.length > 0
         const isSelected = t.id === selectedId
@@ -435,7 +444,14 @@ export function SchedulerModule() {
 
   // Gantt canvas — TODAY line is computed from the project epoch so it
   // advances as real time passes (was previously hardcoded to `16`).
-  const todayWeek = Math.max(0, Math.floor((Date.now() - PROJECT_EPOCH.getTime()) / MS_PER_WEEK))
+  // Clamped to [0, TOTAL_WEEKS] so the red line doesn't render off-canvas
+  // if the current date is far past the project end (audit R4-5 — previously
+  // a date in 2027+ would place the TODAY line at week 52+, beyond the
+  // canvas's 52-week width, making it invisible and confusing).
+  const todayWeek = Math.max(
+    0,
+    Math.min(TOTAL_WEEKS, Math.floor((Date.now() - PROJECT_EPOCH.getTime()) / MS_PER_WEEK))
+  )
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // Mouse handlers for drag-to-move on Gantt bars. Wrapped in useCallback

@@ -10,6 +10,7 @@ import { Link2, Calendar, Gauge, Package, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Task } from './types'
+import { TOTAL_WEEKS } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { INITIAL_VENDORS } from '@/data/seed/vendors'
@@ -317,6 +318,13 @@ export function TaskInspector({
                   className="mt-1 h-8 text-xs"
                   type="number"
                   min={1}
+                  // Max = TOTAL_WEEKS - task.start so the task can't extend
+                  // past the project horizon. The clamp is also enforced in
+                  // updateTaskDuration, but setting it on the input prevents
+                  // the visual "jump" where the user types 100, the input
+                  // briefly shows 100, then re-renders with the clamped
+                  // value (audit R4-7).
+                  max={TOTAL_WEEKS - task.start}
                   value={task.duration}
                   onChange={(e) => {
                     const next = parseInt(e.target.value, 10)
