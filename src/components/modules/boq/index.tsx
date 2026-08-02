@@ -665,9 +665,14 @@ export function BoqModule() {
               icon={<Edit3 className="h-3.5 w-3.5" />}
               label="Edit item"
               onClick={() => {
-                toast.info('Inline editing coming soon', {
-                  description: 'Edit Qty and Rate directly in the grid cells.',
-                })
+                // Inline editing IS implemented (qty/rate inputs in the
+                // grid). Selecting this menu item selects the row and
+                // focuses the qty input so the user can start typing
+                // immediately. Previously this showed a "coming soon"
+                // toast even though inline editing was already wired up
+                // (audit B3-8).
+                setSelectedId(contextMenu.itemId)
+                setEditing({ id: contextMenu.itemId, field: 'qty' })
                 setContextMenu(null)
               }}
             />

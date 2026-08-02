@@ -168,20 +168,32 @@ export function undo(ctx: BoqHandlerCtx): void {
   // the updater so they don't double-fire under StrictMode.
   const snapshot = ctx.undoStack[ctx.undoStack.length - 1]
   const currentTree = ctx.boqData
+  // After this undo, the undo stack will have length - 1 items. Capture
+  // that count for the toast (ctx.undoStack is the pre-pop closure value,
+  // so length - 1 is the post-pop count — audit B3-2).
+  const remainingAfter = ctx.undoStack.length - 1
   ctx.setUndoStack((u) => u.slice(0, -1))
   ctx.setRedoStack((r) => [...r, deepClone(currentTree)])
   ctx.setBoqRows(flattenBoqTree(snapshot) as unknown as BoqItem[])
-  toast.success('Undo', { description: `Reverted (${ctx.undoStack.length - 1} actions left)` })
+  toast.success('Undo', {
+    description: `${remainingAfter} action${remainingAfter === 1 ? '' : 's'} left`,
+  })
 }
 
 export function redo(ctx: BoqHandlerCtx): void {
   if (ctx.redoStack.length === 0) return
   const snapshot = ctx.redoStack[ctx.redoStack.length - 1]
   const currentTree = ctx.boqData
+  // After this redo, the redo stack will have length - 1 items. Capture
+  // that count for the toast (ctx.redoStack is the pre-pop closure value,
+  // so length - 1 is the post-pop count — audit B3-3).
+  const remainingAfter = ctx.redoStack.length - 1
   ctx.setRedoStack((r) => r.slice(0, -1))
   ctx.setUndoStack((u) => [...u, deepClone(currentTree)])
   ctx.setBoqRows(flattenBoqTree(snapshot) as unknown as BoqItem[])
-  toast.success('Redo', { description: `${ctx.redoStack.length - 1} actions left` })
+  toast.success('Redo', {
+    description: `${remainingAfter} action${remainingAfter === 1 ? '' : 's'} left`,
+  })
 }
 
 /** Update a single BOQ item's qty or rate.
@@ -351,9 +363,21 @@ export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
                 desc: 'New BOQ item',
                 type: 'Priced',
                 qty: 0,
-                uom: 'cum',
+                // Default UOM is empty — the user should pick the right unit
+                // for their item. Previously defaulted to 'cum' (cubic
+                // meters) which is only correct for volume-based items; a
+                // 'rmt', 'sqm', 'no', or 'MT' item would show a misleading
+                // unit until the user noticed and changed it (audit B3-6).
+                uom: '',
                 rate: 0,
                 level: it.level + 1,
+                // hasRA is intentionally NOT set — new items don't have a
+                // rate analysis until the user builds one in the RA
+                // Inspector. The grid's RA column shows the lock icon only
+                // when hasRA is truthy, so omitting it is correct (audit
+                // B3-5 — previously the field wasn't set either, but the
+                // comment documents the intent so future contributors
+                // don't add hasRA: true as a "sensible default").
               })
               // Renumber all sibling codes as parent.1, parent.2, ... so
               // additions/removals keep codes consistent with tree structure.
@@ -391,6 +415,21 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
     'id'
   )
   if (!dragInfo) return
+
+  // Guard: refuse to reparent under a non-Heading item. The BoqDndRow
+  // component disables the droppable for non-Heading items, but this is a
+  // defense-in-depth check — if the droppable is somehow enabled (e.g. a
+  // bug in the disabled logic), allowing the reparent would create
+  // children under a Priced/Provisional Sum/Daywork item, double-counting
+  // them in the contract total (audit B3-9).
+  const targetItem = ctx.allFlat.find((i) => i.id === targetHeadingId)
+  if (!targetItem) return
+  if (targetItem.type !== 'Heading') {
+    toast.error('Cannot reparent', {
+      description: `Target ${targetItem.code} is a ${targetItem.type} item — children can only be added under Heading items.`,
+    })
+    return
+  }
 
   // Cycle check: is targetHeadingId a descendant of draggedId?
   const isDescendant = (
@@ -487,8 +526,12 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
   ctx.setExpandedArr((prev) => (prev.includes(targetHeadingId) ? prev : [...prev, targetHeadingId]))
   ctx.setSelectedId(draggedId)
   const draggedCode = ctx.allFlat.find((i) => i.id === draggedId)?.code ?? draggedId
+  // Show the target's code and desc (not just the id) so the user knows
+  // where the item landed without looking back at the grid (audit B3-10).
+  const targetCode = targetItem.code
+  const targetDesc = targetItem.desc
   toast.success('Item reparented', {
-    description: `${draggedCode} moved under ${targetHeadingId}`,
+    description: `${draggedCode} moved under ${targetCode} — ${targetDesc}`,
   })
 }
 
@@ -599,7 +642,12 @@ export function exportRa(item: BoqItem | undefined): void {
 
   exportToCsv(`RA-${item.code.replace(/\./g, '-')}.csv`, headers, rows)
 
+  // Warn the user that the export uses DoR default coefficients, NOT the
+  // RA Inspector's user-editable rows. The inspector's state is local-only
+  // (not persisted to the item), so exportRa can't read it. The export and
+  // the inspector will diverge until RA data is persisted to a DB column
+  // and exportRa is wired to read from it (audit B3-7).
   toast.success('RA exported', {
-    description: `RA-${item.code.replace(/\./g, '-')}.csv downloaded`,
+    description: `RA-${item.code.replace(/\./g, '-')}.csv downloaded · uses DoR default coefficients (not inspector edits)`,
   })
 }

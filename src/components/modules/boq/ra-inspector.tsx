@@ -158,10 +158,14 @@ export function RaInspector({
   // Persistence requires adding an ra_data JSONB column to boq_items and
   // wiring the local state through useSyncedState.
 
-  // Local copy of the linked location — the parent owns the source of truth
-  // (boqRows via useSyncedState), but the inspector mirrors the selection
-  // locally so the UI reflects the change immediately on re-render.
-  const [locationId, setLocationId] = useState<string | undefined>(item.locationId)
+  // Use item.locationId directly as the LocationPicker value — no local
+  // mirror needed. The parent's onUpdateLocation callback propagates the
+  // change, the boqRows store updates, and the new item prop flows back in
+  // the same React batch. This is the standard controlled-component pattern
+  // and avoids the stale-local-state bug that a useState mirror would cause
+  // when the item prop changes externally (audit B3-1 — same fix as the
+  // scheduler's R5-1).
+  const locationId = item.locationId
 
   // Live state for RA resource rows — drives real-time recalculation of
   // directCost / pctCostBase / totalCost / margin when the user edits a
@@ -294,12 +298,11 @@ export function RaInspector({
             <LocationPicker
               value={locationId}
               onChange={(locId) => {
-                setLocationId(locId ?? undefined)
                 // Propagate to the parent so the synced boqRows store is
                 // mutated — the location_id column added in migration 12 is
                 // then persisted to Supabase and visible to other modules.
-                // Without this, the link lived only in this inspector's
-                // local state and was lost on remount / page reload.
+                // (audit B3-1: no local mirror — item.locationId is the
+                // source of truth, updated via the parent callback.)
                 onUpdateLocation?.(locId)
                 toast.success('Location linked to BOQ item', {
                   description: locId
