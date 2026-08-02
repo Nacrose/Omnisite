@@ -112,6 +112,24 @@ const ROUTES: RouteSpec[] = [
     },
     invalidBody: { sender_id: '', sender_name: '', content: '' },
   },
+  {
+    name: 'drawing-annotations',
+    modulePath: '@/app/api/drawing-annotations/route',
+    table: 'drawing_annotations',
+    validBody: {
+      id: 'ann-1',
+      drawing_id: 'DWG-001',
+      author_id: 'user-1',
+      author_name: 'Jane Engineer',
+      type: 'rectangle',
+      color: '#ef4444',
+      stroke_width: 2,
+      fabric_data: { type: 'rect', left: 10, top: 20, width: 100, height: 50 },
+      x: 10,
+      y: 20,
+    },
+    invalidBody: { id: 'ann-1', drawing_id: '', author_id: '', author_name: '' },
+  },
 ]
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────

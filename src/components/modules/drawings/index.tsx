@@ -13,19 +13,19 @@ import { uploadFile, STORAGE_BUCKETS } from '@/lib/storage'
 import { useApp } from '@/lib/app-store'
 import { DrawingsRegister } from './register'
 import { DrawingInspector } from './inspector'
+import {
+  type Dwg,
+  type DrawingFileType,
+  DRAWING_ACCEPT_ATTR,
+  DRAWING_ALLOWED_EXTS,
+  detectDrawingFileType,
+  formatFileSize,
+} from './types'
 
-export interface Dwg {
-  id: string
-  number: string
-  title: string
-  revision: string
-  date: string
-  status: 'Approved for Construction' | 'Pending' | 'Superseded' | 'Rejected'
-  size: string
-  discipline: string
-  links: { type: string; ref: string }[]
-  history: { rev: string; date: string; note: string }[]
-}
+// Re-export the Dwg type so existing callers (`./register`, `./inspector`)
+// that imported from `./index` keep compiling. The canonical home is now
+// `./types`.
+export type { Dwg } from './types'
 
 const DWS: Dwg[] = [
   {
@@ -48,6 +48,10 @@ const DWS: Dwg[] = [
       { rev: 'B', date: '20 Jun 2026', note: 'Updated pier dimensions per consultant comment' },
       { rev: 'C', date: '15 Jul 2026', note: 'Approved for Construction — AFC stamp' },
     ],
+    fileType: 'pdf',
+    // No fileUrl attached on the seed drawing — the viewer will fall back
+    // to a placeholder PDF so the markup UX is still demonstrable.
+    fileUrl: undefined,
   },
   {
     id: 'DWG-002',
@@ -66,6 +70,7 @@ const DWS: Dwg[] = [
       { rev: 'A', date: '25 Jun 2026', note: 'Initial issue' },
       { rev: 'B', date: '10 Jul 2026', note: 'Updated DBM thickness 50mm → 60mm' },
     ],
+    fileType: 'pdf',
   },
   {
     id: 'DWG-003',
@@ -84,6 +89,9 @@ const DWS: Dwg[] = [
     history: [
       { rev: 'A', date: '18 Jul 2026', note: 'Initial issue — awaiting consultant review' },
     ],
+    fileType: 'dwg',
+    sourceFileUrl: undefined,
+    fileSize: 4_812_544,
   },
   {
     id: 'DWG-004',
@@ -99,11 +107,15 @@ const DWS: Dwg[] = [
       { type: 'NCR', ref: 'NCR-034' },
     ],
     history: [{ rev: 'A', date: '22 Jul 2026', note: 'Initial issue' }],
+    fileType: 'pdf',
   },
 ]
 
 // Derive disciplines from the actual data so empty categories don't show.
 const DISCIPLINES = ['All', ...Array.from(new Set(DWS.map((d) => d.discipline)))]
+
+// 25 MB upload cap (matches the original upload handler).
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 export function DrawingsModule() {
   const { activeProjectDbId } = useApp()
@@ -111,12 +123,15 @@ export function DrawingsModule() {
   const [discipline, setDiscipline] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
+  // Newly uploaded drawings (in-session only — they get persisted when the
+  // user opens them and edits/saves a markup. The drawings table itself is
+  // not written from here; this is the same pattern the original code used
+  // for the upload toast.)
+  const [uploadedDrawings, setUploadedDrawings] = useState<Dwg[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const selected = DWS.find((d) => d.id === selectedId) ?? DWS[0]
 
-  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024 // 25 MB
-  const ACCEPTED_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
-  const ACCEPTED_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp']
+  const allDrawings = [...uploadedDrawings, ...DWS]
+  const selected = allDrawings.find((d) => d.id === selectedId) ?? DWS[0]
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -124,17 +139,28 @@ export function DrawingsModule() {
     if (e.target) e.target.value = ''
     if (!file) return
 
+    // Accept by extension — DWG/DXF don't have universally-recognized MIME
+    // types, so we trust the file extension (the input's `accept` attribute
+    // already filters what the file picker shows).
     const lowerName = file.name.toLowerCase()
-    const extOk = ACCEPTED_EXTS.some((ext) => lowerName.endsWith(ext))
-    if (!extOk || !ACCEPTED_TYPES.includes(file.type)) {
+    const extOk = DRAWING_ALLOWED_EXTS.some((ext) => lowerName.endsWith(ext))
+    if (!extOk) {
       toast.error('Unsupported file type', {
-        description: 'Allowed types: PDF, PNG, JPEG, WebP.',
+        description: 'Allowed: PDF, DWG, DXF, ZIP, RAR, PNG, JPEG, WebP.',
       })
       return
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       toast.error('File too large', {
         description: `Max size is 25 MB (received ${(file.size / 1024 / 1024).toFixed(1)} MB).`,
+      })
+      return
+    }
+
+    const fileType = detectDrawingFileType(file)
+    if (!fileType) {
+      toast.error('Could not detect file type', {
+        description: `Unknown extension on ${file.name}.`,
       })
       return
     }
@@ -148,11 +174,43 @@ export function DrawingsModule() {
       )
       if (result.error) {
         toast.error('Upload failed', { description: result.error })
-      } else {
-        toast.success('Drawing uploaded', {
-          description: `${file.name} stored in the drawings bucket.`,
-        })
+        return
       }
+
+      // Build a drawing record for the uploaded file. For PDFs / images,
+      // the URL points at the file the viewer will render. For DWG/DXF/ZIP/RAR,
+      // the URL is the source-file download URL.
+      const isViewerType = fileType === 'pdf' || fileType === 'image'
+      const newId = `DWG-UP-${Date.now()}`
+      const baseName = file.name.replace(/\.[^.]+$/, '')
+      const newDwg: Dwg = {
+        id: newId,
+        number: `${baseName.slice(0, 24).toUpperCase()}`,
+        title: file.name,
+        revision: 'A',
+        date: new Date().toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+        status: 'Pending',
+        size: '—',
+        discipline: 'Uploaded',
+        links: [],
+        history: [{ rev: 'A', date: new Date().toISOString().slice(0, 10), note: 'File uploaded' }],
+        fileType: fileType as DrawingFileType,
+        fileUrl: isViewerType ? result.url : undefined,
+        sourceFileUrl: isViewerType ? undefined : result.url,
+        fileSize: file.size,
+      }
+      setUploadedDrawings((prev) => [newDwg, ...prev])
+      setSelectedId(newId)
+
+      toast.success('Drawing uploaded', {
+        description: isViewerType
+          ? `${file.name} stored in the drawings bucket — viewer + markup ready.`
+          : `${file.name} stored as a downloadable ${fileType.toUpperCase()} source file.`,
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       toast.error('Upload failed', { description: msg })
@@ -161,7 +219,7 @@ export function DrawingsModule() {
     }
   }
 
-  const filtered = DWS.filter((d) => {
+  const filtered = allDrawings.filter((d) => {
     if (discipline !== 'All' && d.discipline !== discipline) return false
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -192,7 +250,10 @@ export function DrawingsModule() {
           </div>
           <PaneBody className="py-2">
             {DISCIPLINES.map((d) => {
-              const count = d === 'All' ? DWS.length : DWS.filter((x) => x.discipline === d).length
+              const count =
+                d === 'All'
+                  ? allDrawings.length
+                  : allDrawings.filter((x) => x.discipline === d).length
               return (
                 <button
                   key={d}
@@ -219,11 +280,11 @@ export function DrawingsModule() {
       }
       centerPane={
         <>
-          <PaneHeader title={`Drawings Register · ${filtered.length} of ${DWS.length}`}>
+          <PaneHeader title={`Drawings Register · ${filtered.length} of ${allDrawings.length}`}>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              accept={DRAWING_ACCEPT_ATTR}
               className="hidden"
               onChange={handleUpload}
             />
@@ -233,7 +294,7 @@ export function DrawingsModule() {
               className="h-7 gap-1.5 text-xs"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
-              title="Upload a drawing (PDF, PNG, JPEG, WebP — max 25 MB)"
+              title="Upload a drawing (PDF, DWG, DXF, ZIP, RAR, PNG, JPEG, WebP — max 25 MB)"
             >
               <Upload className="h-3.5 w-3.5" />
               {uploading ? 'Uploading…' : 'Upload'}
@@ -245,7 +306,17 @@ export function DrawingsModule() {
               onClick={() => {
                 exportToCsv(
                   'omnisite-drawings.csv',
-                  ['Number', 'Title', 'Discipline', 'Revision', 'Date', 'Size', 'Status'],
+                  [
+                    'Number',
+                    'Title',
+                    'Discipline',
+                    'Revision',
+                    'Date',
+                    'Size',
+                    'Status',
+                    'FileType',
+                    'Size(bytes)',
+                  ],
                   filtered.map((d) => [
                     d.number,
                     d.title,
@@ -254,6 +325,8 @@ export function DrawingsModule() {
                     d.date,
                     d.size,
                     d.status,
+                    d.fileType ?? 'pdf',
+                    d.fileSize != null ? String(d.fileSize) : '',
                   ])
                 )
                 toast.success('Drawings exported', {
@@ -274,7 +347,12 @@ export function DrawingsModule() {
       }
       rightPane={<DrawingInspector key={selected.id} dwg={selected} />}
       leftPaneWidth="220px"
-      rightPaneWidth="380px"
+      rightPaneWidth="480px"
     />
   )
 }
+
+// Surface the helper so callers outside the module can format file sizes
+// consistently (e.g. the download card already imports it from ./types —
+// this re-export is for convenience).
+export { formatFileSize }

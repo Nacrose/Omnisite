@@ -162,6 +162,30 @@ export const drawingSchema = z.object({
   links: z.string().optional(), // serialized JSON
   history: z.string().optional(), // serialized JSON
   file_url: z.string().optional(),
+  file_type: z.string().optional(),
+  source_file_url: z.string().optional(),
+  file_size: z.number().int().nonnegative().optional(),
+})
+
+// Drawing annotations (markups on a PDF page — separate from the original file)
+export const drawingAnnotationSchema = z.object({
+  id: z.string().min(1),
+  project_id: z.string().uuid().optional(),
+  drawing_id: z.string().min(1),
+  page_number: z.number().int().min(1).default(1),
+  author_id: z.string().min(1),
+  author_name: z.string().min(1),
+  type: z.enum(['freehand', 'rectangle', 'text', 'stamp', 'arrow', 'circle']),
+  color: z.string().default('#ef4444'),
+  stroke_width: z.number().min(0).default(2),
+  // fabric_data is a JSON object — the full Fabric.js serialized object.
+  // The API stores it as JSONB; the client sends it as a JSON object (not a string).
+  fabric_data: z.any(),
+  text_content: z.string().nullable().optional(),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
 })
 
 // DSR (Daily Site Report) entries

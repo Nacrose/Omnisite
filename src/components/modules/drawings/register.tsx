@@ -10,7 +10,7 @@ import {
   type ColumnDef,
 } from '@/components/ui/table-utils'
 import { cn } from '@/lib/utils'
-import type { Dwg } from './index'
+import type { Dwg } from './types'
 
 /**
  * DrawingsRegister — center-pane table listing all drawings matching the

@@ -44,6 +44,10 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   // Project locations (work-face / asset setup). SITE_ENGINEER can write
   // because field engineers set up locations on site, not just PMs.
   project_locations: ['PM', 'SITE_ENGINEER'],
+  // Drawing annotations (markups / redlines on PDF pages). PM + Site Engineer
+  // can author redlines; field teams (foremen, storekeepers) can read but not
+  // annotate. Matches the RLS policy in migration 00000000000013 §3.
+  drawing_annotations: ['PM', 'SITE_ENGINEER'],
 }
 
 /**
@@ -76,6 +80,7 @@ export const TABLE_PRIMARY_KEYS: Record<string, string> = {
   audit_log: 'id',
   vendors: 'id',
   project_locations: 'id',
+  drawing_annotations: 'id',
 }
 
 /** Get the PK column for a table (defaults to 'id'). */
@@ -108,6 +113,7 @@ const PROJECT_SCOPED_TABLES = new Set([
   'stock_items',
   'vendors',
   'project_locations',
+  'drawing_annotations',
 ])
 
 /**

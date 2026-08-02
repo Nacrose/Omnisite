@@ -71,6 +71,7 @@ const TABLE_TO_ENDPOINT: Record<string, string> = {
   cbs_nodes: 'cbs-nodes',
   qs_items: 'qs-items',
   chat_messages: 'chat-messages',
+  drawing_annotations: 'drawing-annotations',
 }
 
 function endpointFor(table: string): string {

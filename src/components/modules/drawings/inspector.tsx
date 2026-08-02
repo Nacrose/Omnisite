@@ -5,15 +5,16 @@ import { Separator } from '@/components/ui/separator'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Link2, History, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Dwg } from './index'
-import { DrawingViewer } from './viewer'
+import type { Dwg } from './types'
+import { DrawingViewer } from './drawing-viewer'
 
 /**
  * DrawingInspector — right-pane detail view for a single drawing.
  *
  * Composes the drawing header (title + status + revision badge), the
- * embedded `DrawingViewer` (PDF placeholder with zoom + page nav), and
- * the bi-directional links + revision history sections underneath.
+ * embedded `DrawingViewer` (real PDF viewer + Fabric.js markup overlay
+ * for PDFs; download card for DWG/DXF/ZIP/RAR), and the bi-directional
+ * links + revision history sections underneath.
  *
  * The `key={dwg.id}` prop is set by the parent module so page/zoom state
  * inside the viewer resets when switching drawings.
@@ -46,7 +47,8 @@ export function DrawingInspector({ dwg }: { dwg: Dwg }) {
           </div>
         </div>
 
-        {/* PDF Viewer with page navigation + zoom */}
+        {/* Drawing viewer — PDF + markup overlay for PDFs / images;
+            download card for DWG / DXF / ZIP / RAR. */}
         <DrawingViewer dwg={dwg} />
 
         <div className="space-y-3 px-4 pb-4">
