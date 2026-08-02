@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Download, Plus, Smartphone } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -12,6 +13,7 @@ import { toast } from 'sonner'
 import { WorkerList } from './worker-list'
 import { WorkerInspector } from './inspector'
 import { PhoneMockup } from './phone-mockup'
+import { computeDailyPayroll, enumeratePayPeriodDays, formatPayPeriodLabel } from './payroll-calc'
 
 export interface Worker {
   id: string
@@ -120,6 +122,20 @@ export function TimeAttendanceModule() {
   const [selectedId, setSelectedId] = useState('W-001')
   const [selectedTrade, setSelectedTrade] = useState('All Trades')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Pay period for the payroll CSV export. Defaults to the last 7 days
+  // (today inclusive of the start, exclusive of the day AFTER today — i.e.
+  // the 7-day window ending today). Stored as YYYY-MM-DD strings so the
+  // <Input type="date"> binding is straightforward.
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const weekAgoIso = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 6) // 7 days incl. today
+    return d.toISOString().slice(0, 10)
+  })()
+  const [payPeriodStart, setPayPeriodStart] = useState(weekAgoIso)
+  const [payPeriodEnd, setPayPeriodEnd] = useState(todayIso)
+
   const [workerList, , workersLoading] = useSyncedState<Worker[]>(
     'omnisite-workers',
     'workers',
@@ -224,37 +240,95 @@ export function TimeAttendanceModule() {
               size="sm"
               className="mt-2 h-7 w-full gap-1.5 text-xs"
               onClick={() => {
+                // Payroll CSV export — one row per worker per day in the
+                // selected pay period, with regular/OT split and wage calc.
+                // Uses the same `computeDailyPayroll` helper as the worker
+                // inspector so the two views never disagree.
+                const days = enumeratePayPeriodDays(payPeriodStart, payPeriodEnd)
+                if (days.length === 0) {
+                  toast.error('Invalid pay period', {
+                    description: 'Pick a start date on or before the end date.',
+                  })
+                  return
+                }
+                const rows: (string | number)[][] = []
+                let grandTotal = 0
+                for (const day of days) {
+                  for (const w of workerList) {
+                    // We don't have per-day historical attendance yet, so each
+                    // day in the period uses the worker's `todayHours` as the
+                    // hours worked that day. Once a daily attendance table
+                    // exists, swap this for a lookup keyed by (workerId, day).
+                    const hours = w.todayHours ?? 0
+                    const p = computeDailyPayroll(w, hours)
+                    grandTotal += p.totalPay
+                    rows.push([
+                      w.name,
+                      w.trade,
+                      day,
+                      p.regularHours.toFixed(2),
+                      p.otHours.toFixed(2),
+                      p.wageRate.toFixed(2),
+                      p.regularPay.toFixed(2),
+                      p.otPay.toFixed(2),
+                      p.totalPay.toFixed(2),
+                    ])
+                  }
+                }
                 exportToCsv(
                   'omnisite-payroll.csv',
                   [
-                    'ID',
-                    'Name',
+                    'Worker',
                     'Trade',
-                    'Phone',
-                    'Status',
-                    'Clock In',
-                    'Clock Out',
-                    'Today Hours',
+                    'Date',
+                    'Regular Hours',
+                    'OT Hours',
+                    'Wage Rate',
+                    'Regular Pay',
+                    'OT Pay',
+                    'Total Pay',
                   ],
-                  workerList.map((w) => [
-                    w.id,
-                    w.name,
-                    w.trade,
-                    w.phone,
-                    w.status,
-                    w.clockIn ?? '',
-                    w.clockOut ?? '',
-                    w.todayHours ?? 0,
-                  ])
+                  rows
                 )
                 toast.success('Payroll exported', {
-                  description: `${workerList.length} workers exported to CSV`,
+                  description: `${workerList.length} workers × ${days.length} days (${formatPayPeriodLabel(
+                    payPeriodStart,
+                    payPeriodEnd
+                  )}) · Total NPR ${grandTotal.toLocaleString('en-IN')}`,
                 })
               }}
             >
               <Download className="h-3.5 w-3.5" />
               Payroll Export
             </Button>
+            {/* Pay period selector — drives the CSV export above */}
+            <div className="mt-2 space-y-1">
+              <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                Pay Period
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Input
+                  type="date"
+                  className="h-7 px-1.5 text-[10px]"
+                  value={payPeriodStart}
+                  max={payPeriodEnd}
+                  onChange={(e) => setPayPeriodStart(e.target.value)}
+                  aria-label="Pay period start date"
+                />
+                <Input
+                  type="date"
+                  className="h-7 px-1.5 text-[10px]"
+                  value={payPeriodEnd}
+                  min={payPeriodStart}
+                  max={todayIso}
+                  onChange={(e) => setPayPeriodEnd(e.target.value)}
+                  aria-label="Pay period end date"
+                />
+              </div>
+              <div className="text-muted-foreground text-[9px]">
+                {formatPayPeriodLabel(payPeriodStart, payPeriodEnd)}
+              </div>
+            </div>
           </div>
         </>
       }

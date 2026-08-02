@@ -91,12 +91,18 @@ export function RunningBillTab({
   const handleGenerateBill = () => {
     const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
     const retention = earned * (sc.retentionPct / 100)
+    // Advance recovery is PROPORTIONAL to earned value (advancePct% × earned),
+    // NOT the full outstanding advance balance. Per-bill recovery mirrors
+    // the rate at which the advance was paid relative to agreement value.
+    // Example: 10% advance on a 10M agreement → recover 10% of each bill's
+    // earned value, until the cumulative recovery equals the advance paid.
+    const advanceRecovery = earned * (sc.advancePct / 100)
     const tds = sc.customDeductibles.find((d) => d.type === 'tds')
     const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
     const otherDeductibles = sc.customDeductibles.filter((d) => d.type !== 'tds')
     const otherDeductibleTotal = otherDeductibles.reduce((sum, d) => sum + d.amount, 0)
     const totalDeductions =
-      sc.advancePaid + retention + sc.reworkCost + tdsAmount + otherDeductibleTotal
+      advanceRecovery + retention + sc.reworkCost + tdsAmount + otherDeductibleTotal
     const netPayable = earned - totalDeductions
     toast.success('Running bill generated', {
       description: `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)}`,
@@ -105,6 +111,9 @@ export function RunningBillTab({
 
   const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
   const retention = earned * (sc.retentionPct / 100)
+  // Advance recovery = advancePct% × earned (proportional per-bill recovery).
+  // See handleGenerateBill for the full rationale.
+  const advanceRecovery = earned * (sc.advancePct / 100)
   const tds = sc.customDeductibles.find((d) => d.type === 'tds')
   const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
   const otherDeductibles = sc.customDeductibles.filter((d) => d.type !== 'tds')
@@ -170,7 +179,7 @@ export function RunningBillTab({
   })
 
   const totalDeductions =
-    sc.advancePaid +
+    advanceRecovery +
     retention +
     sc.reworkCost +
     tdsAmount +
@@ -215,11 +224,11 @@ export function RunningBillTab({
           Deductions
         </div>
 
-        {/* Advance recovery */}
+        {/* Advance recovery — proportional to earned value */}
         <BillRow
           icon={Wallet}
-          label={`Advance recovery (${sc.advancePct}%)`}
-          amount={-sc.advancePaid}
+          label={`Advance recovery (${sc.advancePct}% of earned)`}
+          amount={-advanceRecovery}
           color="text-red-600"
         />
 
@@ -309,7 +318,7 @@ export function RunningBillTab({
         </div>
         <div className="text-muted-foreground mt-0.5 text-[10px]">
           {netPayable < 0
-            ? 'SC owes project (advance exceeds earned)'
+            ? 'Deductions exceed earned this bill (verify rates)'
             : 'Payable to SC after all deductions'}
         </div>
       </div>

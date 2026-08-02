@@ -36,6 +36,8 @@ export function QsModule() {
         dueDate: 'due_date',
         billingHold: 'billing_hold',
         locationId: 'location_id',
+        capSubmittedDate: 'cap_submitted_date',
+        closedDate: 'closed_date',
       },
       primaryKey: 'id',
     }
@@ -84,7 +86,23 @@ export function QsModule() {
         if (!n) return it
         // When closing, release the billing hold
         const newBillingHold = n === 'Closed' ? false : it.billingHold
-        return { ...it, status: n as QsItem['status'], billingHold: newBillingHold }
+        // Stamp the transition date so the inspector's status notice can show
+        // a real "CAP submitted on {date}" / "Closed on {date}" message
+        // instead of a fabricated name + timestamp. Format: DD Mon YYYY.
+        const today = new Date().toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+        const capSubmittedDate = n === 'CAP Submitted' ? today : it.capSubmittedDate
+        const closedDate = n === 'Closed' ? today : it.closedDate
+        return {
+          ...it,
+          status: n as QsItem['status'],
+          billingHold: newBillingHold,
+          capSubmittedDate,
+          closedDate,
+        }
       })
     )
     toast.success('NCR advanced', {

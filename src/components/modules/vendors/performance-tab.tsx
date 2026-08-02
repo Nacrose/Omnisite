@@ -19,13 +19,16 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
   const retention = earned * (sc.retentionPct / 100)
   // Match the Running Bill tab's formula (includes TDS, other deductibles,
   // and material + consumable chargebacks) so the two tabs agree.
+  // Advance recovery is PROPORTIONAL to earned (advancePct% × earned),
+  // NOT the full outstanding advance balance — see running-bill-tab.tsx.
+  const advanceRecovery = earned * (sc.advancePct / 100)
   const tds = sc.customDeductibles.find((d) => d.type === 'tds')
   const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
   const otherDeductibleTotal = sc.customDeductibles
     .filter((d) => d.type !== 'tds')
     .reduce((sum, d) => sum + d.amount, 0)
   const netPayable =
-    earned - sc.advancePaid - retention - sc.reworkCost - tdsAmount - otherDeductibleTotal
+    earned - advanceRecovery - retention - sc.reworkCost - tdsAmount - otherDeductibleTotal
 
   // Material efficiency
   let matEfficiency = 100

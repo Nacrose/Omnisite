@@ -23,7 +23,7 @@ import { isSupabaseConfigured } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { useRef } from 'react'
 import { CBS, fmt, flattenCbs, type CbsNode } from './types'
-import { rebuildTreeFromRows, createSetCbsData, createUpdateNode } from './hooks'
+import { rebuildTreeFromRows, createSetCbsData, createUpdateNode, computeMarginPct } from './hooks'
 import { CbsTable, type EditingState } from './table'
 import { FinancialsInspector, KpiCell } from './inspector'
 
@@ -82,9 +82,10 @@ export function FinancialsModule() {
       { budget: 0, committed: 0, actual: 0, forecast: 0 }
     )
 
-  // Live total margin
-  const totalMarginPct =
-    totals.budget > 0 ? ((totals.budget - totals.forecast) / totals.budget) * 100 : 0
+  // Live total margin — uses the shared forecast-based formula (matches DB
+  // trigger and recomputeCbsParent). Don't inline a different formula here
+  // or the totals row will drift out of sync with the per-node marginPct.
+  const totalMarginPct = computeMarginPct(totals.budget, totals.forecast)
 
   // Non-persistent UI state
   const [editing, setEditing] = useState<EditingState>(null)

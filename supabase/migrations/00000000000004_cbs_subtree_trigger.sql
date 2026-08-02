@@ -8,8 +8,13 @@
 -- closing the gap where only the client-side updateNode hook kept
 -- parents in sync.
 --
--- margin_pct is recomputed as (budget - actual) / budget * 100, guarded
--- against divide-by-zero.
+-- margin_pct is recomputed as (budget - forecast) / budget * 100, guarded
+-- against divide-by-zero. Uses forecast (EAC) — NOT actual — so the
+-- server-side trigger matches the client-side `computeMarginPct` helper
+-- in src/components/modules/financials/hooks.ts. Forecast is the best
+-- estimate of final cost (actuals + remaining budget to complete);
+-- using `actual` would under-report cost on in-progress nodes and
+-- over-state margin.
 
 CREATE OR REPLACE FUNCTION recompute_cbs_subtree()
 RETURNS TRIGGER AS $$
@@ -42,7 +47,7 @@ BEGIN
         WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val), 0) > 0
         THEN ROUND(
           ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) -
-           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = parent_code_val)) /
+           (SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = parent_code_val)) /
           (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) * 100.0,
           2
         )
@@ -67,7 +72,7 @@ BEGIN
         WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val), 0) > 0
         THEN ROUND(
           ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) -
-           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = current_code_val)) /
+           (SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = current_code_val)) /
           (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) * 100.0,
           2
         )

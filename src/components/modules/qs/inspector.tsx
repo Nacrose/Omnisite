@@ -347,41 +347,87 @@ export function QsInspector({
             </div>
           )}
 
-          {/* Consultant sign-off notice */}
-          {item.type === 'NCR' && item.status === 'Consultant Sign-off' && (
-            <div className="flex items-start gap-2 rounded-md border border-violet-500/30 bg-violet-500/10 p-2.5 text-[11px]">
-              <Clock className="mt-0.5 h-3.5 w-3.5 text-violet-500" />
-              <div>
-                <div className="font-medium text-violet-700 dark:text-violet-300">
-                  Awaiting Consultant digital sign-off
+          {/* NCR status notice — previously this was two separate blocks that
+              each rendered fabricated "Er. Suresh notified" / "Closed by:
+              Er. Suresh" text on every NCR regardless of actual state. The
+              block below is driven entirely by `item.status` and the optional
+              `capSubmittedDate` / `closedDate` timestamps set when the
+              workflow advances. No names are hardcoded. */}
+          {item.type === 'NCR' &&
+            (() => {
+              const toneByStatus: Record<
+                string,
+                {
+                  border: string
+                  bg: string
+                  heading: string
+                  text: string
+                  Icon: typeof Clock
+                  iconColor: string
+                  detail: string
+                }
+              > = {
+                Open: {
+                  border: 'border-amber-500/30',
+                  bg: 'bg-amber-500/10',
+                  heading: 'No CAP submitted yet',
+                  text: 'text-amber-700 dark:text-amber-300',
+                  Icon: AlertTriangle,
+                  iconColor: 'text-amber-500',
+                  detail: 'Submit a corrective action plan to advance the workflow.',
+                },
+                'CAP Submitted': {
+                  border: 'border-sky-500/30',
+                  bg: 'bg-sky-500/10',
+                  heading: item.capSubmittedDate
+                    ? `CAP submitted on ${item.capSubmittedDate} — awaiting consultant sign-off`
+                    : 'CAP submitted — awaiting consultant sign-off',
+                  text: 'text-sky-700 dark:text-sky-300',
+                  Icon: Clock,
+                  iconColor: 'text-sky-500',
+                  detail:
+                    'NCR cannot be closed until the consultant counter-signs the corrective action plan.',
+                },
+                'Consultant Sign-off': {
+                  border: 'border-violet-500/30',
+                  bg: 'bg-violet-500/10',
+                  heading: 'Awaiting consultant sign-off',
+                  text: 'text-violet-700 dark:text-violet-300',
+                  Icon: Clock,
+                  iconColor: 'text-violet-500',
+                  detail:
+                    'NCR cannot be closed until the consultant counter-signature is received.',
+                },
+                Closed: {
+                  border: 'border-emerald-500/30',
+                  bg: 'bg-emerald-500/10',
+                  heading: item.closedDate ? `Closed on ${item.closedDate}` : 'Closed',
+                  text: 'text-emerald-700 dark:text-emerald-300',
+                  Icon: CheckCircle2,
+                  iconColor: 'text-emerald-500',
+                  detail:
+                    'Consultant sign-off received. Billing hold released — Max Billable Qty restored in Financials.',
+                },
+              }
+              const tone = toneByStatus[item.status]
+              if (!tone) return null
+              const { Icon } = tone
+              return (
+                <div
+                  className={cn(
+                    'flex items-start gap-2 rounded-md border p-2.5 text-[11px]',
+                    tone.border,
+                    tone.bg
+                  )}
+                >
+                  <Icon className={cn('mt-0.5 h-3.5 w-3.5', tone.iconColor)} />
+                  <div>
+                    <div className={cn('font-medium', tone.text)}>{tone.heading}</div>
+                    <div className="text-muted-foreground mt-0.5">{tone.detail}</div>
+                  </div>
                 </div>
-                <div className="text-muted-foreground mt-0.5">
-                  CAP submitted on 30 Jul 2026. Engineer Er. Suresh has been notified. NCR cannot be
-                  closed until counter-signature is received.
-                </div>
-                <div className="text-muted-foreground mt-1 text-[10px]">
-                  Last activity: 2 hours ago
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Closed summary */}
-          {item.type === 'NCR' && item.status === 'Closed' && (
-            <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-[11px]">
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-emerald-500" />
-              <div>
-                <div className="font-medium text-emerald-700 dark:text-emerald-300">NCR Closed</div>
-                <div className="text-muted-foreground mt-0.5">
-                  Consultant sign-off received. Billing hold released — Max Billable Qty restored in
-                  Financials.
-                </div>
-                <div className="text-muted-foreground mt-1 text-[10px]">
-                  Closed by: Er. Suresh · 30 Jul 2026 15:42
-                </div>
-              </div>
-            </div>
-          )}
+              )
+            })()}
 
           {item.type === 'ITR' && (
             <div className="space-y-2">

@@ -408,11 +408,16 @@ BEGIN
       committed = COALESCE((SELECT SUM(committed) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
       actual = COALESCE((SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
       forecast = COALESCE((SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = parent_code_val), 0),
+      -- margin_pct = (budget - forecast) / budget * 100
+      -- Uses forecast (EAC), NOT actual, because forecast is the best
+      -- estimate of final cost (actuals + remaining budget to complete).
+      -- Must match the client-side `computeMarginPct` in
+      -- src/components/modules/financials/hooks.ts.
       margin_pct = CASE
         WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val), 0) > 0
         THEN ROUND(
           ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) -
-           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = parent_code_val)) /
+           (SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = parent_code_val)) /
           (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = parent_code_val) * 100.0,
           2
         )
@@ -433,7 +438,7 @@ BEGIN
         WHEN COALESCE((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val), 0) > 0
         THEN ROUND(
           ((SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) -
-           (SELECT SUM(actual) FROM cbs_nodes WHERE parent_code = current_code_val)) /
+           (SELECT SUM(forecast) FROM cbs_nodes WHERE parent_code = current_code_val)) /
           (SELECT SUM(budget) FROM cbs_nodes WHERE parent_code = current_code_val) * 100.0,
           2
         )

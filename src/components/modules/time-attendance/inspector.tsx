@@ -7,6 +7,7 @@ import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { MapPin, Clock, DollarSign, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Worker } from './index'
+import { computeDailyPayroll } from './payroll-calc'
 
 /**
  * WorkerInspector — right-pane detail view for a single worker.
@@ -16,28 +17,21 @@ import type { Worker } from './index'
  * auto-computed labour cost (wage × hours, OT multiplier after standard
  * hours), and a static payroll-summary strip.
  *
- * The labour-cost calc uses `worker.wageRate` if set, otherwise derives a
- * rate from the trade using DoR Norm 2075 daily rates / 8 hours:
- *   - Mason: 1450 NPR/day  → ~181 NPR/hr
- *   - Operator: 1200 NPR/day → 150 NPR/hr
- *   - Everyone else: 950 NPR/day → ~119 NPR/hr
+ * The labour-cost calc uses `computeDailyPayroll` from ./payroll-calc —
+ * the SAME helper used by the payroll CSV export — so the inspector's
+ * "Today's labour cost" can never drift away from what the CSV reports.
  */
 export function WorkerInspector({ worker }: { worker: Worker }) {
-  // Wage rate: use worker.wageRate if set, otherwise derive from trade.
-  // These are NPR per hour, based on DoR Norm 2075 daily rates / 8 hours.
-  const ratePerHour =
-    worker.wageRate ??
-    (worker.trade.includes('Mason')
-      ? 1450 / 8
-      : worker.trade.includes('Operator')
-        ? 1200 / 8
-        : 950 / 8)
-  const otMultiplier = worker.otMultiplier ?? 1.5
-  const standardHours = worker.standardHours ?? 8
   const hours = worker.todayHours || 0
-  const regHours = Math.min(hours, standardHours)
-  const otHours = Math.max(0, hours - standardHours)
-  const todayCost = regHours * ratePerHour + otHours * ratePerHour * otMultiplier
+  const payroll = computeDailyPayroll(worker, hours)
+  const {
+    wageRate: ratePerHour,
+    otMultiplier,
+    standardHours,
+    regularHours: regHours,
+    otHours,
+  } = payroll
+  const todayCost = payroll.totalPay
 
   return (
     <>

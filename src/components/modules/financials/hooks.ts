@@ -10,6 +10,31 @@ import { flattenTree, createTreeRebuilder } from '@/lib/tree-utils'
 // reference) than structuredClone which deep-copies everything.
 const deepClone = <T>(obj: T): T => produce(obj, () => {})
 
+// ─── CBS margin_pct formula ─────────────────────────────────────────────────
+//
+// The SINGLE source of truth for the margin_pct computation. Used by both
+// `recomputeCbsParent` (parent roll-up) and `createUpdateNode` (leaf edit)
+// so the two paths can NEVER drift apart.
+//
+// Standard formula:
+//   margin_pct = (budget - forecast) / budget * 100
+//
+// `forecast` (Estimated At Completion) is used — NOT `actual` — because
+// forecast is the best estimate of final cost (it includes actuals + the
+// remaining budget to complete). `actual` alone under-reports cost on
+// in-progress nodes and would over-state margin.
+//
+// This MUST match the DB trigger `recompute_cbs_subtree` in
+// `supabase/migrations/00000000000009_audit_project_id_indexes_constraints.sql`
+// (and the equivalent definitions in `00000000000000_schema.sql` and
+// `00000000000004_cbs_subtree_trigger.sql`). Both client and server use
+// the forecast-based formula.
+//
+// Exported so the regression test can exercise it directly.
+export function computeMarginPct(budget: number, forecast: number): number {
+  return budget > 0 ? ((budget - forecast) / budget) * 100 : 0
+}
+
 // ─── CBS parent re-aggregation ──────────────────────────────────────────────
 // When a leaf's committed/actual/forecast is edited, the parent's totals
 // must be recomputed as the sum of its children. This is the shared
@@ -24,7 +49,7 @@ export function recomputeCbsParent(node: CbsNode): void {
   node.committed = node.children.reduce((s, c) => s + c.committed, 0)
   node.actual = node.children.reduce((s, c) => s + c.actual, 0)
   node.forecast = node.children.reduce((s, c) => s + c.forecast, 0)
-  node.marginPct = node.budget > 0 ? ((node.budget - node.forecast) / node.budget) * 100 : 0
+  node.marginPct = computeMarginPct(node.budget, node.forecast)
 }
 
 // ─── Field normalization ──────────────────────────────────────────────────
@@ -114,7 +139,7 @@ export function createUpdateNode(
           for (const n of items) {
             if (n.code === code) {
               n[field] = Math.max(0, value)
-              n.marginPct = n.budget > 0 ? ((n.budget - n.forecast) / n.budget) * 100 : 0
+              n.marginPct = computeMarginPct(n.budget, n.forecast)
               return true
             }
             if (n.children && walk(n.children)) {

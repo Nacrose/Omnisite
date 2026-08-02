@@ -435,8 +435,13 @@ BEGIN
       committed = v_committed,
       actual    = v_actual,
       forecast  = v_forecast,
+      -- margin_pct = (budget - forecast) / budget * 100
+      -- Uses forecast (EAC), NOT actual, because forecast is the best
+      -- estimate of final cost (actuals + remaining budget to complete).
+      -- Must match the client-side `computeMarginPct` in
+      -- src/components/modules/financials/hooks.ts.
       margin_pct = CASE
-        WHEN v_budget > 0 THEN ROUND((v_budget - v_actual) / v_budget * 100.0, 2)
+        WHEN v_budget > 0 THEN ROUND((v_budget - v_forecast) / v_budget * 100.0, 2)
         ELSE 0
       END,
       updated_at = NOW()
@@ -462,7 +467,7 @@ BEGIN
       actual    = v_actual,
       forecast  = v_forecast,
       margin_pct = CASE
-        WHEN v_budget > 0 THEN ROUND((v_budget - v_actual) / v_budget * 100.0, 2)
+        WHEN v_budget > 0 THEN ROUND((v_budget - v_forecast) / v_budget * 100.0, 2)
         ELSE 0
       END,
       updated_at = NOW()

@@ -41,6 +41,13 @@ export interface QsItem {
    *  Stored in local state for now; the DB column will land in a follow-up
    *  migration. */
   locationId?: string
+  /** Date the NCR transitioned into "CAP Submitted" (DD Mon YYYY).
+   *  Populated by the workflow advance handler; shown in the inspector's
+   *  status notice. */
+  capSubmittedDate?: string
+  /** Date the NCR was closed (DD Mon YYYY). Populated by the workflow
+   *  advance handler when the item moves to "Closed". */
+  closedDate?: string
 }
 
 /** Filter chips shown in the left pane (All + one per register type). */
@@ -95,6 +102,8 @@ export const INITIAL_ITEMS: QsItem[] = [
     linkedBoq: '1.1.4',
     status: 'Closed',
     date: '20 Jul 2026',
+    capSubmittedDate: '21 Jul 2026',
+    closedDate: '24 Jul 2026',
   },
   {
     id: 'PCH-018',

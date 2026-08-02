@@ -182,8 +182,19 @@ export function DashboardModule() {
           </div>
         </div>
 
-        {/* KPI strip */}
-        <KpiStrip onNavigate={navigateToModule} />
+        {/* KPI strip — values derived from the live BOQ / tasks / CBS data
+            above. See kpi-strip.tsx for the proxy formulas (SPI/CPI/EAC/Margin
+            are not directly computable without EVM baseline data). */}
+        <KpiStrip
+          onNavigate={navigateToModule}
+          live={{
+            contractTotal: liveKpis.contractTotal,
+            totalTasks: liveKpis.totalTasks,
+            completedTasks: liveKpis.completedTasks,
+            totalBudget: liveKpis.totalBudget,
+            totalActual: liveKpis.totalActual,
+          }}
+        />
 
         {/* Location Activity Map — horizontal strip of all active work
             locations with per-station counts of tasks, open NCRs, and DSR
