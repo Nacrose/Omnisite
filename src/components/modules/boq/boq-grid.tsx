@@ -491,11 +491,17 @@ export function BoqDndRow({
       )}
     >
       {children}
+      {/* Drag handle — positioned at left: 28px so it sits in the expand
+          column (which is empty for leaf items, and only shows a chevron
+          for headings). Previously it was at left:0 and covered the
+          checkbox, making the checkbox hard to click on first try
+          (audit B5-5). Only visible on row hover. */}
       <div
         className={cn(
-          'absolute top-0 bottom-0 left-0 flex w-5 cursor-grab items-center justify-center opacity-0 transition-opacity group-hover/dnd:opacity-100',
+          'absolute top-0 bottom-0 flex w-5 cursor-grab items-center justify-center opacity-0 transition-opacity group-hover/dnd:opacity-100',
           isDragging && 'cursor-grabbing'
         )}
+        style={{ left: '28px' }}
       >
         <GripVertical className="text-muted-foreground/60 h-3 w-3" />
       </div>

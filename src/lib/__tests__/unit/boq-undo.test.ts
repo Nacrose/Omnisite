@@ -310,22 +310,23 @@ describe('BOQ handlers — duplicateItem', () => {
     // Copy is at index 1 (immediately after the original).
     const copy = foundationChildren[1]
     expect(copy.id).toMatch(/^1\.1\.1-copy-/)
-    // Code is now suffixed with a short Date.now() token so successive
-    // duplicates of the same item don't collide.
-    expect(copy.code).toMatch(/^1\.1\.1-copy-/)
+    // Code is recomputed by recomputeSiblingCodes so the copy follows the
+    // parent.N pattern. The original is at index 0 (1.1.1), the copy is at
+    // index 1, so its code is 1.1.2. Previously the copy kept a
+    // `-copy-xxxx` code that didn't follow the pattern (audit B5-1).
+    expect(copy.code).toBe('1.1.2')
     expect(copy.desc).toContain('(Copy)')
     expect(copy.qty).toBe(1240) // deep-cloned content
+    // hasRA is cleared on the copy — the original's RA data is local to the
+    // inspector, so the copy has no RA (audit B5-2).
+    expect(copy.hasRA).toBe(false)
   })
 
-  it('produces unique codes when the same item is duplicated twice', () => {
+  it('produces unique ids when the same item is duplicated twice', () => {
     const state = freshState()
     const ctx = makeCtx(state)
 
     duplicateItem('1.1.1', ctx)
-    // Force a different Date.now() so the suffix differs. (Real-world usage
-    // can't duplicate in the same millisecond via a UI click, but two
-    // programmatic calls in the same test tick can.)
-    vi.spyOn(Date, 'now').mockReturnValueOnce(0)
     duplicateItem('1.1.1', ctx)
 
     const foundationChildren = ctx.boqData[0].children![0].children!
@@ -333,7 +334,11 @@ describe('BOQ handlers — duplicateItem', () => {
     const copy1 = foundationChildren[1]
     const copy2 = foundationChildren[2]
     expect(copy1.id).not.toBe(copy2.id)
-    expect(copy1.code).not.toBe(copy2.code)
+    // Both copies get renumbered by recomputeSiblingCodes, so their codes
+    // follow the parent.N pattern (1.1.2 and 1.1.3). They're inherently
+    // unique because they're positional (audit B5-1).
+    expect(copy1.code).toBe('1.1.2')
+    expect(copy2.code).toBe('1.1.3')
   })
 })
 

@@ -275,8 +275,21 @@ export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
                 // duplicate of the same item produced an identical code.
                 d.code = `${it.code}-copy-${Date.now().toString(36).slice(-4)}`
                 d.desc = `${it.desc} (Copy)`
+                // Clear hasRA on the copy — the original's RA data is local
+                // to the inspector (not persisted to the item), so the copy
+                // has no RA. Without this, the grid would show the green lock
+                // icon on the copy, misleading the user into thinking it has
+                // a rate analysis (audit B5-2).
+                d.hasRA = false
               }) as BoqItem
               items.splice(i + 1, 0, copy)
+              // Recompute sibling codes so the copy follows the parent.N
+              // pattern. Without this, the copy keeps its `-copy-xxxx` code
+              // forever, and subsequent add/remove operations don't renumber
+              // it (audit B5-1 — addChildItem and reparentItem both call
+              // recomputeSiblingCodes, but duplicateItem didn't).
+              const parentCode = it.code.split('.').slice(0, -1).join('.')
+              recomputeSiblingCodes(items, parentCode || null)
               return true
             }
             if (it.children && walk(it.children)) return true

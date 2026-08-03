@@ -695,7 +695,6 @@ export function BoqModule() {
             <ContextMenuItem
               icon={<Copy className="h-3.5 w-3.5" />}
               label="Duplicate"
-              shortcut="⌘D"
               onClick={() => {
                 duplicateItem(contextMenu.itemId, ctx)
                 setContextMenu(null)

@@ -402,7 +402,13 @@ export function RaInspector({
                   <Input
                     className="h-6 w-12 text-xs"
                     type="number"
-                    value={pctCosts.labour.pct}
+                    // Use `|| ''` so the input shows empty (not 0) when the
+                    // user clears it — same pattern as the T&P input below.
+                    // Previously used `value={pctCosts.labour.pct}` which
+                    // showed 0 when cleared, preventing the user from typing
+                    // a new value (audit B5-8).
+                    value={pctCosts.labour.pct || ''}
+                    placeholder="—"
                     onChange={(e) =>
                       setPctCosts((s) => ({
                         ...s,
@@ -422,7 +428,8 @@ export function RaInspector({
                   <Input
                     className="h-6 w-12 text-xs"
                     type="number"
-                    value={pctCosts.material.pct}
+                    value={pctCosts.material.pct || ''}
+                    placeholder="—"
                     onChange={(e) =>
                       setPctCosts((s) => ({
                         ...s,
@@ -442,7 +449,8 @@ export function RaInspector({
                   <Input
                     className="h-6 w-12 text-xs"
                     type="number"
-                    value={pctCosts.equipment.pct}
+                    value={pctCosts.equipment.pct || ''}
+                    placeholder="—"
                     onChange={(e) =>
                       setPctCosts((s) => ({
                         ...s,
@@ -572,7 +580,11 @@ export function RaInspector({
                   <Input
                     className="h-6 w-16 text-xs"
                     type="number"
-                    value={opPct}
+                    // Use `|| ''` so the input shows empty (not 0) when
+                    // cleared — same pattern as the pct cost inputs above
+                    // (audit B5-8).
+                    value={opPct || ''}
+                    placeholder="—"
                     onChange={(e) => setOpPct(parseFloat(e.target.value) || 0)}
                   />
                   <span className="text-muted-foreground">%</span>
