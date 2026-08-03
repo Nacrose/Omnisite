@@ -147,7 +147,7 @@ export function WorkProgressView({
         <StickyTableBody>
           {entries.map((d) => {
             const variance = d.actual - d.planned
-            const variancePct = d.planned > 0 ? (variance / d.planned) * 100 : 0
+            const variancePct = d.planned > 0 ? (variance / d.planned) * 100 : null
             return (
               <div
                 key={d.id}
@@ -184,7 +184,7 @@ export function WorkProgressView({
                     )}
                   >
                     {d.actual || '—'}
-                    {d.planned > 0 && (
+                    {variancePct !== null && (
                       <span className="text-muted-foreground ml-0.5 text-[9px]">
                         ({variancePct >= 0 ? '+' : ''}
                         {variancePct.toFixed(0)}%)

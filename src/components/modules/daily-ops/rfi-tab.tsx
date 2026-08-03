@@ -206,6 +206,22 @@ export function RfiTab({
   const [selectedId, setSelectedId] = useState('r1')
   const [filter, setFilter] = useState<'All' | 'Open' | 'Replied' | 'Closed'>('All')
   const [searchQuery, setSearchQuery] = useState('')
+  // Create-RFI modal state — opened by the "+" button in the register
+  // header (audit D5-1 — previously the button showed a toast telling the
+  // user to switch to the DSR tab, which was unnecessarily restrictive).
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createDraft, setCreateDraft] = useState({
+    subject: '',
+    question: '',
+    impact: '',
+    background: '',
+  })
+  const [createSaved, setCreateSaved] = useState(false)
+  const [createRfiId] = useState(() =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10)
+  )
   const selected = rfis.find((r) => r.id === selectedId) ?? rfis[0]
 
   // If selectedId points to a deleted RFI, `selected` falls back to rfis[0]
@@ -241,137 +257,284 @@ export function RfiTab({
   }
 
   return (
-    <Workspace2Pane
-      leftPane={
-        <>
-          <PaneHeader title="RFI Register">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7"
-              onClick={() =>
-                toast.info('Use the DSR Inspector to draft an RFI', {
-                  description:
-                    'RFIs are created from the DSR Inspector — switch to the DSR tab to draft one from a daily entry.',
-                })
-              }
-              title="Add RFI (via DSR Inspector)"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </PaneHeader>
-          <div className="space-y-2 border-b border-[var(--pane-divider)] px-3 py-2">
-            {/* Status filter */}
-            <div className="flex gap-1">
-              {(['All', 'Open', 'Replied', 'Closed'] as const).map((f) => {
-                const count = f === 'All' ? rfis.length : rfis.filter((r) => r.status === f).length
-                return (
-                  <Button
-                    key={f}
-                    variant={filter === f ? 'default' : 'ghost'}
-                    size="sm"
-                    className="h-7 flex-1 text-xs"
-                    onClick={() => setFilter(f)}
-                  >
-                    {f} <span className="ml-1 text-[9px] opacity-70">{count}</span>
-                  </Button>
-                )
-              })}
-            </div>
-            <div className="relative">
-              <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-              <Input
-                placeholder="Filter by number / subject / question…"
-                className="h-8 pl-7 text-xs"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-          <PaneBody className="py-2">
-            {/* Overdue alert */}
-            {overdueCount > 0 && (
-              <div className="mx-3 mb-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-[10px]">
-                <div className="flex items-center gap-1.5 font-medium text-red-600">
-                  <AlertTriangle className="h-3 w-3" />
-                  {overdueCount} RFI overdue
-                </div>
-                <div className="text-muted-foreground mt-0.5">
-                  Consultant reply pending — billing hold may apply.
-                </div>
+    <>
+      <Workspace2Pane
+        leftPane={
+          <>
+            <PaneHeader title="RFI Register">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                onClick={() => {
+                  setCreateDraft({ subject: '', question: '', impact: '', background: '' })
+                  setCreateSaved(false)
+                  setCreateModalOpen(true)
+                }}
+                title="Add RFI"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </PaneHeader>
+            <div className="space-y-2 border-b border-[var(--pane-divider)] px-3 py-2">
+              {/* Status filter */}
+              <div className="flex gap-1">
+                {(['All', 'Open', 'Replied', 'Closed'] as const).map((f) => {
+                  const count =
+                    f === 'All' ? rfis.length : rfis.filter((r) => r.status === f).length
+                  return (
+                    <Button
+                      key={f}
+                      variant={filter === f ? 'default' : 'ghost'}
+                      size="sm"
+                      className="h-7 flex-1 text-xs"
+                      onClick={() => setFilter(f)}
+                    >
+                      {f} <span className="ml-1 text-[9px] opacity-70">{count}</span>
+                    </Button>
+                  )
+                })}
               </div>
-            )}
-            {filtered.length === 0 ? (
-              <div className="text-muted-foreground px-3 py-8 text-center text-[10px]">
-                No RFIs match &ldquo;{searchQuery}&rdquo;.
+              <div className="relative">
+                <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                <Input
+                  placeholder="Filter by number / subject / question…"
+                  className="h-8 pl-7 text-xs"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
-            ) : (
-              filtered.map((r) => {
-                const isOverdue = r.status === 'Open' && new Date(r.replyBy) < new Date()
-                const isSelected = r.id === selectedId
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => setSelectedId(r.id)}
-                    className={cn(
-                      'hover:bg-accent/50 w-full border-l-2 px-3 py-2 text-left transition-colors',
-                      isSelected ? 'bg-accent border-l-primary' : 'border-l-transparent'
-                    )}
-                  >
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="text-muted-foreground font-mono text-[10px]">
-                        {r.number}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'h-4 px-1 text-[9px]',
-                          r.status === 'Open' &&
-                            'border-amber-500/40 text-amber-700 dark:text-amber-300',
-                          r.status === 'Replied' &&
-                            'border-sky-500/40 text-sky-700 dark:text-sky-300',
-                          r.status === 'Closed' &&
-                            'border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
-                        )}
-                      >
-                        {r.status}
-                      </Badge>
-                      {r.severity === 'high' && (
+            </div>
+            <PaneBody className="py-2">
+              {/* Overdue alert */}
+              {overdueCount > 0 && (
+                <div className="mx-3 mb-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-[10px]">
+                  <div className="flex items-center gap-1.5 font-medium text-red-600">
+                    <AlertTriangle className="h-3 w-3" />
+                    {overdueCount} RFI overdue
+                  </div>
+                  <div className="text-muted-foreground mt-0.5">
+                    Consultant reply pending — billing hold may apply.
+                  </div>
+                </div>
+              )}
+              {filtered.length === 0 ? (
+                <div className="text-muted-foreground px-3 py-8 text-center text-[10px]">
+                  No RFIs match &ldquo;{searchQuery}&rdquo;.
+                </div>
+              ) : (
+                filtered.map((r) => {
+                  const isOverdue = r.status === 'Open' && new Date(r.replyBy) < new Date()
+                  const isSelected = r.id === selectedId
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => setSelectedId(r.id)}
+                      className={cn(
+                        'hover:bg-accent/50 w-full border-l-2 px-3 py-2 text-left transition-colors',
+                        isSelected ? 'bg-accent border-l-primary' : 'border-l-transparent'
+                      )}
+                    >
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="text-muted-foreground font-mono text-[10px]">
+                          {r.number}
+                        </span>
                         <Badge
                           variant="outline"
-                          className="h-4 border-red-500/40 px-1 text-[9px] text-red-700 dark:text-red-300"
+                          className={cn(
+                            'h-4 px-1 text-[9px]',
+                            r.status === 'Open' &&
+                              'border-amber-500/40 text-amber-700 dark:text-amber-300',
+                            r.status === 'Replied' &&
+                              'border-sky-500/40 text-sky-700 dark:text-sky-300',
+                            r.status === 'Closed' &&
+                              'border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                          )}
                         >
-                          HIGH
+                          {r.status}
                         </Badge>
-                      )}
-                      {isOverdue && (
-                        <span className="ml-auto flex items-center gap-0.5 text-[9px] font-medium text-red-600">
-                          <Clock className="h-2.5 w-2.5" />
-                          Overdue
-                        </span>
-                      )}
-                    </div>
-                    <div className="truncate text-xs font-medium">{r.subject}</div>
-                    <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[10px]">
-                      <span>{r.date}</span>
-                      {r.linkedDsr && (
-                        <>
-                          <span>·</span>
-                          <span className="font-mono">DSR: {r.linkedDsr}</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                )
-              })
+                        {r.severity === 'high' && (
+                          <Badge
+                            variant="outline"
+                            className="h-4 border-red-500/40 px-1 text-[9px] text-red-700 dark:text-red-300"
+                          >
+                            HIGH
+                          </Badge>
+                        )}
+                        {isOverdue && (
+                          <span className="ml-auto flex items-center gap-0.5 text-[9px] font-medium text-red-600">
+                            <Clock className="h-2.5 w-2.5" />
+                            Overdue
+                          </span>
+                        )}
+                      </div>
+                      <div className="truncate text-xs font-medium">{r.subject}</div>
+                      <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[10px]">
+                        <span>{r.date}</span>
+                        {r.linkedDsr && (
+                          <>
+                            <span>·</span>
+                            <span className="font-mono">DSR: {r.linkedDsr}</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })
+              )}
+            </PaneBody>
+          </>
+        }
+        rightPane={<RfiInspector rfi={selected} onOpenDsr={onOpenDsr} />}
+        leftPaneWidth="320px"
+        rightPaneWidth="380px"
+      />
+
+      {/* Create RFI Modal — opened by the "+" button (audit D5-1) */}
+      {createModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setCreateModalOpen(false)}
+        >
+          <div
+            className="pane w-full max-w-lg overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] bg-sky-500/10 px-4">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-sky-500" />
+                <span className="text-sm font-semibold">
+                  {createSaved ? 'RFI Created' : 'New RFI'}
+                </span>
+              </div>
+              <button
+                onClick={() => setCreateModalOpen(false)}
+                className="hover:bg-accent text-muted-foreground rounded p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {createSaved ? (
+              <div className="p-8 text-center">
+                <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" />
+                <div className="text-sm font-semibold">RFI-{createRfiId} created</div>
+                <div className="text-muted-foreground mt-1 text-xs">
+                  Added to the RFI Register as Open.
+                </div>
+              </div>
+            ) : (
+              <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
+                <div>
+                  <label className="text-xs font-medium">Subject</label>
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    placeholder="Brief subject line…"
+                    value={createDraft.subject}
+                    onChange={(e) => setCreateDraft((d) => ({ ...d, subject: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium">
+                    Question <span className="text-red-500">*</span>
+                  </label>
+                  <Textarea
+                    className={cn(
+                      'mt-1 min-h-[60px] text-xs',
+                      !createDraft.question.trim() && 'border-amber-500/50 ring-1 ring-amber-500/20'
+                    )}
+                    placeholder="State the specific question for the consultant…"
+                    value={createDraft.question}
+                    onChange={(e) => setCreateDraft((d) => ({ ...d, question: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium">
+                    Impact <span className="text-red-500">*</span>
+                  </label>
+                  <Textarea
+                    className={cn(
+                      'mt-1 min-h-[60px] text-xs',
+                      !createDraft.impact.trim() && 'border-amber-500/50 ring-1 ring-amber-500/20'
+                    )}
+                    placeholder="Describe cost/schedule impact…"
+                    value={createDraft.impact}
+                    onChange={(e) => setCreateDraft((d) => ({ ...d, impact: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Background</label>
+                  <Textarea
+                    className="mt-1 min-h-[60px] text-xs"
+                    placeholder="Context for the question…"
+                    value={createDraft.background}
+                    onChange={(e) => setCreateDraft((d) => ({ ...d, background: e.target.value }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between border-t border-[var(--pane-divider)] pt-2">
+                  <div className="text-muted-foreground text-[10px]">
+                    {!createDraft.question.trim() || !createDraft.impact.trim() ? (
+                      <span className="text-amber-600">Fill mandatory fields to save</span>
+                    ) : (
+                      <span className="text-emerald-600">Ready to save</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setCreateModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={!createDraft.question.trim() || !createDraft.impact.trim()}
+                      onClick={() => {
+                        const today = new Date().toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                        const replyBy = new Date(
+                          Date.now() + 7 * 24 * 60 * 60 * 1000
+                        ).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                        const newId = `r-manual-${crypto.randomUUID()}`
+                        addRfi({
+                          id: newId,
+                          number: `RFI-${createRfiId}`,
+                          date: today,
+                          subject: createDraft.subject || 'New RFI',
+                          question: createDraft.question,
+                          background: createDraft.background || 'No background provided.',
+                          impact: createDraft.impact,
+                          status: 'Open',
+                          replyBy,
+                          severity: 'medium',
+                        })
+                        setCreateSaved(true)
+                        setTimeout(() => {
+                          setCreateModalOpen(false)
+                          setSelectedId(newId)
+                        }, 1200)
+                        toast.success('RFI created', {
+                          description: `RFI-${createRfiId} added to the register.`,
+                        })
+                      }}
+                    >
+                      <Mail className="h-3.5 w-3.5" />
+                      Save RFI
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
-          </PaneBody>
-        </>
-      }
-      rightPane={<RfiInspector rfi={selected} onOpenDsr={onOpenDsr} />}
-      leftPaneWidth="320px"
-      rightPaneWidth="380px"
-    />
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

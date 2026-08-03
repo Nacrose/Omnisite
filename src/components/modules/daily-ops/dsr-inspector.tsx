@@ -418,7 +418,8 @@ export function DsrInspector({
                 className="h-6 gap-1 text-[10px]"
                 onClick={generateRfi}
               >
-                ❓ Generate RFI
+                <Mail className="h-3 w-3" />
+                Generate RFI
               </Button>
             </div>
           </TabsContent>
