@@ -65,7 +65,7 @@ export function SubBoqTab({
   const handleSave = () => {
     if (!canSave) return
     const newItem: ScItem = {
-      id: `SC-${Date.now().toString(36)}`,
+      id: `SC-${crypto.randomUUID()}`,
       code: draft.code.trim(),
       desc: draft.desc.trim(),
       uom: draft.uom.trim(),
