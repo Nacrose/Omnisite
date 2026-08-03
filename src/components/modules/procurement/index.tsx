@@ -154,7 +154,15 @@ export function ProcurementModule() {
       return m ? Math.max(max, parseInt(m[1], 10)) : max
     }, 18)
     let poNum = maxNum + 1
+    // Track which reqs actually got a PO generated (audit P6-2 — previously
+    // ALL approved/partially-PO'd reqs were marked "Fully PO'd" even if they
+    // had no selected vendor and were skipped).
+    const reqsWithPO = new Set<string>()
     for (const [vendor, group] of vendorGroups) {
+      // Use the first req's material code and the selected vendor's rate
+      // to populate the PO's traceability fields (audit P3-5, P4-1, P4-2).
+      const firstReq = group.reqs[0]
+      const selectedVendor = firstReq.vendors.find((v) => v.name === vendor)
       const po: Po = {
         id: `PO-2410-${String(poNum).padStart(3, '0')}`,
         vendor,
@@ -167,19 +175,24 @@ export function ProcurementModule() {
         status: 'Pending',
         items: group.itemCount,
         grn: false,
+        // Traceability fields (audit P3-5, P4-1, P4-2):
+        reqId: firstReq.id,
+        rate: selectedVendor?.rate,
+        poQty: group.reqs.reduce((sum, r) => sum + r.qty, 0),
       }
       newPOs.push(po)
       poNum++
+      group.reqs.forEach((r) => reqsWithPO.add(r.id))
     }
 
     setPos((prev) => [...newPOs, ...prev])
 
-    // Mark requisitions as Fully PO'd.
-    // Recompute the predicate INSIDE the updater so we use the latest
-    // `prev` state instead of the render-time `approvedReqs` closure.
+    // Mark requisitions that actually got a PO as Fully PO'd.
+    // Only reqs with a selected vendor get a PO — reqs without a vendor
+    // are left unchanged (audit P6-2).
     setReqs((prev) =>
       prev.map((r) => {
-        if (r.status === 'Approved' || r.status === "Partially PO'd") {
+        if (reqsWithPO.has(r.id)) {
           return { ...r, status: "Fully PO'd" as const }
         }
         return r
@@ -479,20 +492,17 @@ export function ProcurementModule() {
             {tab === 'grn' && (
               <GrnCenterView
                 grns={grns}
-                onToggleApproval={(poId) => {
+                onToggleApproval={(grnId) => {
                   setGrns((prev) =>
                     prev.map((g) => {
-                      if (g.poId !== poId) return g
-                      // 3-way match: PO qty vs GRN qty vs Invoice qty, AND
-                      // PO rate vs Invoice rate. A qty match with a rate
-                      // mismatch would still over/under-pay the vendor —
-                      // locking payment in that case prevents silent
-                      // commercial leakage.
+                      if (g.id !== grnId) return g
                       const matched =
-                        g.poQty === g.grnQty && g.grnQty === g.invoiceQty && g.poRate === g.rate
+                        g.poQty === g.grnQty &&
+                        g.grnQty === g.invoiceQty &&
+                        (g.poRate === undefined || g.poRate === g.rate)
                       if (!matched) {
                         toast.error('Payment locked', {
-                          description: `${poId} fails 3-way match. PO ${g.poQty} ≠ GRN ${g.grnQty} ≠ Inv ${g.invoiceQty} (qty), or PO rate ${g.poRate} ≠ Inv rate ${g.rate}. Cannot approve.`,
+                          description: `${g.poId} fails 3-way match.`,
                         })
                         return g
                       }
@@ -503,7 +513,7 @@ export function ProcurementModule() {
                             ? 'Cleared'
                             : g.payStatus
                       toast.success(newPay === 'Cleared' ? 'Payment cleared' : 'Payment held', {
-                        description: `${poId} — 3-way match verified`,
+                        description: `${g.poId} — 3-way match verified`,
                       })
                       return { ...g, payStatus: newPay }
                     })
@@ -515,7 +525,32 @@ export function ProcurementModule() {
             {tab === 'min' && <MinCenterView mins={mins} />}
           </>
         }
-        rightPane={<ProcurementInspector tab={tab} selectedId={selectedId} reqs={reqs} />}
+        rightPane={
+          <ProcurementInspector
+            tab={tab}
+            selectedId={selectedId}
+            reqs={reqs}
+            onGeneratePos={generatePos}
+            onApprove={(reqId) => {
+              setReqs((prev) =>
+                prev.map((r) => (r.id === reqId ? { ...r, status: 'Approved' as const } : r))
+              )
+              toast.success('Requisition approved', {
+                description: `${reqId} is ready for PO generation.`,
+              })
+            }}
+            onMarkFullyPod={(reqId) => {
+              setReqs((prev) =>
+                prev.map((r) => (r.id === reqId ? { ...r, status: "Fully PO'd" as const } : r))
+              )
+              toast.success('Requisition marked Fully PO\u2019d', { description: reqId })
+            }}
+            onCancelReq={(reqId) => {
+              setReqs((prev) => prev.filter((r) => r.id !== reqId))
+              toast.success('Requisition cancelled', { description: `${reqId} removed.` })
+            }}
+          />
+        }
         leftPaneWidth="260px"
         rightPaneWidth="380px"
       />

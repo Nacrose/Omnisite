@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { PaneBody } from '@/components/workspace-3pane'
-import { CheckCircle2, AlertTriangle, Boxes } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, Boxes, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Po, Grn, StockItem, MinNote } from './types'
@@ -48,7 +48,7 @@ export function PoCenterView({ pos }: { pos: Po[] }) {
         {pos.map((p) => (
           <div
             key={p.id}
-            className="row-hover flex h-10 cursor-pointer items-center border-b border-[var(--pane-divider)] text-xs"
+            className="flex h-10 items-center border-b border-[var(--pane-divider)] text-xs"
           >
             {isVisible('po') && <div className="w-32 px-2 font-mono">{p.id}</div>}
             {isVisible('vendor') && (
@@ -57,7 +57,9 @@ export function PoCenterView({ pos }: { pos: Po[] }) {
             {isVisible('date') && <div className="text-muted-foreground w-24 px-2">{p.date}</div>}
             {isVisible('items') && <div className="w-16 px-2 text-center">{p.items}</div>}
             {isVisible('value') && (
-              <div className="w-28 px-2 text-right font-mono">{p.value.toLocaleString()}</div>
+              <div className="w-28 px-2 text-right font-mono">
+                {p.value.toLocaleString('en-IN')}
+              </div>
             )}
             {isVisible('status') && (
               <div className="w-24 px-2">
@@ -95,17 +97,21 @@ export function GrnCenterView({
   onToggleApproval,
 }: {
   grns: Grn[]
-  onToggleApproval: (poId: string) => void
+  onToggleApproval: (grnId: string) => void
 }) {
   // 3-way match: PO qty === GRN qty === Invoice qty AND PO rate === Invoice rate
   // Checks BOTH quantity and rate — a wrong unit rate on the invoice is the
   // exact thing 3-way match exists to catch (overcharging via rate inflation
-  // at correct quantity).
-  const isMatched = (g: Grn) =>
-    g.poQty === g.grnQty && g.grnQty === g.invoiceQty && g.poRate === g.rate
+  // at correct quantity). If poRate is undefined (old GRN without the field),
+  // skip the rate check — only enforce qty match (audit P7-2).
+  const isMatched = (g: Grn) => {
+    const qtyMatched = g.poQty === g.grnQty && g.grnQty === g.invoiceQty
+    const rateMatched = g.poRate === undefined || g.poRate === g.rate
+    return qtyMatched && rateMatched
+  }
   const lockedAmount = grns
     .filter((g) => !isMatched(g) && g.grnQty > 0)
-    .reduce((sum, g) => sum + g.invoiceQty * g.rate, 0)
+    .reduce((sum, g) => sum + g.grnQty * g.rate, 0)
 
   const COLS: ColumnDef[] = [
     { key: 'po', label: 'PO #' },
@@ -152,7 +158,7 @@ export function GrnCenterView({
               return (
                 <div
                   key={g.id}
-                  className="row-hover flex h-9 items-center border-t border-[var(--pane-divider)] text-xs"
+                  className="flex h-9 items-center border-t border-[var(--pane-divider)] text-xs"
                 >
                   {isVisible('po') && <div className="w-24 px-2 font-mono">{g.poId}</div>}
                   {isVisible('vendor') && <div className="flex-1 truncate px-2">{g.vendor}</div>}
@@ -187,7 +193,7 @@ export function GrnCenterView({
                   {isVisible('action') && (
                     <div className="w-24 px-2 text-center">
                       <button
-                        onClick={() => onToggleApproval(g.poId)}
+                        onClick={() => onToggleApproval(g.id)}
                         disabled={!matched}
                         className={cn(
                           'rounded px-2 py-0.5 text-[10px] font-medium transition-colors',
@@ -298,12 +304,17 @@ export function StockCenterView({ stock }: { stock: StockItem[] }) {
         <StickyTableBody>
           {stock.map((s) => {
             const available = s.onHand - s.reserved
-            const lowStock = available < s.onHand * 0.3
+            // Only flag low stock when onHand > 0 (a 0-onHand item isn't
+            // "low stock", it's out of stock — different badge). Also guard
+            // against negative available (over-issued) with a separate flag
+            // (audit P4-4, P7-3).
+            const lowStock = s.onHand > 0 && available < s.onHand * 0.3
+            const overIssued = available < 0
             return (
               <div
                 key={s.code}
                 className={cn(
-                  'row-hover flex h-9 items-center border-b border-[var(--pane-divider)] text-xs',
+                  'flex h-9 items-center border-b border-[var(--pane-divider)] text-xs',
                   lowStock && 'bg-amber-500/5'
                 )}
               >
@@ -323,10 +334,11 @@ export function StockCenterView({ stock }: { stock: StockItem[] }) {
                   <div
                     className={cn(
                       'w-20 px-2 text-right font-mono font-medium',
-                      lowStock && 'text-amber-600'
+                      overIssued ? 'text-red-600' : lowStock && 'text-amber-600'
                     )}
                   >
                     {available.toLocaleString()}
+                    {overIssued && <span className="ml-0.5 text-[8px] text-red-500">OVER</span>}
                   </div>
                 )}
                 {isVisible('avgcost') && (
@@ -349,23 +361,30 @@ export function StockCenterView({ stock }: { stock: StockItem[] }) {
 export function MinCenterView({ mins }: { mins: MinNote[] }) {
   return (
     <PaneBody className="space-y-2 p-4">
-      {mins.map((m) => (
-        <div
-          key={m.id}
-          className="hover:bg-accent/30 cursor-pointer rounded-lg border border-[var(--pane-divider)] p-3"
-        >
-          <div className="mb-1 flex items-center gap-2">
-            <span className="text-muted-foreground font-mono text-xs">{m.id}</span>
-            <span className="text-muted-foreground text-xs">{m.date}</span>
-            <Badge variant="secondary" className="text-[9px]">
-              {m.status}
-            </Badge>
-            <span className="ml-auto text-xs">{m.task}</span>
+      {mins.length === 0 ? (
+        <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-12 text-center text-xs">
+          <ArrowRight className="h-6 w-6 opacity-40" />
+          <div className="font-medium">No Material Issue Notes</div>
+          <div className="text-[11px]">
+            MINs are created from the Daily Ops → DSR Inspector → Material Reconciliation tab.
           </div>
-          <div className="text-muted-foreground text-xs">{m.items}</div>
-          <div className="text-muted-foreground mt-1 text-[10px]">Issued by: {m.issued}</div>
         </div>
-      ))}
+      ) : (
+        mins.map((m) => (
+          <div key={m.id} className="rounded-lg border border-[var(--pane-divider)] p-3">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="text-muted-foreground font-mono text-xs">{m.id}</span>
+              <span className="text-muted-foreground text-xs">{m.date}</span>
+              <Badge variant="secondary" className="text-[9px]">
+                {m.status}
+              </Badge>
+              <span className="ml-auto text-xs">{m.task}</span>
+            </div>
+            <div className="text-muted-foreground text-xs">{m.items}</div>
+            <div className="text-muted-foreground mt-1 text-[10px]">Issued by: {m.issued}</div>
+          </div>
+        ))
+      )}
       <div className="text-muted-foreground border-t border-[var(--pane-divider)] p-3 text-[11px]">
         MIN links material issue to specific DSR task. Stock deducted in real-time. Variance vs
         theoretical tracked in DSR Inspector.

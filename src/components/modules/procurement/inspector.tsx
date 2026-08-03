@@ -22,10 +22,18 @@ export function ProcurementInspector({
   tab,
   selectedId,
   reqs,
+  onGeneratePos,
+  onMarkFullyPod,
+  onCancelReq,
+  onApprove,
 }: {
   tab: Tab
   selectedId: string
   reqs: ReqItem[]
+  onGeneratePos?: () => void
+  onMarkFullyPod?: (reqId: string) => void
+  onCancelReq?: (reqId: string) => void
+  onApprove?: (reqId: string) => void
 }) {
   // The inspector only renders requisition details. The PO/GRN/Stock/MIN
   // tabs have their own list views in the center pane; showing requisition
@@ -82,15 +90,33 @@ export function ProcurementInspector({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Lowest bid</span>
               <span className="font-mono">
-                NPR {Math.min(...req.vendors.map((v) => v.rate)).toLocaleString()}
+                {req.vendors.length > 0
+                  ? `NPR ${Math.min(...req.vendors.map((v) => v.rate)).toLocaleString()}`
+                  : '—'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Selected</span>
               <span className="font-mono font-medium">
-                {req.vendors.find((v) => v.selected)?.name}
+                {req.vendors.find((v) => v.selected)?.name ?? '—'}
               </span>
             </div>
+            {req.vendors.find((v) => v.selected) && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Selected rate</span>
+                  <span className="font-mono">
+                    NPR {req.vendors.find((v) => v.selected)!.rate.toLocaleString()} / {req.uom}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">PO value (est.)</span>
+                  <span className="font-mono font-semibold">
+                    NPR {(req.qty * req.vendors.find((v) => v.selected)!.rate).toLocaleString()}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {req.overrideReason && (
@@ -129,15 +155,28 @@ export function ProcurementInspector({
             Actions
           </div>
           <div className="space-y-1.5">
+            {req.status === 'Draft' && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 w-full justify-start gap-2 text-xs"
+                onClick={() => onApprove?.(req.id)}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Approve Requisition
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
               className="h-8 w-full justify-start gap-2 text-xs"
-              onClick={() =>
-                toast.info('Convert to Consolidated PO coming soon', {
-                  description: `Use the "Generate POs" button in the Requisitions center to bulk-convert approved reqs into per-vendor POs.`,
-                })
-              }
+              onClick={() => {
+                if (onGeneratePos) {
+                  onGeneratePos()
+                } else {
+                  toast.info('Use the "Generate POs" button in the Requisitions center.')
+                }
+              }}
             >
               <Package className="h-3.5 w-3.5" />
               Convert to Consolidated PO
@@ -146,11 +185,11 @@ export function ProcurementInspector({
               variant="outline"
               size="sm"
               className="h-8 w-full justify-start gap-2 text-xs"
-              onClick={() =>
-                toast.info('Mark Fully PO\u2019d coming soon', {
-                  description: `Will flip ${req.id} status to "Fully PO\u2019d" once per-line PO coverage tracking is wired.`,
-                })
-              }
+              onClick={() => {
+                if (onMarkFullyPod) {
+                  onMarkFullyPod(req.id)
+                }
+              }}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
               Mark Fully PO'd
@@ -159,11 +198,11 @@ export function ProcurementInspector({
               variant="ghost"
               size="sm"
               className="text-destructive h-8 w-full justify-start gap-2 text-xs"
-              onClick={() =>
-                toast.info('Cancel Requisition coming soon', {
-                  description: `Will mark ${req.id} as Cancelled and audit-log the reason. Cancellation flow is not yet wired.`,
-                })
-              }
+              onClick={() => {
+                if (onCancelReq) {
+                  onCancelReq(req.id)
+                }
+              }}
             >
               <AlertTriangle className="h-3.5 w-3.5" />
               Cancel Requisition

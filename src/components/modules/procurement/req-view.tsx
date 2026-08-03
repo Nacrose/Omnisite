@@ -67,7 +67,7 @@ export function ReqCenterView({
       </div>
       <div className="space-y-3 p-3">
         {reqs.map((r) => {
-          const lowest = Math.min(...r.vendors.map((v) => v.rate))
+          const lowest = r.vendors.length > 0 ? Math.min(...r.vendors.map((v) => v.rate)) : 0
           const selectedVendor = r.vendors.find((v) => v.selected)
           const isOverride = selectedVendor && selectedVendor.rate > lowest
           return (
@@ -105,11 +105,11 @@ export function ReqCenterView({
               <div className="text-sm font-medium">{r.item}</div>
               {/* Vendor matrix — now interactive */}
               <div className="mt-2 grid grid-cols-3 gap-2">
-                {r.vendors.map((v, i) => {
-                  const isLowest = v.rate === lowest
+                {r.vendors.map((v) => {
+                  const isLowest = r.vendors.length > 0 && v.rate === lowest
                   return (
                     <button
-                      key={i}
+                      key={v.name}
                       onClick={(e) => {
                         e.stopPropagation()
                         onVendorSelect(r.id, v.name)
@@ -176,7 +176,21 @@ export function ReqCenterView({
       <div className="bg-secondary/20 border-t border-[var(--pane-divider)] p-3">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold">Consolidated PO Builder</span>
-          <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={onGeneratePos}>
+          <Button
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={onGeneratePos}
+            disabled={
+              reqs.filter((r) => r.status === 'Approved' || r.status === "Partially PO'd")
+                .length === 0
+            }
+            title={
+              reqs.filter((r) => r.status === 'Approved' || r.status === "Partially PO'd")
+                .length === 0
+                ? 'No approved requisitions to generate POs from'
+                : 'Generate POs from approved requisitions'
+            }
+          >
             <Package className="h-3.5 w-3.5" />
             Generate POs
           </Button>
@@ -353,9 +367,14 @@ function VendorBidPicker({
         </div>
 
         {/* Footer */}
-        <div className="bg-secondary/20 text-muted-foreground border-t border-[var(--pane-divider)] px-4 py-2 text-[10px]">
-          {suppliers.length} suppliers in vendor list · catalog rates pulled from the
-          <span className="font-mono"> vendors</span> table
+        <div className="bg-secondary/20 flex items-center justify-between border-t border-[var(--pane-divider)] px-4 py-2">
+          <span className="text-muted-foreground text-[10px]">
+            {suppliers.length} suppliers in vendor list · catalog rates pulled from the
+            <span className="font-mono"> vendors</span> table
+          </span>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onClose}>
+            Done
+          </Button>
         </div>
       </div>
     </div>
