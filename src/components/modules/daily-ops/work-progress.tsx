@@ -35,6 +35,12 @@ export function WorkProgressView({
   onCopyYesterday?: () => void
 }) {
   const selected = entries.find((e) => e.id === selectedId)
+  // Track which entry's ITR banner the user has dismissed so it doesn't
+  // reappear on every selection. Resets when the selected entry changes
+  // (audit D3-5 — previously the banner persisted every time a completed
+  // entry was selected, with no way to dismiss it).
+  const [dismissedItrFor, setDismissedItrFor] = useState<string | null>(null)
+  const showItrBanner = selected?.status === 'completed' && dismissedItrFor !== selected?.id
   // Stable ITR ID — generated once per mount using crypto.randomUUID() so it
   // doesn't change on re-render and isn't based on Math.random() (which could
   // collide across mounts). The displayed ITR uses the first 8 hex chars so
@@ -95,8 +101,8 @@ export function WorkProgressView({
         </Button>
       </PaneHeader>
 
-      {/* ITR auto-prompt when selected entry is completed */}
-      {selected?.status === 'completed' && (
+      {/* ITR auto-prompt when selected entry is completed (dismissible) */}
+      {showItrBanner && selected && (
         <div className="flex items-center gap-2 border-b border-[var(--pane-divider)] bg-emerald-500/10 px-4 py-2 text-xs">
           <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-500" />
           <span className="flex-1">
@@ -115,6 +121,13 @@ export function WorkProgressView({
           >
             View ITR
           </Button>
+          <button
+            onClick={() => setDismissedItrFor(selected.id)}
+            className="text-muted-foreground hover:text-foreground rounded p-0.5 text-[10px]"
+            title="Dismiss"
+          >
+            ✕
+          </button>
         </div>
       )}
       <StickyTableShell minWidth={840}>

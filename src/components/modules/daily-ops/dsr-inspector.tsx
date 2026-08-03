@@ -167,7 +167,10 @@ export function DsrInspector({
     if (!photo.path) return
     const ok = await deleteFile(STORAGE_BUCKETS.DSR_PHOTOS, photo.path)
     if (ok) {
-      setPhotos((prev) => prev.filter((p) => p.url !== photo.url))
+      // Filter by path (unique per file) instead of url — signed URLs
+      // could theoretically be shared, and filtering by url would remove
+      // both. Path is always unique within the storage folder (audit D3-2).
+      setPhotos((prev) => prev.filter((p) => p.path !== photo.path))
       toast.success('Photo deleted')
     } else {
       toast.error('Delete failed')
@@ -195,7 +198,10 @@ export function DsrInspector({
     // Register tab. Previously this just set local state + showed a toast,
     // and the drafted RFI was never visible in the register.
     addRfi({
-      id: `r-dsr-${Date.now().toString(36)}`,
+      // Use crypto.randomUUID for a collision-free id. Previously used
+      // `r-dsr-${Date.now().toString(36)}` which could collide if two RFIs
+      // were saved in the same millisecond (audit D3-7).
+      id: `r-dsr-${crypto.randomUUID()}`,
       number: `RFI-${rfiId}`,
       date: new Date().toLocaleDateString('en-GB', {
         day: 'numeric',
@@ -315,6 +321,24 @@ export function DsrInspector({
                 }}
               />
               <span className="text-muted-foreground text-[10px]">{entry.uom}</span>
+            </div>
+            {/* Status dropdown — lets the user change the entry's status
+                (in-progress / completed / blocked / pending). Previously
+                status was read-only with no UI to change it (audit D3-6). */}
+            <div>
+              <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                Status
+              </label>
+              <select
+                className="mt-1 h-8 w-full rounded-md border border-[var(--pane-divider)] bg-transparent px-2 text-xs"
+                value={entry.status}
+                onChange={(e) => onUpdate?.('status', e.target.value)}
+              >
+                <option value="pending">Pending</option>
+                <option value="in-progress">In progress</option>
+                <option value="completed">Completed</option>
+                <option value="blocked">Blocked</option>
+              </select>
             </div>
             <div className="bg-secondary/40 rounded-md p-2.5">
               <div className="flex justify-between">
