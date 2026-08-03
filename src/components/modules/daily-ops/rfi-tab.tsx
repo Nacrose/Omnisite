@@ -598,6 +598,33 @@ function RfiInspector({
                 Log Consultant Reply
               </Button>
             )}
+            {rfi.status === 'Replied' && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 w-full justify-start gap-2 text-xs"
+                onClick={() => {
+                  // Mark the RFI as Closed (audit D4-2 — previously there
+                  // was no way to close a Replied RFI).
+                  const today = new Date().toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })
+                  useRfiStore.getState().updateRfi(rfi.id, {
+                    status: 'Closed',
+                    repliedDate: rfi.repliedDate || today,
+                  })
+                  toast.success('RFI closed', {
+                    description: `${rfi.number} marked as Closed.`,
+                  })
+                }}
+                title="Close RFI"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Close RFI
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

@@ -241,10 +241,22 @@ export function DsrInspector({
               {entry.status}
             </Badge>
           </div>
-          <div className="text-sm leading-snug font-semibold">{entry.task}</div>
-          <div className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
-            <MapPin className="h-3 w-3" />
-            {entry.chainage}
+          {/* Task name — editable so the user can rename 'New DSR entry'
+              to something meaningful (audit D4-4). */}
+          <Input
+            className="h-8 text-sm font-semibold"
+            value={entry.task}
+            onChange={(e) => onUpdate?.('task', e.target.value)}
+          />
+          {/* Chainage — editable so the user can set the location string
+              (audit D4-4). */}
+          <div className="mt-2 flex items-center gap-1.5">
+            <MapPin className="text-muted-foreground h-3 w-3" />
+            <Input
+              className="h-7 flex-1 text-xs"
+              value={entry.chainage}
+              onChange={(e) => onUpdate?.('chainage', e.target.value)}
+            />
           </div>
           {/* Location picker — optional FK to project_locations.id */}
           <div className="mt-2">
@@ -321,6 +333,18 @@ export function DsrInspector({
                 }}
               />
               <span className="text-muted-foreground text-[10px]">{entry.uom}</span>
+            </div>
+            {/* UOM — editable so the user can change the unit (e.g. from
+                'cum' to 'sqm' or 'MT'). Previously read-only (audit D4-3). */}
+            <div>
+              <label className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                Unit of Measure
+              </label>
+              <Input
+                className="mt-1 h-8 text-xs"
+                value={entry.uom}
+                onChange={(e) => onUpdate?.('uom', e.target.value)}
+              />
             </div>
             {/* Status dropdown — lets the user change the entry's status
                 (in-progress / completed / blocked / pending). Previously

@@ -193,9 +193,8 @@ export function DailyOpsModule() {
                   className="h-7"
                   onClick={() => {
                     // Add a new ad-hoc DSR entry for the selected date.
-                    // Uses crypto.randomUUID for a collision-free id (audit D1-3 —
-                    // previously the button had no onClick).
-                    const newId = `D-${Date.now().toString(36)}`
+                    // Uses crypto.randomUUID for a collision-free id (audit D1-3).
+                    const newId = `D-${crypto.randomUUID()}`
                     const newEntry: DsrEntry = {
                       id: newId,
                       task: 'New DSR entry',
@@ -311,8 +310,8 @@ export function DailyOpsModule() {
                 onSelect={setSelectedId}
                 onAddAdHoc={() => {
                   // Add a new ad-hoc DSR entry for the selected date
-                  // (audit D1-4 — previously the button had no onClick).
-                  const newId = `D-${Date.now().toString(36)}`
+                  // (audit D1-4). Uses crypto.randomUUID for collision-free id.
+                  const newId = `D-${crypto.randomUUID()}`
                   const newEntry: DsrEntry = {
                     id: newId,
                     task: 'New DSR entry',
@@ -344,7 +343,11 @@ export function DailyOpsModule() {
                   }
                   const cloned = prevEntries.map((d) => ({
                     ...d,
-                    id: `D-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 4)}`,
+                    // Use full crypto.randomUUID for collision-free ids.
+                    // Previously used Date.now() + 4-char UUID suffix which
+                    // could collide if two entries were cloned in the same ms
+                    // (audit D4-1).
+                    id: `D-${crypto.randomUUID()}`,
                     date: selectedDate,
                     actual: 0,
                     status: 'pending' as const,
