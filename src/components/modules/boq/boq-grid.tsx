@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useRef, useMemo } from 'react'
+import { Fragment, useRef, useMemo, useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ChevronDown, ChevronRight, GripVertical, Lock } from 'lucide-react'
@@ -180,6 +180,29 @@ function BoqRow({
   // leading edge of each keystroke) so this never triggers a re-render.
   const lastEditRef = useRef<{ id: string; field: 'qty' | 'rate'; time: number } | null>(null)
 
+  // Refs to the qty/rate inputs so the context menu's "Edit item" action
+  // can imperatively focus the cell. Without this, setting `editing` from
+  // the context menu only highlighted the cell visually — the user still
+  // had to click the input to place the cursor (audit B4-1).
+  const qtyInputRef = useRef<HTMLInputElement>(null)
+  const rateInputRef = useRef<HTMLInputElement>(null)
+
+  // When the parent sets `editing` to this row+field (e.g. from the context
+  // menu's "Edit item" action), focus the corresponding input. Without this,
+  // the editing state only controls visual styling — the cursor doesn't
+  // actually enter the cell (audit B4-1).
+  useEffect(() => {
+    if (editing?.id === item.id) {
+      if (editing.field === 'qty' && qtyInputRef.current) {
+        qtyInputRef.current.focus()
+        qtyInputRef.current.select()
+      } else if (editing.field === 'rate' && rateInputRef.current) {
+        rateInputRef.current.focus()
+        rateInputRef.current.select()
+      }
+    }
+  }, [editing, item.id])
+
   const handleFieldChange = (id: string, field: 'qty' | 'rate', value: number) => {
     const now = Date.now()
     const isContinuation =
@@ -290,6 +313,7 @@ function BoqRow({
             </span>
           ) : (
             <input
+              ref={qtyInputRef}
               type="number"
               value={item.qty ?? ''}
               onChange={(e) => handleFieldChange(item.id, 'qty', parseFloat(e.target.value) || 0)}
@@ -328,6 +352,7 @@ function BoqRow({
             </div>
           ) : (
             <input
+              ref={rateInputRef}
               type="number"
               value={item.rate ?? ''}
               onChange={(e) => handleFieldChange(item.id, 'rate', parseFloat(e.target.value) || 0)}

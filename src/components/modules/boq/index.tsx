@@ -203,6 +203,16 @@ export function BoqModule() {
     allFlat.find((i) => i.type !== 'Heading') ??
     allFlat[0]
 
+  // If selectedId points to a deleted item (or stale persisted ID),
+  // selectedLeaf falls back to the first non-Heading — but selectedId in
+  // state stays stale, so the grid highlights NO row. Sync selectedId to
+  // the fallback so the grid highlights the right row (audit B4-4 — same
+  // fix as the scheduler's R6-6). Uses the "adjust state during render"
+  // pattern to avoid the lint violation that useEffect+setState triggers.
+  if (selectedLeaf && selectedLeaf.id !== selectedId) {
+    setSelectedId(selectedLeaf.id)
+  }
+
   // Live contract total — sum of qty × rate for LEAF non-heading items
   // only. Including parent items in the sum would double-count: a Priced
   // item with children would contribute both itself AND its children's
@@ -227,6 +237,8 @@ export function BoqModule() {
   // object can reference it; the actual `undo(ctx)` closure is assigned in
   // a useEffect below, after `ctx` is initialized.
   const undoRef = useRef<() => void>(() => {})
+  // redoRef — same pattern as undoRef, for the keyboard shortcut (audit B4-6).
+  const redoRef = useRef<() => void>(() => {})
 
   // Handler context — captured fresh on every render so the extracted
   // handler functions always see the latest state + setters.
@@ -248,26 +260,30 @@ export function BoqModule() {
   const redoFn = () => redo(ctx)
   useEffect(() => {
     undoRef.current = undoFn
+    redoRef.current = redoFn
   })
 
-  // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z)
+  // Keyboard shortcuts for undo/redo (⌘Z / ⌘⇧Z). Uses refs so the effect
+  // only mounts once (empty dep array) instead of re-subscribing on every
+  // render — the previous version had no dep array, so it added/removed
+  // the listener on every render (audit B4-7).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         const target = e.target as HTMLElement
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
         e.preventDefault()
-        undoFn()
+        undoRef.current()
       } else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         const target = e.target as HTMLElement
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
         e.preventDefault()
-        redoFn()
+        redoRef.current()
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  })
+  }, [])
 
   // DnD — owned by useBoqDnd; the reparent callback delegates to handlers.ts.
   const dnd = useBoqDnd(allFlat, (draggedId, targetId) => reparentItem(draggedId, targetId, ctx))

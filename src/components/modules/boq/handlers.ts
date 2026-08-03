@@ -139,17 +139,23 @@ export function commitBoqData(updater: (prev: BoqItem[]) => BoqItem[], ctx: BoqH
   // commitBoqData is called twice before React commits the state update (e.g.
   // a batch action, or two separate keystrokes landing in the same batch),
   // both calls would otherwise read the same `ctx.boqData` from the render
-  // closure and push two identical deep clones onto the undo stack. The
-  // second snapshot is then a no-op when undone. Comparing the JSON-serialized
-  // form against the last pushed snapshot skips the redundant push.
+  // closure and push two identical deep clones onto the undo stack.
   //
-  // Capture the current tree for the undo stack BEFORE applying the updater.
+  // The previous guard used JSON.stringify(lastSnapshot) === JSON.stringify
+  // (currentTree) which is O(n) in the size of the tree on EVERY commit —
+  // expensive for large BOQs (1000+ items). Replaced with a reference check:
+  // ctx.boqData is a useMemo result, so its identity only changes when
+  // boqRows changes. If the last snapshot was taken from the SAME boqData
+  // reference, the snapshot is identical and we skip the push. We track
+  // this via a WeakMap from snapshot → source-tree-reference (audit B4-5).
   const currentTree = ctx.boqData
   const lastSnapshot = ctx.undoStack[ctx.undoStack.length - 1]
-  const isSameAsLast =
-    !!lastSnapshot && JSON.stringify(lastSnapshot) === JSON.stringify(currentTree)
+  const lastSource = lastSnapshot ? snapshotSources.get(lastSnapshot) : undefined
+  const isSameAsLast = lastSource === currentTree
   if (!isSameAsLast) {
-    ctx.setUndoStack((u) => [...u, deepClone(currentTree)])
+    const snapshot = deepClone(currentTree)
+    snapshotSources.set(snapshot, currentTree)
+    ctx.setUndoStack((u) => [...u, snapshot])
   }
   ctx.setRedoStack([])
   ctx.setBoqRows((prevRows) => {
@@ -160,6 +166,12 @@ export function commitBoqData(updater: (prev: BoqItem[]) => BoqItem[], ctx: BoqH
     return flattenBoqTree(next) as unknown as BoqItem[]
   })
 }
+
+// WeakMap tracking which boqData reference each undo snapshot was cloned
+// from. Used by commitBoqData's dedup guard to avoid the O(n) JSON.stringify
+// comparison. WeakMap entries are GC'd when the snapshot is no longer
+// referenced (i.e. after it's popped from the undo stack). (audit B4-5)
+const snapshotSources = new WeakMap<object, object>()
 
 export function undo(ctx: BoqHandlerCtx): void {
   if (ctx.undoStack.length === 0) return
@@ -275,7 +287,9 @@ export function duplicateItem(id: string, ctx: BoqHandlerCtx): void {
       }),
     ctx
   )
-  toast.success('Item duplicated', { description: `Copy created below ${id}` })
+  toast.success('Item duplicated', {
+    description: `Copy of ${ctx.allFlat.find((i) => i.id === id)?.code ?? id} created below`,
+  })
 }
 
 /** Delete an item (and its subtree). Shows an undoable toast.
@@ -395,7 +409,11 @@ export function addChildItem(parentId: string, ctx: BoqHandlerCtx): void {
   )
   ctx.setExpandedArr((prev) => (prev.includes(parentId) ? prev : [...prev, parentId]))
   ctx.setSelectedId(newId)
-  toast.success('Child item added', { description: `New item under ${parentId}` })
+  // Show the parent's code (not the raw id) so the user knows where the
+  // new item landed without looking back at the grid (audit B4-8).
+  toast.success('Child item added', {
+    description: `New item under ${parentItem.code} — ${parentItem.desc}`,
+  })
 }
 
 // ─── Drag-and-drop reparenting ────────────────────────────────────────────
