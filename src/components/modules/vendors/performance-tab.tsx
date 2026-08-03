@@ -10,13 +10,16 @@ import { getMaterialCoefficient } from './material-coefficients'
 // ─── Performance Dashboard Tab ───────────────────────────────────────────────
 
 export function PerformanceTab({ sc }: { sc: Subcontractor }) {
+  // On-time rate — null when there are no assigned tasks so the KPI shows
+  // "N/A" instead of a misleading 100% (audit V3-3).
+  const onTimeTasks = sc.assignedTasks.filter((t) => t.status === 'on-track').length
   const onTimeRate =
-    sc.assignedTasks.length > 0
-      ? (sc.assignedTasks.filter((t) => t.status === 'on-track').length / sc.assignedTasks.length) *
-        100
-      : 100
+    sc.assignedTasks.length > 0 ? (onTimeTasks / sc.assignedTasks.length) * 100 : null
 
   const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
+  // Total composite RMT — used for both the material chargeback computation
+  // and the material efficiency section below.
+  const totalRmt = sc.items.find((i) => i.type === 'composite')?.actualQty || 0
   const retention = earned * (sc.retentionPct / 100)
   // Match the Running Bill tab's formula (includes TDS, other deductibles,
   // and material + consumable chargebacks) so the two tabs agree.
@@ -35,8 +38,53 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
   const otherDeductibleTotal = sc.customDeductibles
     .filter((d) => d.type !== 'tds')
     .reduce((sum, d) => sum + d.amount, 0)
+
+  // Material + consumable chargebacks — must match the Running Bill tab's
+  // formula so the two tabs agree on net payable (audit V3-2). Previously
+  // the performance tab omitted these, showing a higher net payable.
+  let materialChargeback = 0
+  const perfMaterialMap = new Map<
+    string,
+    { code: string; issued: number; returned: number; theoretical: number; rate: number }
+  >()
+  for (const mi of sc.materialIssues) {
+    const e = perfMaterialMap.get(mi.materialCode) || {
+      code: mi.materialCode,
+      issued: 0,
+      returned: 0,
+      theoretical: 0,
+      rate: mi.rate,
+    }
+    e.issued += mi.qty
+    perfMaterialMap.set(mi.materialCode, e)
+  }
+  for (const mr of sc.materialReturns) {
+    const e = perfMaterialMap.get(mr.materialCode)
+    if (e) e.returned += mr.qty
+  }
+  for (const [, m] of perfMaterialMap) {
+    const coeff = getMaterialCoefficient(m.code, sc)
+    m.theoretical = coeff ? coeff * totalRmt : 0
+    const netUsed = m.issued - m.returned
+    const overQty = Math.max(0, netUsed - m.theoretical)
+    materialChargeback += overQty * m.rate
+  }
+  let consumableChargeback = 0
+  sc.consumables.forEach((c) => {
+    const theoretical = c.normPerUnit && c.normBasis ? c.normPerUnit * c.normBasis : 0
+    const overQty = Math.max(0, c.qty - theoretical)
+    consumableChargeback += overQty * c.rate
+  })
+
   const netPayable =
-    earned - advanceRecovery - retention - sc.reworkCost - tdsAmount - otherDeductibleTotal
+    earned -
+    advanceRecovery -
+    retention -
+    sc.reworkCost -
+    tdsAmount -
+    otherDeductibleTotal -
+    materialChargeback -
+    consumableChargeback
 
   // Material efficiency
   let matEfficiency = 100
@@ -59,7 +107,6 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
     const e = materialMap.get(mr.materialCode)
     if (e) e.returned += mr.qty
   }
-  const totalRmt = sc.items.find((i) => i.type === 'composite')?.actualQty || 0
   for (const [, m] of materialMap) {
     // Shared coefficient lookup — previously this was a stale copy that only
     // handled cement + steel, so aggregate and sand always showed as 0%
@@ -77,15 +124,20 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
   const kpis = [
     {
       label: 'On-Time Delivery',
-      value: `${onTimeRate.toFixed(0)}%`,
+      value: onTimeRate !== null ? `${onTimeRate.toFixed(0)}%` : 'N/A',
       icon: Calendar,
       color:
-        onTimeRate >= 80
-          ? 'text-emerald-600'
-          : onTimeRate >= 50
-            ? 'text-amber-600'
-            : 'text-red-600',
-      desc: `${sc.assignedTasks.filter((t) => t.status === 'on-track').length}/${sc.assignedTasks.length} tasks on track`,
+        onTimeRate === null
+          ? 'text-muted-foreground'
+          : onTimeRate >= 80
+            ? 'text-emerald-600'
+            : onTimeRate >= 50
+              ? 'text-amber-600'
+              : 'text-red-600',
+      desc:
+        onTimeRate !== null
+          ? `${onTimeTasks}/${sc.assignedTasks.length} tasks on track`
+          : 'No tasks assigned',
     },
     {
       label: 'Quality (NCRs)',
@@ -153,25 +205,23 @@ export function PerformanceTab({ sc }: { sc: Subcontractor }) {
         <div className="space-y-1.5">
           <ComplianceRow label="PAN" value={sc.pan} status="ok" />
           <ComplianceRow label="GST" value={sc.gst} status="ok" />
-          {/* Date-aware compliance status: >6 months = ok, 3-6 months = warn, <3 months = exp */}
+          {/* Date-aware compliance status: 30-day amber window to match the
+              dashboard and profile tab (audit V3-1 — previously used
+              90/180-day thresholds which disagreed with the other views). */}
           {(() => {
             const daysTo = (iso: string) => (Date.parse(iso) - Date.now()) / 86_400_000
             const insStatus =
               daysTo(sc.insuranceExpiry) < 0
                 ? 'exp'
-                : daysTo(sc.insuranceExpiry) < 90
-                  ? 'exp'
-                  : daysTo(sc.insuranceExpiry) < 180
-                    ? 'warn'
-                    : 'ok'
+                : daysTo(sc.insuranceExpiry) <= 30
+                  ? 'warn'
+                  : 'ok'
             const licStatus =
               daysTo(sc.labourLicenseExpiry) < 0
                 ? 'exp'
-                : daysTo(sc.labourLicenseExpiry) < 90
-                  ? 'exp'
-                  : daysTo(sc.labourLicenseExpiry) < 180
-                    ? 'warn'
-                    : 'ok'
+                : daysTo(sc.labourLicenseExpiry) <= 30
+                  ? 'warn'
+                  : 'ok'
             return (
               <>
                 <ComplianceRow
