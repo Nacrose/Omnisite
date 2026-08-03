@@ -69,6 +69,10 @@ function normalizeCbsRow(row: Record<string, unknown>): CbsNode {
     forecast: Number(row.forecast) || 0,
     marginPct: Number(row.marginPct ?? row.margin_pct) || 0,
     level: Number(row.level) || 0,
+    // Preserve parentCode (with snake_case fallback) so rebuildTreeFromRows
+    // can re-attach children after a flatten→rebuild round-trip. Without
+    // this, every row would become a root after the first edit (audit F1-6).
+    parentCode: (row.parentCode ?? row.parent_code ?? undefined) as string | undefined,
   }
 }
 

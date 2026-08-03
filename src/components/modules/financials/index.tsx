@@ -55,11 +55,20 @@ export function FinancialsModule() {
   // same React batch).
   const setCbsData = createSetCbsData(setCbsRows)
 
-  // Convert expanded array to Set for O(1) lookups
-  const expanded = new Set(expandedArr)
+  // Convert expanded array to Set for O(1) lookups. Memoized so the Set
+  // identity is stable across renders — CbsTable's recursive render keys
+  // on `expanded`, and a fresh Set every render would force unnecessary
+  // re-renders (audit F1-3 — same pattern as BOQ).
+  const expanded = useMemo(() => new Set(expandedArr), [expandedArr])
 
   const flat = flattenCbs(cbsData)
   const selected = flat.find((c) => c.code === selectedCode) ?? flat[0]
+
+  // Sync selectedCode when the fallback kicks in (audit F1-2 — same pattern
+  // as BOQ B4-4, scheduler R6-6, etc.).
+  if (selected && selected.code !== selectedCode) {
+    setSelectedCode(selected.code)
+  }
 
   // Count top-level nodes (no parentCode) and leaf nodes (no children) from
   // the LIVE tree so the left-pane footer reflects user edits. Previously
@@ -177,36 +186,29 @@ export function FinancialsModule() {
             <div className="text-muted-foreground px-3 py-2 text-[10px]">
               Mirrors BOQ WBS · {topLevelCount} top nodes · {leafCount} leaf items
             </div>
-            {CBS.filter((c) => {
-              if (!cbsSearch.trim()) return true
-              const q = cbsSearch.toLowerCase()
-              const liveNode = cbsData.find((n) => n.code === c.code) ?? c
-              return (
-                liveNode.code.toLowerCase().includes(q) || liveNode.name.toLowerCase().includes(q)
-              )
-            }).map((c) => {
-              // Use the LIVE tree (cbsData) for display so the left-pane
-              // reflects user edits. Previously this rendered from the CBS
-              // constant, so edits to the P&L grid never updated the outline.
-              const liveNode = cbsData.find((n) => n.code === c.code) ?? c
-              return (
-                <button
-                  key={c.code}
-                  onClick={() => setSelectedCode(c.code)}
-                  className={cn(
-                    'hover:bg-accent/50 w-full px-3 py-1.5 text-left',
-                    selectedCode === c.code && 'bg-accent'
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground font-mono text-[10px]">
-                      {liveNode.code}
-                    </span>
-                    <span className="text-xs font-medium">{liveNode.name}</span>
-                  </div>
-                </button>
-              )
-            })}
+            {cbsData
+              .filter((c) => {
+                if (!cbsSearch.trim()) return true
+                const q = cbsSearch.toLowerCase()
+                return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+              })
+              .map((c) => {
+                return (
+                  <button
+                    key={c.code}
+                    onClick={() => setSelectedCode(c.code)}
+                    className={cn(
+                      'hover:bg-accent/50 w-full px-3 py-1.5 text-left',
+                      selectedCode === c.code && 'bg-accent'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground font-mono text-[10px]">{c.code}</span>
+                      <span className="text-xs font-medium">{c.name}</span>
+                    </div>
+                  </button>
+                )
+              })}
           </PaneBody>
         </>
       }
