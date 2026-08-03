@@ -464,6 +464,13 @@ export function BoqModule() {
               <Button
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
+                // Disable the + Item button when the selected item is not a
+                // Heading — children can only be added under Headings (the
+                // handler guards this too, but disabling the button gives
+                // better UX than an error toast after click). If no item is
+                // selected, allow the click so the handler can show its
+                // 'Select a parent heading first' error (audit B6-3).
+                disabled={!!selectedLeaf && selectedLeaf.type !== 'Heading'}
                 onClick={() => {
                   if (selectedLeaf) {
                     addChildItem(selectedLeaf.id, ctx)
@@ -713,7 +720,20 @@ export function BoqModule() {
               icon={<FileSpreadsheet className="h-3.5 w-3.5" />}
               label="Export RA (DoR)"
               onClick={() => {
-                exportRa(allFlat.find((i) => i.id === contextMenu.itemId))
+                const item = allFlat.find((i) => i.id === contextMenu.itemId)
+                // Check hasRA before exporting — without this, the context
+                // menu would export a DoR default RA for items that don't
+                // have Rate Analysis enabled, producing a misleading CSV
+                // (e.g. an excavation item would get cement/sand/aggregate
+                // rows). The toolbar button already checks hasRA; the
+                // context menu didn't (audit B6-4).
+                if (item?.hasRA) {
+                  exportRa(item)
+                } else {
+                  toast.error('This item does not have Rate Analysis enabled.', {
+                    description: 'Select a BOQ item with the RA lock icon.',
+                  })
+                }
                 setContextMenu(null)
               }}
             />

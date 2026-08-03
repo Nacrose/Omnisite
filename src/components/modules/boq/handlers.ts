@@ -323,6 +323,12 @@ export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
       return
     }
   }
+  // Capture the deleted item's code so we can find its parent's sibling group
+  // and recompute codes after the splice. Without this, deleting item 1.1.2
+  // leaves 1.1.1, 1.1.3, 1.1.4 instead of renumbering to 1.1.1, 1.1.2, 1.1.3
+  // (audit B6-1 — addChildItem, reparentItem, and duplicateItem all recompute,
+  // but deleteItem didn't).
+  const deletedCode = item?.code
   commitBoqData(
     (prev) =>
       produce(prev, (draft) => {
@@ -333,6 +339,17 @@ export function deleteItem(id: string, ctx: BoqHandlerCtx): void {
             const it = items[i]
             if (it.id === id) {
               items.splice(i, 1)
+              // Recompute sibling codes for the remaining siblings so they
+              // stay contiguous (1.1.1, 1.1.2, ... instead of 1.1.1, 1.1.3, ...)
+              // The parent code is the deleted item's code minus its last
+              // segment (e.g. '1.1.2' → '1.1'). For root-level items, the
+              // parent code is null (audit B6-1).
+              if (deletedCode) {
+                const parentCode = deletedCode.includes('.')
+                  ? deletedCode.split('.').slice(0, -1).join('.')
+                  : null
+                recomputeSiblingCodes(items, parentCode)
+              }
             } else if (it.children) {
               walk(it.children)
             }
@@ -489,8 +506,27 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
   commitBoqData((prev) => {
     return produce(prev, (draft) => {
       let movedItem: BoqItem | null = null
+      // Track the old parent's code so we can recompute its remaining
+      // children's codes after the item is removed. Without this, moving
+      // item 1.1.2 out of parent 1.1 leaves 1.1.1, 1.1.3, 1.1.4 instead
+      // of renumbering to 1.1.1, 1.1.2, 1.1.3 (audit B6-2).
+      let oldParentCode: string | null = null
 
-      // Step 1: Remove the dragged item from its current location
+      // Step 1: Remove the dragged item from its current location.
+      // Also capture the old parent's code by finding the dragged item's
+      // parent before the splice.
+      const findOldParentCode = (items: BoqItem[], parentCode: string | null): boolean => {
+        for (const it of items) {
+          if (it.id === draggedId) {
+            oldParentCode = parentCode
+            return true
+          }
+          if (it.children && findOldParentCode(it.children, it.code)) return true
+        }
+        return false
+      }
+      findOldParentCode(draft as BoqItem[], null)
+
       const removeFromTree = (items: BoqItem[]): BoqItem[] => {
         return items.filter((it) => {
           if (it.id === draggedId) {
@@ -502,6 +538,25 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
         })
       }
       const cleaned = removeFromTree(draft as BoqItem[])
+
+      // Step 1b: Recompute sibling codes for the OLD parent's remaining
+      // children so they stay contiguous (audit B6-2).
+      if (oldParentCode !== null) {
+        const recomputeOldSiblings = (items: BoqItem[]): boolean => {
+          for (const it of items) {
+            if (it.code === oldParentCode && it.children) {
+              recomputeSiblingCodes(it.children, it.code)
+              return true
+            }
+            if (it.children && recomputeOldSiblings(it.children)) return true
+          }
+          return false
+        }
+        recomputeOldSiblings(cleaned)
+      } else {
+        // Old parent was root level — renumber root items.
+        recomputeSiblingCodes(cleaned, null)
+      }
 
       // Step 2: Find target heading and add the moved item
       if (movedItem) {

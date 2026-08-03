@@ -853,14 +853,18 @@ function RaSection({
             <Input
               className="col-span-2 h-6 px-1 text-xs"
               type="number"
-              value={r.qty}
+              // Use `|| ''` so the input shows empty (not 0) when cleared —
+              // same pattern as the pct cost inputs (audit B6-5).
+              value={r.qty || ''}
+              placeholder="0"
               onChange={(e) => onUpdate(i, 'qty', parseFloat(e.target.value) || 0)}
             />
             <div className="col-span-2 flex items-center gap-0.5">
               <Input
                 className="h-6 flex-1 px-1 font-mono text-xs"
                 type="number"
-                value={r.rate}
+                value={r.rate || ''}
+                placeholder="0"
                 onChange={(e) => onUpdate(i, 'rate', parseFloat(e.target.value) || 0)}
               />
               <button
