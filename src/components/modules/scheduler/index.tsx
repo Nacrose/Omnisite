@@ -410,12 +410,19 @@ export function SchedulerModule() {
     const walk = (items: Task[], depth: number) => {
       for (const t of items) {
         // "Critical path only" filter: skip non-critical LEAF tasks.
-        // Summary tasks are always rendered (they provide structure).
-        // Critical leaf tasks are rendered. Non-critical leaf tasks are
-        // hidden. This keeps the tree structure intact while focusing on
-        // the critical path (audit R4-4).
+        // Summary tasks are always rendered (they provide structure) —
+        // UNLESS they have no critical descendants, in which case they're
+        // empty shells that just add noise. Skip them too (audit S7-5).
         const isLeaf = !t.children || t.children.length === 0
         if (showCriticalOnly && isLeaf && !t.critical) continue
+        // For Summary tasks in critical-only mode, check if any descendant
+        // is critical. If not, skip the Summary entirely — showing an empty
+        // Summary with all children hidden is confusing.
+        if (showCriticalOnly && !isLeaf && t.critical === false) {
+          const hasCriticalDescendant = (nodes: Task[] | undefined): boolean =>
+            nodes?.some((n) => n.critical || hasCriticalDescendant(n.children)) ?? false
+          if (!hasCriticalDescendant(t.children)) continue
+        }
 
         const isExpanded = expanded.has(t.id)
         const hasChildren = t.children && t.children.length > 0

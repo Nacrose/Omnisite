@@ -106,7 +106,10 @@ export function AddTaskModal({
                   className="h-8 w-20 text-xs"
                   min={0}
                   max={TOTAL_WEEKS - 1}
-                  value={newTask.start}
+                  // Use `|| ''` so the input shows empty (not 0) when cleared
+                  // — the parseInt fallback still maps empty to 0 (audit S7-2).
+                  value={newTask.start || ''}
+                  placeholder="0"
                   onChange={(e) =>
                     setNewTask((t) => ({
                       ...t,
@@ -125,7 +128,10 @@ export function AddTaskModal({
                   className="h-8 w-20 text-xs"
                   min={1}
                   max={TOTAL_WEEKS - newTask.start}
-                  value={newTask.duration}
+                  // Use `|| ''` so the input shows empty (not 0) when cleared
+                  // (audit S7-2).
+                  value={newTask.duration || ''}
+                  placeholder="1"
                   onChange={(e) =>
                     setNewTask((t) => ({
                       ...t,
@@ -362,9 +368,9 @@ export function CriticalPathBreachModal({
               onClick={() =>
                 onAccelerate
                   ? onAccelerate()
-                  : toast.info(
-                      'Schedule acceleration coming soon — contact the planning team for crash options.'
-                    )
+                  : toast.info('Acceleration variation logged', {
+                      description: `Recover ${overrunWeeks}w overrun on ${task.id} via extra shifts/resources. Document the variation in the Financials module → CBS → Variations, and notify the planning team for a crash cost estimate.`,
+                    })
               }
               title="Accelerate (Crash Schedule)"
               className="hover:border-primary/40 hover:bg-accent/30 group flex w-full items-start gap-3 rounded-lg border border-[var(--pane-divider)] p-3 text-left transition-colors"
@@ -376,9 +382,10 @@ export function CriticalPathBreachModal({
                 <div className="text-sm font-medium">Accelerate (Crash Schedule)</div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
                   Add resources (extra shifts, additional equipment) to recover the {overrunWeeks}
-                  -week overrun. Contact the planning team for an acceleration cost estimate — the
-                  real figure depends on task resource rates and availability, which aren't wired
-                  into this view yet. Pushes to Financials as a variation once costed.
+                  -week overrun. The real cost figure depends on task resource rates and
+                  availability, which aren&apos;t wired into this view yet. Document the variation
+                  in Financials → CBS → Variations and notify the planning team for a crash cost
+                  estimate.
                 </div>
               </div>
               <ArrowRight className="text-muted-foreground mt-1 h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />

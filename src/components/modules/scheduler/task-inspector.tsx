@@ -350,7 +350,10 @@ export function TaskInspector({
                   // briefly shows 100, then re-renders with the clamped
                   // value (audit R4-7).
                   max={TOTAL_WEEKS - task.start}
-                  value={task.duration}
+                  // Use `|| ''` so the input shows empty (not 0) when cleared
+                  // — same pattern as the BOQ module's inputs (audit S7-1).
+                  value={task.duration || ''}
+                  placeholder="1"
                   onChange={(e) => {
                     const next = parseInt(e.target.value, 10)
                     // Only propagate when the user enters a valid positive
@@ -371,7 +374,10 @@ export function TaskInspector({
                   type="number"
                   min={0}
                   max={100}
-                  value={task.progress}
+                  // Use `|| ''` so the input shows empty (not 0) when cleared
+                  // (audit S7-1).
+                  value={task.progress || ''}
+                  placeholder="0"
                   disabled={!onUpdateProgress}
                   onChange={(e) => {
                     const next = parseInt(e.target.value, 10)
