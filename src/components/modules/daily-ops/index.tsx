@@ -117,7 +117,15 @@ export function DailyOpsModule() {
       <div className="flex h-full w-full flex-col overflow-hidden">
         {headerStrip}
         <div className="min-h-0 flex-1">
-          <RfiTab />
+          <RfiTab
+            onOpenDsr={(dsrId) => {
+              // Switch to the DSR tab and select the linked entry (audit D2-3).
+              // If the entry doesn't exist in the store (e.g. deleted), the
+              // DSR view's selectedId sync will fall back to the first entry.
+              setTopView('dsr')
+              setSelectedId(dsrId)
+            }}
+          />
         </div>
       </div>
     )

@@ -5,6 +5,7 @@ import { create } from 'zustand'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -17,6 +18,7 @@ import {
   Clock,
   HelpCircle,
   CheckCircle2,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -144,11 +146,18 @@ const INITIAL_RFIS: Rfi[] = [
 interface RfiStore {
   rfis: Rfi[]
   addRfi: (rfi: Rfi) => void
+  /** Update an existing RFI by id. Used by the "Log Consultant Reply" action
+   *  to set status='Replied', reply text, and repliedDate (audit D2-7). */
+  updateRfi: (id: string, updates: Partial<Rfi>) => void
 }
 
 const useRfiStore = create<RfiStore>((set) => ({
   rfis: [...INITIAL_RFIS],
   addRfi: (rfi) => set((s) => ({ rfis: [rfi, ...s.rfis] })),
+  updateRfi: (id, updates) =>
+    set((s) => ({
+      rfis: s.rfis.map((r) => (r.id === id ? { ...r, ...updates } : r)),
+    })),
 }))
 
 /**
@@ -170,6 +179,12 @@ export function addRfi(rfi: Rfi): void {
   useRfiStore.getState().addRfi(rfi)
 }
 
+/** Update an existing RFI by id. Used by the RFI Inspector's "Log Consultant
+ *  Reply" action (audit D2-7). */
+export function updateRfi(id: string, updates: Partial<Rfi>): void {
+  useRfiStore.getState().updateRfi(id, updates)
+}
+
 // Re-export RFIS for backward compat (components that read the initial array
 // directly). This is a snapshot — for live updates, use the Zustand store via
 // useRfiStore or the useSyncExternalStore-style wrappers above.
@@ -177,7 +192,14 @@ export const RFIS: Rfi[] = INITIAL_RFIS
 
 // ─── RFI Tab (list + inspector) ─────────────────────────────────────────────
 
-export function RfiTab() {
+export function RfiTab({
+  onOpenDsr,
+}: {
+  /** Fired when the user clicks "Open linked DSR" in the RFI Inspector.
+   *  The parent switches to the DSR tab and selects the linked entry
+   *  (audit D2-3). */
+  onOpenDsr?: (dsrId: string) => void
+}) {
   // Subscribe to the Zustand store so the RFI list re-renders when addRfi()
   // is called from the DSR Inspector.
   const rfis = useRfiStore((s) => s.rfis)
@@ -346,7 +368,7 @@ export function RfiTab() {
           </PaneBody>
         </>
       }
-      rightPane={<RfiInspector rfi={selected} />}
+      rightPane={<RfiInspector rfi={selected} onOpenDsr={onOpenDsr} />}
       leftPaneWidth="320px"
       rightPaneWidth="380px"
     />
@@ -355,8 +377,45 @@ export function RfiTab() {
 
 // ─── RFI Inspector ──────────────────────────────────────────────────────────
 
-function RfiInspector({ rfi }: { rfi: Rfi }) {
+function RfiInspector({
+  rfi,
+  onOpenDsr,
+}: {
+  rfi: Rfi
+  /** Fired when the user clicks "Open linked DSR". The parent switches to
+   *  the DSR tab and selects the linked entry (audit D2-3). */
+  onOpenDsr?: (dsrId: string) => void
+}) {
   const isOverdue = rfi.status === 'Open' && new Date(rfi.replyBy) < new Date()
+  // Reply modal state — opened by "Log Consultant Reply" (audit D2-2).
+  const [replyModalOpen, setReplyModalOpen] = useState(false)
+  const [replyText, setReplyText] = useState('')
+  const [replySaved, setReplySaved] = useState(false)
+
+  const handleSaveReply = () => {
+    if (!replyText.trim()) return
+    const today = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+    // Update the RFI in the store: set status to Replied, stamp the reply
+    // text and date (audit D2-2/D2-7).
+    useRfiStore.getState().updateRfi(rfi.id, {
+      status: 'Replied',
+      reply: replyText.trim(),
+      repliedDate: today,
+    })
+    setReplySaved(true)
+    setTimeout(() => {
+      setReplyModalOpen(false)
+      setReplySaved(false)
+      setReplyText('')
+    }, 1200)
+    toast.success('Reply logged', {
+      description: `${rfi.number} marked as Replied.`,
+    })
+  }
   return (
     <>
       <PaneHeader title={`RFI Inspector · ${rfi.number}`} />
@@ -528,12 +587,12 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 variant="default"
                 size="sm"
                 className="h-8 w-full justify-start gap-2 text-xs"
-                onClick={() =>
-                  toast.info('Consultant reply logging coming soon', {
-                    description: `Once wired, this will capture the reply text, mark ${rfi.number} as Replied, and stamp the replied date.`,
-                  })
-                }
-                title="Log Consultant Reply (coming soon)"
+                onClick={() => {
+                  setReplyText('')
+                  setReplySaved(false)
+                  setReplyModalOpen(true)
+                }}
+                title="Log Consultant Reply"
               >
                 <Mail className="h-3.5 w-3.5" />
                 Log Consultant Reply
@@ -557,11 +616,16 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
                 variant="outline"
                 size="sm"
                 className="h-8 w-full justify-start gap-2 text-xs"
-                onClick={() =>
-                  toast.info('Linked DSR navigation coming soon', {
-                    description: `Will switch the Daily Ops module to the DSR tab and select ${rfi.linkedDsr}. Cross-module deep-linking is not yet wired.`,
-                  })
-                }
+                onClick={() => {
+                  if (onOpenDsr && rfi.linkedDsr) {
+                    onOpenDsr(rfi.linkedDsr)
+                  } else {
+                    toast.info('Linked DSR navigation coming soon', {
+                      description: `Will switch the Daily Ops module to the DSR tab and select ${rfi.linkedDsr}.`,
+                    })
+                  }
+                }}
+                title="Open linked DSR"
               >
                 <ArrowRight className="h-3.5 w-3.5" />
                 Open linked DSR ({rfi.linkedDsr})
@@ -588,6 +652,80 @@ function RfiInspector({ rfi }: { rfi: Rfi }) {
           </div>
         </div>
       </PaneBody>
+
+      {/* Reply Modal — opened by "Log Consultant Reply" (audit D2-2) */}
+      {replyModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setReplyModalOpen(false)}
+        >
+          <div
+            className="pane w-full max-w-lg overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] bg-sky-500/10 px-4">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-sky-500" />
+                <span className="text-sm font-semibold">
+                  {replySaved ? 'Reply Saved' : `Log Consultant Reply — ${rfi.number}`}
+                </span>
+              </div>
+              <button
+                onClick={() => setReplyModalOpen(false)}
+                className="hover:bg-accent text-muted-foreground rounded p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {replySaved ? (
+              <div className="p-8 text-center">
+                <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" />
+                <div className="text-sm font-semibold">Reply logged</div>
+                <div className="text-muted-foreground mt-1 text-xs">
+                  {rfi.number} marked as Replied.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 p-4">
+                <div>
+                  <label className="text-xs font-medium">Consultant Reply</label>
+                  <Textarea
+                    className="mt-1 min-h-[120px] text-xs"
+                    placeholder="Paste or type the consultant's reply here…"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="flex items-center justify-between border-t border-[var(--pane-divider)] pt-2">
+                  <div className="text-muted-foreground text-[10px]">
+                    {!replyText.trim() ? (
+                      <span className="text-amber-600">Reply text is required</span>
+                    ) : (
+                      <span className="text-emerald-600">Ready to save</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setReplyModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={!replyText.trim()}
+                      onClick={handleSaveReply}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Save Reply
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }

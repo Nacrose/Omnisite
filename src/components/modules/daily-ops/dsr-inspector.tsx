@@ -457,14 +457,14 @@ export function DsrInspector({
               </div>
             ) : photos.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
-                {photos.map((photo, i) => (
+                {photos.map((photo) => (
                   <div
-                    key={photo.url + i}
+                    key={photo.path || photo.url}
                     className="group relative aspect-square overflow-hidden rounded-md border border-[var(--pane-divider)]"
                   >
                     <img
                       src={photo.url}
-                      alt={`DSR ${entry.id} photo ${i + 1}`}
+                      alt={`DSR ${entry.id} photo`}
                       className="h-full w-full object-cover"
                       loading="lazy"
                     />
@@ -472,7 +472,7 @@ export function DsrInspector({
                       <button
                         onClick={() => handleDeletePhoto(photo)}
                         className="absolute top-1 right-1 rounded bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-label={`Delete photo ${i + 1}`}
+                        aria-label="Delete photo"
                         title="Delete photo"
                       >
                         <Trash2 className="h-3 w-3" />
