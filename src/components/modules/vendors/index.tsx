@@ -171,6 +171,12 @@ export function VendorsModule() {
 
   const selected = vendors.find((v) => v.id === selectedId) ?? vendors[0]
 
+  // Sync selectedId when the fallback kicks in (audit V1-1 — same pattern
+  // as BOQ B4-4, scheduler R6-6, daily-ops D1-1).
+  if (selected && selected.id !== selectedId) {
+    setSelectedId(selected.id)
+  }
+
   if (vendorsLoading) {
     return (
       <div className="flex h-full items-center justify-center">

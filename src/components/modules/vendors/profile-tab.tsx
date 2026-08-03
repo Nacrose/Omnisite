@@ -51,9 +51,15 @@ function ratingClass(rating: string): string {
 /**
  * Compliance status for a doc, derived from its expiry date.
  *   - missing: no expiry and no fileUrl
- *   - ok: >6 months to expiry (or no expiry but file uploaded)
- *   - warn: 3-6 months to expiry
- *   - exp: <3 months to expiry (or already expired)
+ *   - ok: >30 days to expiry (or no expiry but file uploaded)
+ *   - warn: expiring within 30 days (but not yet expired)
+ *   - exp: already expired
+ *
+ * Thresholds match the Compliance Dashboard (30-day amber window) so the
+ * profile tab and the dashboard don't disagree on the same vendor's doc
+ * status (audit V1-5 — previously the profile used 90/180-day thresholds
+ * while the dashboard used 30 days, so a doc at 60 days showed "warn" in
+ * the profile but "ok" in the dashboard).
  */
 function complianceStatus(doc: ComplianceDoc): 'ok' | 'warn' | 'exp' | 'missing' {
   if (!doc.expiryDate && !doc.fileUrl) return 'missing'
@@ -61,8 +67,7 @@ function complianceStatus(doc: ComplianceDoc): 'ok' | 'warn' | 'exp' | 'missing'
   const daysTo = (Date.parse(doc.expiryDate) - Date.now()) / 86_400_000
   if (Number.isNaN(daysTo)) return 'missing'
   if (daysTo < 0) return 'exp'
-  if (daysTo < 90) return 'exp'
-  if (daysTo < 180) return 'warn'
+  if (daysTo <= 30) return 'warn'
   return 'ok'
 }
 

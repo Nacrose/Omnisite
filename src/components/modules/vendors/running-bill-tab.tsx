@@ -80,7 +80,7 @@ export function RunningBillTab({
   const handleSave = () => {
     if (!canSave) return
     const d: CustomDeductible = {
-      id: `DED-${Date.now().toString(36)}`,
+      id: `DED-${crypto.randomUUID()}`,
       type: draft.type,
       label: draft.label.trim(),
       amount: Number(draft.amount),
@@ -92,45 +92,6 @@ export function RunningBillTab({
       description: `${d.label} · ${fmtNPR(d.amount)} (${d.type})`,
     })
     setModalOpen(false)
-  }
-
-  const handleGenerateBill = () => {
-    const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
-    const retention = earned * (sc.retentionPct / 100)
-    // Advance recovery is PROPORTIONAL to earned value (advancePct% × earned),
-    // NOT the full outstanding advance balance. Per-bill recovery mirrors
-    // the rate at which the advance was paid relative to agreement value.
-    // Example: 10% advance on a 10M agreement → recover 10% of each bill's
-    // earned value, until the cumulative recovery equals the advance paid.
-    //
-    // CAP: cumulative recovery across all bills must not exceed `advancePaid`.
-    // `sc.advanceRecovered` is the running total recovered in prior bills.
-    // Once the cap is hit, recovery for this bill drops to 0 and we surface
-    // "Advance fully recovered" so the operator knows no further recovery
-    // will be deducted.
-    const alreadyRecovered = sc.advanceRecovered ?? 0
-    const proportionalRecovery = earned * (sc.advancePct / 100)
-    const remaining = Math.max(0, sc.advancePaid - alreadyRecovered)
-    const advanceRecovery = Math.min(proportionalRecovery, remaining)
-    const fullyRecovered = sc.advancePaid > 0 && remaining <= 0
-    const tds = sc.customDeductibles.find((d) => d.type === 'tds')
-    const tdsAmount = tds ? earned * ((tds.ratePct || 0) / 100) : 0
-    const otherDeductibles = sc.customDeductibles.filter((d) => d.type !== 'tds')
-    const otherDeductibleTotal = otherDeductibles.reduce((sum, d) => sum + d.amount, 0)
-    const totalDeductions =
-      advanceRecovery + retention + sc.reworkCost + tdsAmount + otherDeductibleTotal
-    const netPayable = earned - totalDeductions
-    // Persist the new cumulative recovery total so the next bill respects
-    // the cap. Without this callback, every bill would re-compute the full
-    // proportional recovery and over-recover past `advancePaid`.
-    if (!fullyRecovered && advanceRecovery > 0) {
-      onUpdateAdvanceRecovered?.(alreadyRecovered + advanceRecovery)
-    }
-    toast.success('Running bill generated', {
-      description: fullyRecovered
-        ? `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)} · Advance fully recovered`
-        : `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)}`,
-    })
   }
 
   const earned = sc.items.reduce((sum, it) => sum + it.actualQty * it.rate, 0)
@@ -201,6 +162,19 @@ export function RunningBillTab({
     materialChargeback +
     consumableChargeback
   const netPayable = earned - totalDeductions
+
+  // handleGenerateBill uses the computed values above (audit V1-6 —
+  // previously it recomputed everything from scratch, which was fragile).
+  const handleGenerateBill = () => {
+    if (!advanceFullyRecovered && advanceRecovery > 0) {
+      onUpdateAdvanceRecovered?.(alreadyRecovered + advanceRecovery)
+    }
+    toast.success('Running bill generated', {
+      description: advanceFullyRecovered
+        ? `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)} · Advance fully recovered`
+        : `Earned ${fmtNPR(earned)} · Net payable ${fmtNPR(netPayable)}`,
+    })
+  }
 
   const DEDUCTION_TYPE_ICONS: Record<string, typeof Wallet> = {
     advance: Wallet,
