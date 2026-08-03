@@ -46,10 +46,6 @@ export interface Rfi {
   locationId?: string
 }
 
-// Real current date — captured once at module load so overdue calculations
-// reflect the user's actual clock instead of a hardcoded demo date.
-const TODAY = new Date()
-
 // ─── Shared RFI store ──────────────────────────────────────────────────────
 // RFIs need to be mutable so the DSR Inspector can add new drafts that
 // appear in the RFI Register. Using a module-level array + useSyncExternalStore
@@ -189,6 +185,13 @@ export function RfiTab() {
   const [filter, setFilter] = useState<'All' | 'Open' | 'Replied' | 'Closed'>('All')
   const [searchQuery, setSearchQuery] = useState('')
   const selected = rfis.find((r) => r.id === selectedId) ?? rfis[0]
+
+  // If selectedId points to a deleted RFI, `selected` falls back to rfis[0]
+  // but selectedId stays stale — the outline highlights NO row. Sync it
+  // (audit D1-6 — same fix as BOQ B4-4, scheduler R6-6, DSR D1-1).
+  if (selected && selected.id !== selectedId) {
+    setSelectedId(selected.id)
+  }
   // Filter by status first, then by the search query (matches RFI number,
   // subject, or question text — the most common lookups).
   const filtered = (filter === 'All' ? rfis : rfis.filter((r) => r.status === filter)).filter(
@@ -202,7 +205,9 @@ export function RfiTab() {
       )
     }
   )
-  const overdueCount = rfis.filter((r) => r.status === 'Open' && new Date(r.replyBy) < TODAY).length
+  const overdueCount = rfis.filter(
+    (r) => r.status === 'Open' && new Date(r.replyBy) < new Date()
+  ).length
 
   // Guard against an empty RFI store (e.g. fresh install with no seed data,
   // or all RFIs deleted). Without this, `selected` is undefined and
@@ -280,7 +285,7 @@ export function RfiTab() {
               </div>
             ) : (
               filtered.map((r) => {
-                const isOverdue = r.status === 'Open' && new Date(r.replyBy) < TODAY
+                const isOverdue = r.status === 'Open' && new Date(r.replyBy) < new Date()
                 const isSelected = r.id === selectedId
                 return (
                   <button
@@ -351,7 +356,7 @@ export function RfiTab() {
 // ─── RFI Inspector ──────────────────────────────────────────────────────────
 
 function RfiInspector({ rfi }: { rfi: Rfi }) {
-  const isOverdue = rfi.status === 'Open' && new Date(rfi.replyBy) < TODAY
+  const isOverdue = rfi.status === 'Open' && new Date(rfi.replyBy) < new Date()
   return (
     <>
       <PaneHeader title={`RFI Inspector · ${rfi.number}`} />

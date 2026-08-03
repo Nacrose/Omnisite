@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Plus, Copy, Mail, Camera, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { DsrEntry, StatusDot } from './types'
 import {
   useColumnVisibility,
@@ -20,10 +21,18 @@ export function WorkProgressView({
   entries,
   selectedId,
   onSelect,
+  onAddAdHoc,
+  onCopyYesterday,
 }: {
   entries: DsrEntry[]
   selectedId: string
   onSelect: (id: string) => void
+  /** Fired when the user clicks "Ad-Hoc Entry". The parent adds a new DSR
+   *  entry to the synced store. Previously this button had no onClick (audit D1-4). */
+  onAddAdHoc?: () => void
+  /** Fired when the user clicks "Copy Yesterday". The parent copies entries
+   *  from the previous day. Previously this button had no onClick (audit D1-4). */
+  onCopyYesterday?: () => void
 }) {
   const selected = entries.find((e) => e.id === selectedId)
   // Stable ITR ID — generated once per mount using crypto.randomUUID() so it
@@ -50,11 +59,37 @@ export function WorkProgressView({
   return (
     <>
       <PaneHeader title="Work Progress · Auto-generated from Schedule">
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={() => {
+            if (onAddAdHoc) {
+              onAddAdHoc()
+            } else {
+              toast.info('Ad-hoc entry coming soon', {
+                description: 'Will add a new DSR entry for the selected date.',
+              })
+            }
+          }}
+        >
           <Plus className="h-3.5 w-3.5" />
           Ad-Hoc Entry
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={() => {
+            if (onCopyYesterday) {
+              onCopyYesterday()
+            } else {
+              toast.info('Copy Yesterday coming soon', {
+                description: 'Will prefill from the previous day’s entries.',
+              })
+            }
+          }}
+        >
           <Copy className="h-3.5 w-3.5" />
           Copy Yesterday
         </Button>

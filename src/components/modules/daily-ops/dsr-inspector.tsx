@@ -289,7 +289,10 @@ export function DsrInspector({
               <Input
                 className="mt-1 h-8"
                 type="number"
-                value={entry.planned}
+                // Use `|| ''` so the input shows empty (not 0) when cleared
+                // — same pattern as BOQ/scheduler inputs (audit D1-5).
+                value={entry.planned || ''}
+                placeholder="0"
                 onChange={(e) => {
                   const num = Number(e.target.value)
                   onUpdate?.('planned', Number.isFinite(num) ? num : 0)
@@ -304,7 +307,8 @@ export function DsrInspector({
               <Input
                 className="mt-1 h-8"
                 type="number"
-                value={entry.actual}
+                value={entry.actual || ''}
+                placeholder="0"
                 onChange={(e) => {
                   const num = Number(e.target.value)
                   onUpdate?.('actual', Number.isFinite(num) ? num : 0)

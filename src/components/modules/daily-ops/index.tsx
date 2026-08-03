@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useSyncExternalStore } from 'react'
+import { useState, useMemo, useSyncExternalStore } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ import {
   HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { DSR_ENTRIES, StatusDot, type DsrEntry } from './types'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { WorkProgressView } from './work-progress'
@@ -51,8 +52,29 @@ export function DailyOpsModule() {
   const [selectedDate, setSelectedDate] = useState(
     dsrEntries[0]?.date || new Date().toISOString().slice(0, 10)
   )
+  // Search query — filters the dayEntries list by task name or chainage.
+  // Previously the input had no value/onChange, so typing did nothing (audit D1-2).
+  const [searchQuery, setSearchQuery] = useState('')
   const dayEntries = dsrEntries.filter((d) => d.date === selectedDate)
-  const selected = dayEntries.find((d) => d.id === selectedId) ?? dayEntries[0] ?? dsrEntries[0]
+  const filteredDayEntries = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return dayEntries
+    return dayEntries.filter(
+      (d) => d.task.toLowerCase().includes(q) || d.chainage.toLowerCase().includes(q)
+    )
+  }, [dayEntries, searchQuery])
+  const selected =
+    filteredDayEntries.find((d) => d.id === selectedId) ?? dayEntries[0] ?? dsrEntries[0]
+
+  // If selectedId points to a deleted entry (or an entry from a different
+  // date that's no longer in dayEntries), `selected` falls back to
+  // dayEntries[0] or dsrEntries[0] — but selectedId in state stays stale,
+  // so the outline highlights NO row. Sync selectedId to the fallback so
+  // the outline highlights the right row (audit D1-1 — same fix as BOQ
+  // B4-4 and scheduler R6-6). Uses the "adjust state during render" pattern.
+  if (selected && selected.id !== selectedId) {
+    setSelectedId(selected.id)
+  }
 
   // Live RFI count from the shared store — updates when DSR Inspector adds one.
   const rfis = useSyncExternalStore(subscribeRfis, getRfis, getRfis)
@@ -157,7 +179,33 @@ export function DailyOpsModule() {
           leftPane={
             <>
               <PaneHeader title="Site Execution">
-                <Button variant="ghost" size="sm" className="h-7">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => {
+                    // Add a new ad-hoc DSR entry for the selected date.
+                    // Uses crypto.randomUUID for a collision-free id (audit D1-3 —
+                    // previously the button had no onClick).
+                    const newId = `D-${Date.now().toString(36)}`
+                    const newEntry: DsrEntry = {
+                      id: newId,
+                      task: 'New DSR entry',
+                      source: 'Manual',
+                      chainage: '—',
+                      planned: 0,
+                      actual: 0,
+                      uom: 'cum',
+                      status: 'pending',
+                      date: selectedDate,
+                    }
+                    setDsrEntries((prev) => [...prev, newEntry])
+                    setSelectedId(newId)
+                    toast.success('DSR entry added', {
+                      description: `${newId} for ${selectedDate}`,
+                    })
+                  }}
+                >
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </PaneHeader>
@@ -182,7 +230,12 @@ export function DailyOpsModule() {
                 </div>
                 <div className="relative">
                   <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-                  <Input placeholder="Filter by task / chainage…" className="h-8 pl-7 text-xs" />
+                  <Input
+                    placeholder="Filter by task / chainage…"
+                    className="h-8 pl-7 text-xs"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
               </div>
               <PaneBody className="py-2">
@@ -200,15 +253,18 @@ export function DailyOpsModule() {
                     className="bg-transparent text-[10px] font-semibold tracking-wider uppercase outline-none"
                   />
                   <span className="ml-auto text-[9px] font-normal normal-case">
-                    {dayEntries.length} {dayEntries.length === 1 ? 'entry' : 'entries'}
+                    {filteredDayEntries.length}{' '}
+                    {filteredDayEntries.length === 1 ? 'entry' : 'entries'}
                   </span>
                 </div>
-                {dayEntries.length === 0 ? (
+                {filteredDayEntries.length === 0 ? (
                   <div className="text-muted-foreground px-3 py-8 text-center text-[10px]">
-                    No DSR entries for {selectedDate}. Switch to the Work Progress tab to add one.
+                    {dayEntries.length === 0
+                      ? `No DSR entries for ${selectedDate}. Switch to the Work Progress tab to add one.`
+                      : `No entries match "${searchQuery}".`}
                   </div>
                 ) : (
-                  dayEntries.map((d) => (
+                  filteredDayEntries.map((d) => (
                     <button
                       key={d.id}
                       onClick={() => setSelectedId(d.id)}
@@ -245,6 +301,51 @@ export function DailyOpsModule() {
                 entries={dayEntries.length > 0 ? dayEntries : dsrEntries}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
+                onAddAdHoc={() => {
+                  // Add a new ad-hoc DSR entry for the selected date
+                  // (audit D1-4 — previously the button had no onClick).
+                  const newId = `D-${Date.now().toString(36)}`
+                  const newEntry: DsrEntry = {
+                    id: newId,
+                    task: 'New DSR entry',
+                    source: 'Manual',
+                    chainage: '—',
+                    planned: 0,
+                    actual: 0,
+                    uom: 'cum',
+                    status: 'pending',
+                    date: selectedDate,
+                  }
+                  setDsrEntries((prev) => [...prev, newEntry])
+                  setSelectedId(newId)
+                  toast.success('Ad-hoc DSR entry added', {
+                    description: `${newId} for ${selectedDate}`,
+                  })
+                }}
+                onCopyYesterday={() => {
+                  // Copy entries from the previous day. Parse selectedDate,
+                  // subtract 1 day, and clone any entries from that date with
+                  // new IDs and reset actual/planned (audit D1-4).
+                  const prevDate = new Date(selectedDate + 'T00:00:00')
+                  prevDate.setDate(prevDate.getDate() - 1)
+                  const prevIso = prevDate.toISOString().slice(0, 10)
+                  const prevEntries = dsrEntries.filter((d) => d.date === prevIso)
+                  if (prevEntries.length === 0) {
+                    toast.info(`No DSR entries found for ${prevIso} to copy.`)
+                    return
+                  }
+                  const cloned = prevEntries.map((d) => ({
+                    ...d,
+                    id: `D-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 4)}`,
+                    date: selectedDate,
+                    actual: 0,
+                    status: 'pending' as const,
+                  }))
+                  setDsrEntries((prev) => [...prev, ...cloned])
+                  toast.success(`Copied ${cloned.length} entries from ${prevIso}`, {
+                    description: `Actual quantities reset to 0, status set to pending.`,
+                  })
+                }}
               />
             ) : (
               <DailySiteLogView date={selectedDate} />
