@@ -675,9 +675,22 @@ export function SchedulerModule() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Critical path</span>
                 <span className="font-mono text-red-500">
-                  {flat.filter((f) => f.task.critical && f.task.type === 'Work').length} tasks ·{' '}
+                  {/* Count both Work and Hammock critical tasks — Hammock tasks
+                    are included in CPM (R5-3), so they can be critical too
+                    (e.g. seed T-301). Previously only Work tasks were counted,
+                    undercounting the critical path (audit S8-5). */}
+                  {
+                    flat.filter(
+                      (f) =>
+                        f.task.critical && (f.task.type === 'Work' || f.task.type === 'Hammock')
+                    ).length
+                  }{' '}
+                  tasks ·{' '}
                   {flat
-                    .filter((f) => f.task.critical && f.task.type === 'Work')
+                    .filter(
+                      (f) =>
+                        f.task.critical && (f.task.type === 'Work' || f.task.type === 'Hammock')
+                    )
                     .reduce((s, f) => s + f.task.duration, 0)}
                   w
                 </span>

@@ -497,7 +497,12 @@ function computeWeeklyLoad(tasks: Task[]): { load: number[]; peak: number } {
   const load = new Array(TOTAL_WEEKS).fill(0)
   const walk = (items: Task[]) => {
     for (const t of items) {
-      if (t.type === 'Work' && t.duration > 0) {
+      // Include Hammock tasks in the load calculation — they have durations
+      // and resources (e.g. seed T-301 has resources: ['L-3']). This must
+      // match leveling.ts's flattenLeaves which was fixed in R6-2 to include
+      // Hammock tasks. Without this, the chart and leveling would disagree
+      // on the peak load (audit S8-2).
+      if ((t.type === 'Work' || t.type === 'Hammock') && t.duration > 0) {
         const resources = t.resources ?? []
         for (let w = t.start; w < t.start + t.duration && w < TOTAL_WEEKS; w++) {
           load[w] += resources.length

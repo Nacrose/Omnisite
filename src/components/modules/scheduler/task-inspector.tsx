@@ -455,9 +455,9 @@ export function TaskInspector({
             </div>
             <div className="space-y-1.5">
               {task.dependencies && task.dependencies.length > 0 ? (
-                task.dependencies.map((dep, i) => (
+                task.dependencies.map((dep) => (
                   <div
-                    key={`${dep.predecessorId}-${dep.linkType}-${i}`}
+                    key={`${dep.predecessorId}-${dep.linkType}`}
                     className="flex items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5"
                   >
                     <Link2 className="text-muted-foreground h-3 w-3" />
