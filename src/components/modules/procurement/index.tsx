@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Search,
   Plus,
   FileText,
   Package,
@@ -264,7 +263,7 @@ export function ProcurementModule() {
     setOverrideReason('')
   }
 
-  if (reqsLoading || posLoading || minsLoading) {
+  if (reqsLoading || posLoading || grnsLoading || stockLoading || minsLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <LoadingState label="Loading procurement data…" />
@@ -282,10 +281,29 @@ export function ProcurementModule() {
                 variant="ghost"
                 size="sm"
                 className="h-7"
-                onClick={() =>
-                  toast.info('New requisition creation coming soon — use the API or contact admin.')
-                }
-                title="New requisition (coming soon)"
+                onClick={() => {
+                  // Add a new blank requisition and switch to the req tab
+                  // (audit P1-2 — previously showed a "coming soon" toast).
+                  const newId = `REQ-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+                  setReqs((prev) => [
+                    {
+                      id: newId,
+                      item: 'New requisition',
+                      uom: 'cum',
+                      qty: 0,
+                      status: 'Draft',
+                      source: 'Manual',
+                      vendors: [],
+                    },
+                    ...prev,
+                  ])
+                  setSelectedId(newId)
+                  setTab('req')
+                  toast.success('Requisition created', {
+                    description: `${newId} — fill in the details and add vendor bids.`,
+                  })
+                }}
+                title="New requisition"
               >
                 <Plus className="h-3.5 w-3.5" />
               </Button>
@@ -377,32 +395,61 @@ export function ProcurementModule() {
               }
             >
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1.5 text-xs"
-                onClick={() => toast.info('Use the search box in the center pane.')}
-                title="Search (use center pane)"
-              >
-                <Search className="h-3.5 w-3.5" />
-                Search
-              </Button>
-              <Button
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
                 onClick={() => {
-                  const tabName =
-                    tab === 'req'
-                      ? 'requisition'
-                      : tab === 'po'
-                        ? 'consolidated PO'
-                        : tab === 'grn'
-                          ? 'GRN'
-                          : tab === 'stock'
-                            ? 'material'
-                            : 'MIN'
-                  toast.info(`New ${tabName} creation coming soon.`)
+                  // Create a new entry for the active tab (audit P1-4 —
+                  // previously showed a "coming soon" toast for all tabs).
+                  if (tab === 'req') {
+                    const newId = `REQ-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+                    setReqs((prev) => [
+                      {
+                        id: newId,
+                        item: 'New requisition',
+                        uom: 'cum',
+                        qty: 0,
+                        status: 'Draft',
+                        source: 'Manual',
+                        vendors: [],
+                      },
+                      ...prev,
+                    ])
+                    setSelectedId(newId)
+                    toast.success('Requisition created', { description: newId })
+                  } else if (tab === 'po') {
+                    // POs are generated from approved requisitions, not
+                    // created manually — point the user to the req tab.
+                    toast.info('POs are generated from requisitions', {
+                      description:
+                        'Switch to the Requisitions tab, select vendors, and click "Generate POs".',
+                    })
+                  } else if (tab === 'grn') {
+                    toast.info('GRNs are created from delivered POs', {
+                      description:
+                        'Switch to the Purchase Orders tab and mark a PO as Delivered to auto-generate a GRN.',
+                    })
+                  } else if (tab === 'stock') {
+                    const newCode = `MAT-${crypto.randomUUID().slice(0, 6).toUpperCase()}`
+                    setStock((prev) => [
+                      {
+                        code: newCode,
+                        name: 'New material',
+                        onHand: 0,
+                        reserved: 0,
+                        avgCost: 0,
+                        warehouse: 'Main',
+                      },
+                      ...prev,
+                    ])
+                    toast.success('Stock item created', { description: newCode })
+                  } else if (tab === 'min') {
+                    toast.info('MIN creation requires a linked DSR entry', {
+                      description:
+                        'Create a MIN from the Daily Ops → DSR Inspector → Material Reconciliation tab.',
+                    })
+                  }
                 }}
-                title="New entry (coming soon)"
+                title="New entry"
               >
                 <Plus className="h-3.5 w-3.5" />
                 New{' '}
