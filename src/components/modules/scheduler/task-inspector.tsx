@@ -10,7 +10,6 @@ import { Link2, Calendar, Gauge, Package, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Task } from './types'
-import { TOTAL_WEEKS } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { INITIAL_VENDORS } from '@/data/seed/vendors'
@@ -90,12 +89,15 @@ function buildConstraint(code: string, week: number | null | undefined): string 
 
 export function TaskInspector({
   task,
+  totalWeeks,
   onUpdateDuration,
   onUpdateProgress,
   onUpdateLocation,
   onUpdateConstraint,
 }: {
   task: Task
+  /** Effective project weeks — replaces the hardcoded TOTAL_WEEKS=52. */
+  totalWeeks: number
   onUpdateDuration?: (id: string, newDuration: number) => void
   /**
    * Fired when the user edits the progress input. The parent mutates the
@@ -349,7 +351,7 @@ export function TaskInspector({
                   // the visual "jump" where the user types 100, the input
                   // briefly shows 100, then re-renders with the clamped
                   // value (audit R4-7).
-                  max={TOTAL_WEEKS - task.start}
+                  max={totalWeeks - task.start}
                   // Use `|| ''` so the input shows empty (not 0) when cleared
                   // — same pattern as the BOQ module's inputs (audit S7-1).
                   value={task.duration || ''}
@@ -374,9 +376,10 @@ export function TaskInspector({
                   type="number"
                   min={0}
                   max={100}
-                  // Use `|| ''` so the input shows empty (not 0) when cleared
-                  // (audit S7-1).
-                  value={task.progress || ''}
+                  // Use a nullish check instead of || so a legitimate 0%
+                  // progress shows "0" instead of blanking (the || operator
+                  // treats 0 as falsy, which blanks the field).
+                  value={task.progress === 0 ? '0' : task.progress || ''}
                   placeholder="0"
                   disabled={!onUpdateProgress}
                   onChange={(e) => {

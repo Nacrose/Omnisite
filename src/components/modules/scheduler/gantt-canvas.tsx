@@ -3,7 +3,7 @@
 import { useMemo, memo } from 'react'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { TOTAL_WEEKS, WEEK_WIDTH, type Task, type DragState } from './types'
+import { WEEK_WIDTH, type Task, type DragState } from './types'
 
 export interface GanttCanvasProps {
   tasks: Task[]
@@ -20,6 +20,10 @@ export interface GanttCanvasProps {
   onResizeMouseDown: (e: React.MouseEvent, t: Task) => void
   showResources: boolean
   todayWeek: number
+  /** Effective project weeks — dynamically computed from the task tree.
+   *  Replaces the hardcoded TOTAL_WEEKS=52 so projects longer than a year
+   *  aren't truncated. */
+  totalWeeks: number
   canvasRef: React.RefObject<HTMLDivElement | null>
 }
 
@@ -259,6 +263,7 @@ export function GanttCanvas({
   onResizeMouseDown,
   showResources,
   todayWeek,
+  totalWeeks,
   canvasRef,
 }: GanttCanvasProps) {
   // Only re-walk the task tree when the tasks themselves or the expanded
@@ -286,8 +291,8 @@ export function GanttCanvas({
             <div className="text-muted-foreground flex w-[480px] flex-shrink-0 items-center border-r border-[var(--pane-divider)] px-3 text-[10px] font-semibold tracking-wider uppercase">
               Task
             </div>
-            <div className="flex" style={{ width: TOTAL_WEEKS * WEEK_WIDTH }}>
-              {Array.from({ length: TOTAL_WEEKS }).map((_, i) => {
+            <div className="flex" style={{ width: totalWeeks * WEEK_WIDTH }}>
+              {Array.from({ length: totalWeeks }).map((_, i) => {
                 const isMonthStart = i % 4 === 0
                 return (
                   <div
@@ -371,7 +376,7 @@ export function GanttCanvas({
                   </div>
                   <div
                     className="gantt-grid relative h-8"
-                    style={{ width: TOTAL_WEEKS * WEEK_WIDTH }}
+                    style={{ width: totalWeeks * WEEK_WIDTH }}
                   >
                     {/* Baseline ghost */}
                     <div
@@ -411,7 +416,7 @@ export function GanttCanvas({
                 it doesn't intercept bar clicks/drag. */}
             <svg
               className="pointer-events-none absolute top-0 left-[480px] z-[15]"
-              width={TOTAL_WEEKS * WEEK_WIDTH}
+              width={totalWeeks * WEEK_WIDTH}
               height={visibleRows.length * 32}
               style={{ overflow: 'visible' }}
             >
@@ -472,7 +477,7 @@ export function GanttCanvas({
 
               The bars are colored amber when load = peak (so the user can
               see at a glance which weeks leveling would target). */}
-          {showResources && <ResourceLoadChart tasks={tasks} />}
+          {showResources && <ResourceLoadChart tasks={tasks} totalWeeks={totalWeeks} />}
         </div>
       </div>
     </div>
@@ -489,12 +494,8 @@ export function GanttCanvas({
 // Memoized so it only recomputes when the task tree actually changes —
 // hovering / dragging bars doesn't invalidate the chart.
 
-interface ResourceLoadChartProps {
-  tasks: Task[]
-}
-
-function computeWeeklyLoad(tasks: Task[]): { load: number[]; peak: number } {
-  const load = new Array(TOTAL_WEEKS).fill(0)
+function computeWeeklyLoad(tasks: Task[], totalWeeks: number): { load: number[]; peak: number } {
+  const load = new Array(totalWeeks).fill(0)
   const walk = (items: Task[]) => {
     for (const t of items) {
       // Include Hammock tasks in the load calculation — they have durations
@@ -504,7 +505,7 @@ function computeWeeklyLoad(tasks: Task[]): { load: number[]; peak: number } {
       // on the peak load (audit S8-2).
       if ((t.type === 'Work' || t.type === 'Hammock') && t.duration > 0) {
         const resources = t.resources ?? []
-        for (let w = t.start; w < t.start + t.duration && w < TOTAL_WEEKS; w++) {
+        for (let w = t.start; w < t.start + t.duration && w < totalWeeks; w++) {
           load[w] += resources.length
         }
       }
@@ -518,8 +519,12 @@ function computeWeeklyLoad(tasks: Task[]): { load: number[]; peak: number } {
 
 export const ResourceLoadChart = memo(function ResourceLoadChart({
   tasks,
-}: ResourceLoadChartProps) {
-  const { load, peak } = useMemo(() => computeWeeklyLoad(tasks), [tasks])
+  totalWeeks,
+}: {
+  tasks: Task[]
+  totalWeeks: number
+}) {
+  const { load, peak } = useMemo(() => computeWeeklyLoad(tasks, totalWeeks), [tasks, totalWeeks])
   const hasAnyLoad = load.some((v) => v > 0)
   const barHeight = 32 // px
 
@@ -545,7 +550,7 @@ export const ResourceLoadChart = memo(function ResourceLoadChart({
           <div className="w-[480px] flex-shrink-0 border-r border-[var(--pane-divider)]" />
           <div
             className="flex items-end"
-            style={{ width: TOTAL_WEEKS * WEEK_WIDTH, height: barHeight + 8 }}
+            style={{ width: totalWeeks * WEEK_WIDTH, height: barHeight + 8 }}
           >
             {load.map((v, i) => {
               const isPeak = v === peak && v > 0

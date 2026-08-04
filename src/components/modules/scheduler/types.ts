@@ -64,6 +64,33 @@ export { TASKS } from '@/data/seed/scheduler'
 export const TOTAL_WEEKS = 52
 export const WEEK_WIDTH = 26
 
+/**
+ * Compute the effective project horizon (in weeks) from a task tree.
+ * Uses the latest (start + duration) across all tasks, with a minimum
+ * of TOTAL_WEEKS (52). This allows projects longer than one year
+ * without truncating the Gantt canvas, drag clamps, or input maxes.
+ *
+ * Previously TOTAL_WEEKS=52 was hardcoded everywhere — the Gantt canvas,
+ * drag clamps, inspector inputs, modal inputs, and leveling all capped
+ * at 52 weeks. Now the scheduler computes this dynamically and passes
+ * it to all consumers. The types.ts constant remains as the minimum
+ * floor.
+ */
+export function computeProjectWeeks(tasks: Task[]): number {
+  let max = TOTAL_WEEKS
+  const walk = (items: Task[]) => {
+    for (const t of items) {
+      const finish = t.start + t.duration
+      if (finish > max) max = finish
+      if (t.children) walk(t.children)
+    }
+  }
+  walk(tasks)
+  // Add a 4-week buffer so tasks can be dragged/resized past the
+  // current project end without immediately hitting the ceiling.
+  return max + 4
+}
+
 export function flattenTasks(items: Task[]): { task: Task; depth: number }[] {
   const out: { task: Task; depth: number }[] = []
   const walk = (items: Task[], depth: number) => {

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Plus, X, AlertTriangle, Zap, ArrowRight, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { TOTAL_WEEKS, type Task } from './types'
+import { type Task } from './types'
 
 // ─── New Task draft shape ───────────────────────────────────────────────────
 
@@ -34,11 +34,14 @@ export const EMPTY_NEW_TASK: NewTaskDraft = {
 export function AddTaskModal({
   newTask,
   setNewTask,
+  totalWeeks,
   onClose,
   onSubmit,
 }: {
   newTask: NewTaskDraft
   setNewTask: (updater: (prev: NewTaskDraft) => NewTaskDraft) => void
+  /** Effective project weeks — replaces the hardcoded TOTAL_WEEKS=52. */
+  totalWeeks: number
   onClose: () => void
   onSubmit: () => void
 }) {
@@ -105,15 +108,13 @@ export function AddTaskModal({
                   type="number"
                   className="h-8 w-20 text-xs"
                   min={0}
-                  max={TOTAL_WEEKS - 1}
-                  // Use `|| ''` so the input shows empty (not 0) when cleared
-                  // — the parseInt fallback still maps empty to 0 (audit S7-2).
+                  max={totalWeeks - 1}
                   value={newTask.start || ''}
                   placeholder="0"
                   onChange={(e) =>
                     setNewTask((t) => ({
                       ...t,
-                      start: Math.max(0, Math.min(TOTAL_WEEKS - 1, parseInt(e.target.value) || 0)),
+                      start: Math.max(0, Math.min(totalWeeks - 1, parseInt(e.target.value) || 0)),
                     }))
                   }
                 />
@@ -127,9 +128,7 @@ export function AddTaskModal({
                   type="number"
                   className="h-8 w-20 text-xs"
                   min={1}
-                  max={TOTAL_WEEKS - newTask.start}
-                  // Use `|| ''` so the input shows empty (not 0) when cleared
-                  // (audit S7-2).
+                  max={totalWeeks - newTask.start}
                   value={newTask.duration || ''}
                   placeholder="1"
                   onChange={(e) =>
@@ -137,7 +136,7 @@ export function AddTaskModal({
                       ...t,
                       duration: Math.max(
                         1,
-                        Math.min(TOTAL_WEEKS - t.start, parseInt(e.target.value) || 1)
+                        Math.min(totalWeeks - t.start, parseInt(e.target.value) || 1)
                       ),
                     }))
                   }
@@ -219,12 +218,8 @@ export function AddTaskModal({
                         newTask.type === 'Summary' && 'bg-muted-foreground/60'
                       )}
                       style={{
-                        left: `${(newTask.start / TOTAL_WEEKS) * 100}%`,
-                        // Milestones render as a thin sliver (3% width) since
-                        // effDuration=0 would make the bar invisible. Non-milestone
-                        // tasks get a 2% minimum floor. Previously both branches
-                        // of the ternary were 2, making the condition dead code.
-                        width: `${Math.max((effDuration / TOTAL_WEEKS) * 100, newTask.type === 'Milestone' ? 3 : 2)}%`,
+                        left: `${(newTask.start / totalWeeks) * 100}%`,
+                        width: `${Math.max((effDuration / totalWeeks) * 100, newTask.type === 'Milestone' ? 3 : 2)}%`,
                       }}
                     />
                   </div>

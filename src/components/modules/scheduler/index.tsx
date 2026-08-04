@@ -12,7 +12,14 @@ import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
 import { undoableToast } from '@/components/ui/confirm-dialog'
-import { TASKS, TOTAL_WEEKS, WEEK_WIDTH, flattenTasks, type Task, type DragState } from './types'
+import {
+  TASKS,
+  WEEK_WIDTH,
+  flattenTasks,
+  computeProjectWeeks,
+  type Task,
+  type DragState,
+} from './types'
 import { GanttCanvas } from './gantt-canvas'
 import { TaskInspector } from './task-inspector'
 import { AddTaskModal, CriticalPathBreachModal, EMPTY_NEW_TASK, type NewTaskDraft } from './modals'
@@ -36,7 +43,7 @@ function flattenTaskTree(items: Task[], parentId: string | null = null): Task[] 
 // Shared project constants — imported from a single source so the
 // scheduler and dashboard can never drift apart (previously both files
 // independently defined `new Date('2026-04-01')`).
-import { PROJECT_EPOCH, MS_PER_WEEK, getTodayWeek } from '@/lib/project-constants'
+import { getTodayWeek } from '@/lib/project-constants'
 
 export function SchedulerModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
@@ -258,6 +265,16 @@ export function SchedulerModule() {
     [flat]
   )
 
+  // Effective project weeks — dynamically computed from the task tree so
+  // projects longer than 52 weeks aren't truncated. The Gantt canvas,
+  // drag clamps, inspector inputs, and modal inputs all use this value
+  // instead of the hardcoded TOTAL_WEEKS=52. The constant remains as the
+  // minimum floor (computeProjectWeeks returns max(52, horizon+4)).
+  // This closes the gap flagged in the user's deep audit: the leveling
+  // fix (computeHorizon) was correct but couldn't be exercised because
+  // every other part of the UI still capped at 52.
+  const effectiveWeeks = useMemo(() => computeProjectWeeks(taskTree), [taskTree])
+
   // Update a task's start date when dragged
   const updateTaskStart = (id: string, newStart: number) => {
     commitTasks((prev) =>
@@ -265,7 +282,7 @@ export function SchedulerModule() {
         const walk = (items: Task[]) => {
           for (const t of items) {
             if (t.id === id) {
-              t.start = Math.max(0, Math.min(TOTAL_WEEKS - t.duration, newStart))
+              t.start = Math.max(0, Math.min(effectiveWeeks - t.duration, newStart))
               return true
             }
             if (t.children && walk(t.children)) return true
@@ -284,7 +301,7 @@ export function SchedulerModule() {
         const walk = (items: Task[]) => {
           for (const t of items) {
             if (t.id === id) {
-              t.duration = Math.max(1, Math.min(TOTAL_WEEKS - t.start, newDuration))
+              t.duration = Math.max(1, Math.min(effectiveWeeks - t.start, newDuration))
               return true
             }
             if (t.children && walk(t.children)) return true
@@ -416,7 +433,7 @@ export function SchedulerModule() {
         // For Summary tasks in critical-only mode, check if any descendant
         // is critical. If not, skip the Summary entirely — showing an empty
         // Summary with all children hidden is confusing.
-        if (showCriticalOnly && !isLeaf && t.critical === false) {
+        if (showCriticalOnly && !isLeaf && !t.critical) {
           const hasCriticalDescendant = (nodes: Task[] | undefined): boolean =>
             nodes?.some((n) => n.critical || hasCriticalDescendant(n.children)) ?? false
           if (!hasCriticalDescendant(t.children)) continue
@@ -486,7 +503,7 @@ export function SchedulerModule() {
   // Gantt canvas — TODAY line is computed from the shared project epoch
   // so it advances as real time passes (was previously hardcoded to `16`).
   // Clamped to [0, TOTAL_WEEKS] via the shared helper (audit R4-5).
-  const todayWeek = getTodayWeek(TOTAL_WEEKS)
+  const todayWeek = getTodayWeek(effectiveWeeks)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // Mouse handlers for drag-to-move on Gantt bars. Wrapped in useCallback
@@ -698,7 +715,7 @@ export function SchedulerModule() {
         }
         centerPane={
           <>
-            <PaneHeader title="Gantt Canvas · W1 to W52">
+            <PaneHeader title={`Gantt Canvas · W1 to W${effectiveWeeks}`}>
               <span className="text-muted-foreground bg-secondary/60 hidden items-center gap-1.5 rounded px-2 py-0.5 text-[10px] md:flex">
                 <span className="bg-primary h-1.5 w-1.5 animate-pulse rounded-full" />
                 Drag bars to move · drag edges to resize
@@ -802,6 +819,7 @@ export function SchedulerModule() {
               onResizeMouseDown={onResizeMouseDown}
               showResources={showResources}
               todayWeek={todayWeek}
+              totalWeeks={effectiveWeeks}
               canvasRef={canvasRef}
             />
           </>
@@ -810,6 +828,7 @@ export function SchedulerModule() {
           <TaskInspector
             key={selectedTask.id}
             task={selectedTask}
+            totalWeeks={effectiveWeeks}
             onUpdateDuration={updateTaskDuration}
             onUpdateProgress={updateTaskProgress}
             onUpdateLocation={(locId) => {
@@ -881,6 +900,7 @@ export function SchedulerModule() {
         <AddTaskModal
           newTask={newTask}
           setNewTask={setNewTask}
+          totalWeeks={effectiveWeeks}
           onClose={() => setAddTaskOpen(false)}
           onSubmit={addTask}
         />
