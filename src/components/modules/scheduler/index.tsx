@@ -33,12 +33,10 @@ function flattenTaskTree(items: Task[], parentId: string | null = null): Task[] 
   return flattenTree(items as unknown as Record<string, unknown>[], parentId) as unknown as Task[]
 }
 
-// TODO: replace with real project epoch once project settings exist.
-// For now, use a fixed epoch so the TODAY line is deterministic and moves
-// forward as real time passes (previously hardcoded to `16`, which kept
-// the red marker pinned at week 16 forever).
-const PROJECT_EPOCH = new Date('2026-04-01') // approx project start
-const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
+// Shared project constants — imported from a single source so the
+// scheduler and dashboard can never drift apart (previously both files
+// independently defined `new Date('2026-04-01')`).
+import { PROJECT_EPOCH, MS_PER_WEEK, getTodayWeek } from '@/lib/project-constants'
 
 export function SchedulerModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
@@ -485,16 +483,10 @@ export function SchedulerModule() {
     return rows
   }
 
-  // Gantt canvas — TODAY line is computed from the project epoch so it
-  // advances as real time passes (was previously hardcoded to `16`).
-  // Clamped to [0, TOTAL_WEEKS] so the red line doesn't render off-canvas
-  // if the current date is far past the project end (audit R4-5 — previously
-  // a date in 2027+ would place the TODAY line at week 52+, beyond the
-  // canvas's 52-week width, making it invisible and confusing).
-  const todayWeek = Math.max(
-    0,
-    Math.min(TOTAL_WEEKS, Math.floor((Date.now() - PROJECT_EPOCH.getTime()) / MS_PER_WEEK))
-  )
+  // Gantt canvas — TODAY line is computed from the shared project epoch
+  // so it advances as real time passes (was previously hardcoded to `16`).
+  // Clamped to [0, TOTAL_WEEKS] via the shared helper (audit R4-5).
+  const todayWeek = getTodayWeek(TOTAL_WEEKS)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // Mouse handlers for drag-to-move on Gantt bars. Wrapped in useCallback
@@ -507,6 +499,7 @@ export function SchedulerModule() {
     e.preventDefault()
     setSelectedId(t.id)
     setDragging({ id: t.id, startX: e.clientX, originalStart: t.start, mode: 'move' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Mouse handler for resize (right-edge drag) on Gantt bars
@@ -516,7 +509,42 @@ export function SchedulerModule() {
     e.preventDefault()
     setSelectedId(t.id)
     setDragging({ id: t.id, startX: e.clientX, originalDuration: t.duration, mode: 'resize' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ─── Breach detection ──────────────────────────────────────────────────
+  // Extracted into a reusable function so it can be called from both the
+  // drag-end handler AND the inspector's constraint-update callback.
+  // Previously the breach check lived ONLY inside the drag-end onUp handler,
+  // so setting "MFO: Wk 10" via the inspector on a task already finishing
+  // at week 20 would never trigger the modal — only a subsequent drag would
+  // (the most significant coverage gap in the breach-detection feature).
+
+  /**
+   * Check a task for an MFO/MSO deadline breach and open the breach modal
+   * if the task's start/finish exceeds the deadline week.
+   */
+  const checkBreach = (task: Task | undefined) => {
+    if (!task || !task.constraints || task.type === 'Summary') return
+    const hasMFO = /^(MFO|Must Finish On)/i.test(task.constraints)
+    const hasMSO = /^(MSO|Must Start On)/i.test(task.constraints)
+    if (!hasMFO && !hasMSO) return
+    const match = task.constraints.match(/Wk (\d+)/)
+    if (!match) return
+    const deadlineWeek = parseInt(match[1])
+    if (hasMFO) {
+      const finishWeek = task.start + task.duration
+      if (finishWeek > deadlineWeek) {
+        setBreachTask(task)
+        setBreachModal(true)
+      }
+    } else {
+      if (task.start > deadlineWeek) {
+        setBreachTask(task)
+        setBreachModal(true)
+      }
+    }
+  }
 
   // Keep a ref to the latest task tree so the drag-end breach detector
   // reads post-drag values instead of the stale closure value captured
@@ -544,45 +572,11 @@ export function SchedulerModule() {
       // Summary tasks (e.g. T-301 under T-300) are still found.
       const flat = flattenTasks(tasksRef.current)
       const updated = flat.find((f) => f.task.id === dragging?.id)?.task
-      // Match both the human-readable and abbreviated forms of MFO and MSO
-      // (C20 + S1 + R3-3). Seed T-404 uses "Must Finish On: Wk 48"; the
-      // inspector constraint picker writes "MFO: Wk N" / "MSO: Wk N".
-      // Both deadline constraint types should trigger the EOT breach
-      // detector — previously only MFO was checked, so a task with
-      // "MSO: Wk 20" whose start was week 25 was silently ignored (R3-3).
-      const hasMFO =
-        updated && updated.constraints && /^(MFO|Must Finish On)/i.test(updated.constraints)
-      const hasMSO =
-        updated && updated.constraints && /^(MSO|Must Start On)/i.test(updated.constraints)
-      // Detect breach on ANY task type with MFO/MSO (audit S2 — previously
-      // only Hammock tasks triggered the breach modal). Summary tasks are
-      // still excluded because their start/finish are derived from
-      // children, not directly editable by dragging.
-      if (updated && (hasMFO || hasMSO) && updated.type !== 'Summary') {
-        // Extract deadline from constraint string like "Must Finish On: Wk 32"
-        // or "MFO: Wk 32". If the constraint is bare "MFO" with no week
-        // (shouldn't happen post-fix since the inspector always writes
-        // "MFO: Wk N", but be defensive), skip breach detection.
-        const match = updated.constraints!.match(/Wk (\d+)/)
-        if (match) {
-          const deadlineWeek = parseInt(match[1])
-          if (hasMFO) {
-            // MFO: task must FINISH by deadlineWeek. Breach if finish > deadline.
-            const finishWeek = updated.start + updated.duration
-            if (finishWeek > deadlineWeek) {
-              setBreachTask(updated)
-              setBreachModal(true)
-            }
-          } else {
-            // MSO: task must START by deadlineWeek. Breach if start > deadline.
-            // (R3-3 — previously MSO was never checked.)
-            if (updated.start > deadlineWeek) {
-              setBreachTask(updated)
-              setBreachModal(true)
-            }
-          }
-        }
-      }
+      // Use the shared breach-detection function (also called from the
+      // inspector's constraint-update callback — previously this logic
+      // was duplicated inline here only, leaving inspector-set deadlines
+      // uncovered).
+      checkBreach(updated)
       // Offer an undo for the drag. Compare the post-drag value with the
       // snapshot captured when the drag started (dragging.originalStart /
       // originalDuration) — only show the toast if the value actually
@@ -843,13 +837,27 @@ export function SchedulerModule() {
                 })
               )
             }}
-            onUpdateConstraint={(constraint) =>
+            onUpdateConstraint={(constraint) => {
               // Propagate the picked constraint code (ASAP/ALAP/SNET/FNLT/MFO/MSO)
               // into the synced tasks store so it persists to Supabase and is
               // visible to the EOT breach detector (which checks the
               // `constraints` string for `Must Finish On` / `MFO`). Walks the
               // tree so nested children are updated immutably (matches the
               // locationId update path).
+              //
+              // ALSO check for a breach immediately — the constraint change
+              // doesn't alter the task's start/duration, so we can check
+              // the breach against the selected task's CURRENT values right
+              // now (no need to wait for the state commit). Previously the
+              // breach check only fired on drag-end, so setting "MFO: Wk 10"
+              // via the inspector on a task already finishing at week 20
+              // would never trigger the modal (the most significant coverage
+              // gap in the breach-detection feature).
+              const taskWithNewConstraint: Task = {
+                ...selectedTask,
+                constraints: constraint,
+              }
+              checkBreach(taskWithNewConstraint)
               commitTasks((prev) =>
                 produce(prev, (draft) => {
                   const walk = (items: Task[]) => {
@@ -861,7 +869,7 @@ export function SchedulerModule() {
                   walk(draft as Task[])
                 })
               )
-            }
+            }}
           />
         }
         leftPaneWidth="320px"

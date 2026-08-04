@@ -53,7 +53,31 @@ export interface LevelingResult {
   peakLoadAfter: number
 }
 
-const TOTAL_WEEKS = 52
+/**
+ * Compute the project horizon (in weeks) from the actual task tree.
+ * Uses the latest (start + duration) across all tasks, with a minimum
+ * of 52 weeks. This replaces the hardcoded `const TOTAL_WEEKS = 52`
+ * that silently truncated any project longer than one year — the same
+ * issue flagged in the very first audit and untouched through eight
+ * rounds of scheduler work.
+ *
+ * The horizon is computed once per `levelResources` call (not per
+ * render) so it's stable for the duration of the leveling pass.
+ */
+function computeHorizon(tasks: Task[]): number {
+  let max = 52 // minimum floor — most projects are at least a year
+  const walk = (items: Task[]) => {
+    for (const t of items) {
+      const finish = t.start + t.duration
+      if (finish > max) max = finish
+      if (t.children) walk(t.children)
+    }
+  }
+  walk(tasks)
+  // Add a small buffer (4 weeks) so the leveling candidate-shift loop
+  // has room to shift tasks forward past the current project end.
+  return max + 4
+}
 
 function flattenLeaves(tasks: Task[]): Task[] {
   const out: Task[] = []
@@ -76,8 +100,8 @@ function flattenLeaves(tasks: Task[]): Task[] {
   return out
 }
 
-function weeklyLoad(leaves: Task[]): number[] {
-  const load = new Array(TOTAL_WEEKS).fill(0)
+function weeklyLoad(leaves: Task[], horizon: number): number[] {
+  const load = new Array(horizon).fill(0)
   for (const t of leaves) {
     // Null guard: rows loaded from Supabase (or a freshly-seeded Task tree
     // without resources populated) may have `resources === undefined`.
@@ -86,7 +110,7 @@ function weeklyLoad(leaves: Task[]): number[] {
     // [] makes the load contribution zero, which is correct (no resources
     // means no peak contribution).
     const resources = t.resources ?? []
-    for (let w = t.start; w < t.start + t.duration && w < TOTAL_WEEKS; w++) {
+    for (let w = t.start; w < t.start + t.duration && w < horizon; w++) {
       load[w] += resources.length
     }
   }
@@ -125,8 +149,13 @@ function buildFsPredecessorFinishMap(
 }
 
 export function levelResources(tasks: Task[]): LevelingResult {
+  // Compute the project horizon dynamically from the task tree so
+  // projects longer than 52 weeks aren't silently truncated (the
+  // hardcoded `TOTAL_WEEKS = 52` was flagged in the first audit and
+  // survived eight rounds — now fixed).
+  const horizon = computeHorizon(tasks)
   const leaves = flattenLeaves(tasks)
-  const loadBefore = weeklyLoad(leaves)
+  const loadBefore = weeklyLoad(leaves, horizon)
   const peakBefore = Math.max(1, ...loadBefore)
 
   // Map each leaf to its FS predecessors' finish weeks so we can reject
@@ -172,7 +201,7 @@ export function levelResources(tasks: Task[]): LevelingResult {
     // and to respect the project horizon).
     for (let delta = 0; delta <= 8; delta++) {
       const candidateStart = originalStart + delta
-      if (candidateStart + leaf.duration > TOTAL_WEEKS) break
+      if (candidateStart + leaf.duration > horizon) break
 
       // Reject candidates that would violate any FS dependency.
       // (SS/FF/SF not enforced — see buildFsPredecessorFinishMap comment.)
@@ -189,7 +218,7 @@ export function levelResources(tasks: Task[]): LevelingResult {
 
       // Temporarily move the leaf, recompute load, find the new peak.
       leaf.start = candidateStart
-      const candidateLoad = weeklyLoad(workLeaves)
+      const candidateLoad = weeklyLoad(workLeaves, horizon)
       const candidatePeak = Math.max(...candidateLoad)
 
       // Prefer the candidate if it strictly reduces the peak, or matches the
@@ -233,7 +262,7 @@ export function levelResources(tasks: Task[]): LevelingResult {
     }
   }
 
-  const loadAfter = weeklyLoad(workLeaves)
+  const loadAfter = weeklyLoad(workLeaves, horizon)
   const peakAfter = Math.max(...loadAfter)
 
   // Dedup violations by task id — if a task has multiple FS predecessors

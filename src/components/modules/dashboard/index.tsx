@@ -40,6 +40,7 @@ import { UrgentActionsQueue, type UrgentAction } from './urgent-actions'
 import { MiniGanttChart, SCurveChart, CashFlowChart, BacklogChart } from './charts'
 import { LocationStripMap } from './location-strip-map'
 import { useApp } from '@/lib/app-store'
+import { getTodayWeek } from '@/lib/project-constants'
 
 export function DashboardModule() {
   const router = useRouter()
@@ -263,13 +264,10 @@ export function DashboardModule() {
     // the Gantt canvas shows as TODAY. A task with progress === 0 whose
     // `start` is before this week is genuinely stalled (it should have begun).
     const flatTasks = flattenTasks(taskRows)
-    // Mirrors the scheduler's PROJECT_EPOCH + MS_PER_WEEK constants so the
-    // dashboard's "today" agrees with the Gantt canvas's red TODAY line.
-    const PROJECT_EPOCH = new Date('2026-04-01')
-    const SCHEDULER_TODAY_WEEK = Math.max(
-      0,
-      Math.floor((Date.now() - PROJECT_EPOCH.getTime()) / (7 * 24 * 60 * 60 * 1000))
-    )
+    // Use the shared project constants so the dashboard's "today" agrees
+    // with the Gantt canvas's red TODAY line (previously both files
+    // independently defined `new Date('2026-04-01')` — a drift risk).
+    const SCHEDULER_TODAY_WEEK = getTodayWeek()
     for (const { task } of flatTasks) {
       if (task.type === 'Work' && task.progress === 0 && task.start < SCHEDULER_TODAY_WEEK) {
         actions.push({

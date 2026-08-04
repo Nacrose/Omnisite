@@ -220,9 +220,11 @@ export function AddTaskModal({
                       )}
                       style={{
                         left: `${(newTask.start / TOTAL_WEEKS) * 100}%`,
-                        // Milestones render as a thin sliver (2% width) since
-                        // effDuration=0 would make the bar invisible.
-                        width: `${Math.max((effDuration / TOTAL_WEEKS) * 100, newTask.type === 'Milestone' ? 2 : 2)}%`,
+                        // Milestones render as a thin sliver (3% width) since
+                        // effDuration=0 would make the bar invisible. Non-milestone
+                        // tasks get a 2% minimum floor. Previously both branches
+                        // of the ternary were 2, making the condition dead code.
+                        width: `${Math.max((effDuration / TOTAL_WEEKS) * 100, newTask.type === 'Milestone' ? 3 : 2)}%`,
                       }}
                     />
                   </div>
