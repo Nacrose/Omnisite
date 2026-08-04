@@ -156,11 +156,19 @@ export function createUpdateNode(
         walk(draft as CbsNode[])
       })
     })
-    undoableToast(
-      `${field[0].toUpperCase()}${field.slice(1)} updated`,
-      `${code}: ${oldValue} → ${Math.max(0, value)}. Click Undo to revert.`,
-      () => updateNode(code, field, oldValue)
-    )
+    // Only show the undo toast when the value actually changes (not on every
+    // keystroke that produces the same parsed number, e.g. typing "4" then
+    // "45" then "450" would fire 3 toasts for 3 different values — that's
+    // correct behavior, but previously the toast also fired for no-op
+    // keystrokes like typing "0" when the value was already 0). Also format
+    // the numbers with toLocaleString so they're readable (audit F2-1, F2-2).
+    if (oldValue !== Math.max(0, value)) {
+      undoableToast(
+        `${field[0].toUpperCase()}${field.slice(1)} updated`,
+        `${code}: ${oldValue.toLocaleString('en-IN')} → ${Math.max(0, value).toLocaleString('en-IN')}. Click Undo to revert.`,
+        () => updateNode(code, field, oldValue)
+      )
+    }
   }
   return updateNode
 }
