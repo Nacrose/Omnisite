@@ -341,7 +341,7 @@ export function SchedulerModule() {
     // the same second) don't collide. Previously `T-${500 + taskNum}` would
     // clash with seed task IDs once the count grew past 100, and would
     // duplicate IDs if tasks were deleted and re-added.
-    const newId = `T-${Date.now().toString(36)}`
+    const newId = `T-${crypto.randomUUID()}`
     const isMilestone = newTask.type === 'Milestone'
     const isSummary = newTask.type === 'Summary'
     // Milestones have duration 0. Summary tasks start with duration 0 —

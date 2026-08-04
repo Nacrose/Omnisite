@@ -345,7 +345,7 @@ export function TaskInspector({
                   className="mt-1 h-8 text-xs"
                   type="number"
                   min={1}
-                  // Max = TOTAL_WEEKS - task.start so the task can't extend
+                  // Max = totalWeeks - task.start so the task can't extend
                   // past the project horizon. The clamp is also enforced in
                   // updateTaskDuration, but setting it on the input prevents
                   // the visual "jump" where the user types 100, the input
@@ -430,7 +430,7 @@ export function TaskInspector({
                     className="h-7 w-20 text-xs"
                     type="number"
                     min={1}
-                    max={52}
+                    max={totalWeeks}
                     value={deadlineWeekInput}
                     onChange={(e) => {
                       const v = e.target.value
@@ -439,7 +439,7 @@ export function TaskInspector({
                       if (
                         !Number.isNaN(parsed) &&
                         parsed >= 1 &&
-                        parsed <= 52 &&
+                        parsed <= totalWeeks &&
                         onUpdateConstraint
                       ) {
                         onUpdateConstraint(buildConstraint(activeConstraintCode, parsed))

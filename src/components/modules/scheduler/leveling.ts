@@ -1,4 +1,5 @@
 import type { Task } from './types'
+import { computeProjectWeeks } from './types'
 
 /**
  * Resource leveling — a peak-smoothing heuristic.
@@ -51,32 +52,6 @@ export interface LevelingResult {
   violations: LevelingViolation[]
   peakLoadBefore: number
   peakLoadAfter: number
-}
-
-/**
- * Compute the project horizon (in weeks) from the actual task tree.
- * Uses the latest (start + duration) across all tasks, with a minimum
- * of 52 weeks. This replaces the hardcoded `const TOTAL_WEEKS = 52`
- * that silently truncated any project longer than one year — the same
- * issue flagged in the very first audit and untouched through eight
- * rounds of scheduler work.
- *
- * The horizon is computed once per `levelResources` call (not per
- * render) so it's stable for the duration of the leveling pass.
- */
-function computeHorizon(tasks: Task[]): number {
-  let max = 52 // minimum floor — most projects are at least a year
-  const walk = (items: Task[]) => {
-    for (const t of items) {
-      const finish = t.start + t.duration
-      if (finish > max) max = finish
-      if (t.children) walk(t.children)
-    }
-  }
-  walk(tasks)
-  // Add a small buffer (4 weeks) so the leveling candidate-shift loop
-  // has room to shift tasks forward past the current project end.
-  return max + 4
 }
 
 function flattenLeaves(tasks: Task[]): Task[] {
@@ -149,11 +124,11 @@ function buildFsPredecessorFinishMap(
 }
 
 export function levelResources(tasks: Task[]): LevelingResult {
-  // Compute the project horizon dynamically from the task tree so
-  // projects longer than 52 weeks aren't silently truncated (the
-  // hardcoded `TOTAL_WEEKS = 52` was flagged in the first audit and
-  // survived eight rounds — now fixed).
-  const horizon = computeHorizon(tasks)
+  // Use the shared computeProjectWeeks from types.ts so the horizon
+  // calculation can't drift between leveling and the rest of the UI
+  // (previously leveling had its own computeHorizon that duplicated the
+  // same logic — audit round 9).
+  const horizon = computeProjectWeeks(tasks)
   const leaves = flattenLeaves(tasks)
   const loadBefore = weeklyLoad(leaves, horizon)
   const peakBefore = Math.max(1, ...loadBefore)

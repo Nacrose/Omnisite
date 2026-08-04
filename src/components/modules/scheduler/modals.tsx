@@ -260,14 +260,17 @@ export function CriticalPathBreachModal({
   const match = task.constraints?.match(/Wk (\d+)/)
   const deadlineWeek = match ? parseInt(match[1]) : 0
   const finishWeek = task.start + task.duration
-  // Guard: if the constraint has no parseable week (shouldn't happen — the
-  // breach detector only opens this modal when /Wk (\d+)/ matches — but
-  // defensive), render a minimal "invalid constraint" state instead of
-  // showing wildly wrong overrun numbers (audit R3-8 — previously
-  // deadlineWeek fell back to 0, making overrun = finishWeek, e.g. "+48w").
   const hasValidDeadline = match !== null && deadlineWeek > 0
   const overrunWeeks = hasValidDeadline ? finishWeek - deadlineWeek : 0
   const overrunDays = overrunWeeks * 7
+  // Determine whether this is an MFO or MSO breach so the modal text
+  // can say "Must Finish On" or "Must Start On" correctly (previously
+  // the text always said "Must Finish On" even for MSO breaches).
+  const isMSO = task.constraints ? /^(MSO|Must Start On)/i.test(task.constraints) : false
+  const constraintLabel = isMSO ? 'Must Start On' : 'Must Finish On'
+  // For MSO, the breach is start > deadline (not finish > deadline).
+  // The overrun is start - deadline for MSO, finish - deadline for MFO.
+  const effectiveOverrun = isMSO ? task.start - deadlineWeek : overrunWeeks
 
   return (
     <div
@@ -298,9 +301,10 @@ export function CriticalPathBreachModal({
             {hasValidDeadline ? (
               <>
                 <div className="text-muted-foreground">
-                  This task has a <span className="font-medium">Must Finish On</span> deadline of Wk{' '}
-                  {deadlineWeek} but its forecast finish is Wk {finishWeek}. The deadline is overrun
-                  by {overrunWeeks} week{overrunWeeks === 1 ? '' : 's'}.
+                  This task has a <span className="font-medium">{constraintLabel}</span> deadline of
+                  Wk {deadlineWeek} but its {isMSO ? 'forecast start' : 'forecast finish'} is Wk{' '}
+                  {isMSO ? task.start : finishWeek}. The deadline is overrun by {effectiveOverrun}{' '}
+                  week{effectiveOverrun === 1 ? '' : 's'}.
                 </div>
                 <div className="grid grid-cols-3 gap-2 pt-2">
                   <div className="text-center">
@@ -308,13 +312,17 @@ export function CriticalPathBreachModal({
                     <div className="font-mono font-bold">Wk {deadlineWeek}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-muted-foreground text-[10px]">Forecast Finish</div>
-                    <div className="font-mono font-bold text-red-600">Wk {finishWeek}</div>
+                    <div className="text-muted-foreground text-[10px]">
+                      {isMSO ? 'Forecast Start' : 'Forecast Finish'}
+                    </div>
+                    <div className="font-mono font-bold text-red-600">
+                      Wk {isMSO ? task.start : finishWeek}
+                    </div>
                   </div>
                   <div className="text-center">
                     <div className="text-muted-foreground text-[10px]">Overrun</div>
                     <div className="font-mono font-bold text-red-600">
-                      +{overrunWeeks}w ({overrunDays}d)
+                      +{effectiveOverrun}w ({effectiveOverrun * 7}d)
                     </div>
                   </div>
                 </div>
@@ -353,8 +361,8 @@ export function CriticalPathBreachModal({
                 <div className="text-sm font-medium">File EOT Claim</div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
                   Extension of Time claim per FIDIC Clause 8.4. Drafts a formal letter to the
-                  Engineer with impact analysis. Timeline moves by +{overrunWeeks} weeks. No cost
-                  penalty.
+                  Engineer with impact analysis. Timeline moves by +{effectiveOverrun} weeks. No
+                  cost penalty.
                 </div>
               </div>
               <ArrowRight className="text-muted-foreground mt-1 h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -366,7 +374,7 @@ export function CriticalPathBreachModal({
                 onAccelerate
                   ? onAccelerate()
                   : toast.info('Acceleration variation logged', {
-                      description: `Recover ${overrunWeeks}w overrun on ${task.id} via extra shifts/resources. Document the variation in the Financials module → CBS → Variations, and notify the planning team for a crash cost estimate.`,
+                      description: `Recover ${effectiveOverrun}w overrun on ${task.id} via extra shifts/resources. Document the variation in the Financials module → CBS → Variations, and notify the planning team for a crash cost estimate.`,
                     })
               }
               title="Accelerate (Crash Schedule)"
@@ -378,7 +386,8 @@ export function CriticalPathBreachModal({
               <div className="flex-1">
                 <div className="text-sm font-medium">Accelerate (Crash Schedule)</div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
-                  Add resources (extra shifts, additional equipment) to recover the {overrunWeeks}
+                  Add resources (extra shifts, additional equipment) to recover the{' '}
+                  {effectiveOverrun}
                   -week overrun. The real cost figure depends on task resource rates and
                   availability, which aren&apos;t wired into this view yet. Document the variation
                   in Financials → CBS → Variations and notify the planning team for a crash cost
