@@ -502,7 +502,7 @@ export function SchedulerModule() {
 
   // Gantt canvas — TODAY line is computed from the shared project epoch
   // so it advances as real time passes (was previously hardcoded to `16`).
-  // Clamped to [0, TOTAL_WEEKS] via the shared helper (audit R4-5).
+  // Clamped to [0, effectiveWeeks] via the shared helper (audit R4-5).
   const todayWeek = getTodayWeek(effectiveWeeks)
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -690,20 +690,20 @@ export function SchedulerModule() {
                     are included in CPM (R5-3), so they can be critical too
                     (e.g. seed T-301). Previously only Work tasks were counted,
                     undercounting the critical path (audit S8-5). */}
-                  {
-                    flat.filter(
-                      (f) =>
-                        f.task.critical && (f.task.type === 'Work' || f.task.type === 'Hammock')
-                    ).length
-                  }{' '}
-                  tasks ·{' '}
-                  {flat
-                    .filter(
+                  {/* Memoized inline via IIFE to avoid filtering twice on
+                    every render — previously this ran flat.filter(...).length
+                    AND flat.filter(...).reduce(...), two passes over the
+                    same array for the same predicate (audit round 10). */}
+                  {(() => {
+                    const criticalTasks = flat.filter(
                       (f) =>
                         f.task.critical && (f.task.type === 'Work' || f.task.type === 'Hammock')
                     )
-                    .reduce((s, f) => s + f.task.duration, 0)}
-                  w
+                    return `${criticalTasks.length} tasks · ${criticalTasks.reduce(
+                      (s, f) => s + f.task.duration,
+                      0
+                    )}w`
+                  })()}
                 </span>
               </div>
               <div className="flex justify-between">
