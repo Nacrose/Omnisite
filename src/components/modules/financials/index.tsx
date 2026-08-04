@@ -186,11 +186,24 @@ export function FinancialsModule() {
             <div className="text-muted-foreground px-3 py-2 text-[10px]">
               Mirrors BOQ WBS · {topLevelCount} top nodes · {leafCount} leaf items
             </div>
-            {cbsData
+            {flat
               .filter((c) => {
+                // Only show TOP-LEVEL nodes in the left pane navigator,
+                // but search across ALL nodes (including children) so
+                // typing "Foundation" highlights the parent "Bridge Works"
+                // that contains it (audit F3-1 — previously searching for
+                // a child node name returned zero results because only
+                // root nodes were in the filter scope).
+                if (c.parentCode) return false // skip non-root nodes
                 if (!cbsSearch.trim()) return true
                 const q = cbsSearch.toLowerCase()
-                return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+                // Check if this root or any of its descendants match
+                if (c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+                  return true
+                const descendants = flat.filter((f) => f.code.startsWith(c.code + '.'))
+                return descendants.some(
+                  (d) => d.code.toLowerCase().includes(q) || d.name.toLowerCase().includes(q)
+                )
               })
               .map((c) => {
                 return (

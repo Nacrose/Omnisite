@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
-import { Plus } from 'lucide-react'
+import { Plus, Layers, Leaf } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fmt, type CbsNode } from './types'
 
@@ -29,14 +29,40 @@ export function KpiCell({
 }
 
 export function FinancialsInspector({ node }: { node: CbsNode }) {
+  const isLeaf = !node.children || node.children.length === 0
   return (
     <>
       <PaneHeader title={`Financial Inspector · ${node.code}`} />
       <PaneBody>
         <div className="border-b border-[var(--pane-divider)] p-4">
-          <Badge variant="outline" className="text-[10px]">
-            CBS Node
-          </Badge>
+          <div className="mb-2 flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px]">
+              CBS Node
+            </Badge>
+            {/* Leaf vs Parent badge — tells the user whether this node's
+                values are directly editable (leaf) or aggregated from
+                children (parent). The grid's inline inputs are only
+                active on leaf nodes; without this badge, a user selecting
+                a parent would see read-only inputs with no explanation
+                (audit F3-2). */}
+            {isLeaf ? (
+              <Badge
+                variant="secondary"
+                className="bg-emerald-500/10 text-[9px] text-emerald-700 dark:text-emerald-300"
+              >
+                <Leaf className="mr-0.5 h-2.5 w-2.5" />
+                Leaf (editable)
+              </Badge>
+            ) : (
+              <Badge
+                variant="secondary"
+                className="bg-sky-500/10 text-[9px] text-sky-700 dark:text-sky-300"
+              >
+                <Layers className="mr-0.5 h-2.5 w-2.5" />
+                Parent (aggregated)
+              </Badge>
+            )}
+          </div>
           <div className="mt-2 text-sm font-semibold">{node.name}</div>
         </div>
 
