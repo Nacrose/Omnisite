@@ -313,9 +313,7 @@ export function RfiTab({
                     <AlertTriangle className="h-3 w-3" />
                     {overdueCount} RFI overdue
                   </div>
-                  <div className="text-muted-foreground mt-0.5">
-                    Consultant reply pending — billing hold may apply.
-                  </div>
+                  <div className="text-muted-foreground mt-0.5">Consultant reply pending.</div>
                 </div>
               )}
               {filtered.length === 0 ? (

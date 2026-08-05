@@ -305,7 +305,7 @@ export function DailyOpsModule() {
           centerPane={
             view === 'progress' ? (
               <WorkProgressView
-                entries={dayEntries.length > 0 ? dayEntries : dsrEntries}
+                entries={dayEntries}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 onAddAdHoc={() => {

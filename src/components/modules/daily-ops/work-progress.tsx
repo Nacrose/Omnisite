@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
-import { Plus, Copy, Mail, Camera, CheckCircle2 } from 'lucide-react'
+import { Plus, Copy, Mail, Camera, CheckCircle2, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { DsrEntry, StatusDot } from './types'
@@ -41,11 +41,6 @@ export function WorkProgressView({
   // entry was selected, with no way to dismiss it).
   const [dismissedItrFor, setDismissedItrFor] = useState<string | null>(null)
   const showItrBanner = selected?.status === 'completed' && dismissedItrFor !== selected?.id
-  // Stable ITR ID — generated once per mount using crypto.randomUUID() so it
-  // doesn't change on re-render and isn't based on Math.random() (which could
-  // collide across mounts). The displayed ITR uses the first 8 hex chars so
-  // it stays compact while remaining unique.
-  const [itrId] = useState(() => crypto.randomUUID().slice(0, 8))
   const router = useRouter()
   const COLS: ColumnDef[] = [
     { key: 'dsr', label: 'DSR #' },
@@ -101,16 +96,16 @@ export function WorkProgressView({
         </Button>
       </PaneHeader>
 
-      {/* ITR auto-prompt when selected entry is completed (dismissible) */}
+      {/* ITR prompt when selected entry is completed (dismissible) */}
       {showItrBanner && selected && (
         <div className="flex items-center gap-2 border-b border-[var(--pane-divider)] bg-emerald-500/10 px-4 py-2 text-xs">
           <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-500" />
           <span className="flex-1">
-            <span className="font-medium">ITR auto-prompted:</span>
+            <span className="font-medium">ITR suggested:</span>
             <span className="text-muted-foreground">
               {' '}
-              {selected.id} marked completed → Inspection Test Request ITR-{itrId} auto-generated
-              for consultant approval.
+              {selected.id} marked completed. An Inspection Test Request should be raised in the Q&S
+              module for consultant approval.
             </span>
           </span>
           <Button
@@ -119,7 +114,7 @@ export function WorkProgressView({
             className="h-6 gap-1 text-[10px]"
             onClick={() => router.push('/qs')}
           >
-            View ITR
+            Go to Q&S
           </Button>
           <button
             onClick={() => setDismissedItrFor(selected.id)}
@@ -145,71 +140,85 @@ export function WorkProgressView({
           </div>
         </StickyTableHeader>
         <StickyTableBody>
-          {entries.map((d) => {
-            const variance = d.actual - d.planned
-            const variancePct = d.planned > 0 ? (variance / d.planned) * 100 : null
-            return (
-              <div
-                key={d.id}
-                onClick={() => onSelect(d.id)}
-                className={cn(
-                  'row-hover flex h-10 cursor-pointer items-center border-b border-[var(--pane-divider)] text-xs transition-colors',
-                  selectedId === d.id && 'bg-accent'
-                )}
-              >
-                {isVisible('dsr') && (
-                  <div className="text-muted-foreground w-20 px-2 font-mono">{d.id}</div>
-                )}
-                {isVisible('task') && (
-                  <div className="min-w-0 flex-1 px-2">
-                    <div className="truncate font-medium">{d.task}</div>
-                    {d.remarks && (
-                      <div className="text-muted-foreground truncate text-[10px]">{d.remarks}</div>
-                    )}
-                  </div>
-                )}
-                {isVisible('chainage') && (
-                  <div className="text-muted-foreground w-32 truncate px-2 font-mono text-[10px]">
-                    {d.chainage}
-                  </div>
-                )}
-                {isVisible('planned') && (
-                  <div className="w-20 px-2 text-right font-mono">{d.planned || '—'}</div>
-                )}
-                {isVisible('actual') && (
-                  <div
-                    className={cn(
-                      'w-20 px-2 text-right font-mono',
-                      variance > 0 ? 'text-emerald-600' : variance < 0 ? 'text-red-500' : ''
-                    )}
-                  >
-                    {d.actual || '—'}
-                    {variancePct !== null && (
-                      <span className="text-muted-foreground ml-0.5 text-[9px]">
-                        ({variancePct >= 0 ? '+' : ''}
-                        {variancePct.toFixed(0)}%)
-                      </span>
-                    )}
-                  </div>
-                )}
-                {isVisible('uom') && <div className="text-muted-foreground w-14 px-2">{d.uom}</div>}
-                {isVisible('status') && (
-                  <div className="w-28 px-2">
-                    <StatusDot status={d.status} />
-                  </div>
-                )}
-                {isVisible('actions') && (
-                  <div className="flex w-12 items-center justify-center gap-1 px-2">
-                    {d.hasRfi && <Mail className="h-3 w-3 text-sky-500" />}
-                    {d.hasPhotos && <Camera className="h-3 w-3 text-violet-500" />}
-                    {!d.hasRfi && !d.hasPhotos && (
-                      <span className="text-muted-foreground/30">—</span>
-                    )}
-                  </div>
-                )}
+          {entries.length === 0 ? (
+            <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-12 text-center text-xs">
+              <FileText className="h-6 w-6 opacity-40" />
+              <div className="font-medium">No DSR entries for this date</div>
+              <div className="text-[11px]">
+                Use the &ldquo;Ad-Hoc Entry&rdquo; button above or switch to the Daily Site Log tab.
               </div>
-            )
-          })}
+            </div>
+          ) : (
+            entries.map((d) => {
+              const variance = d.actual - d.planned
+              const variancePct = d.planned > 0 ? (variance / d.planned) * 100 : null
+              return (
+                <div
+                  key={d.id}
+                  onClick={() => onSelect(d.id)}
+                  className={cn(
+                    'row-hover flex h-10 cursor-pointer items-center border-b border-[var(--pane-divider)] text-xs transition-colors',
+                    selectedId === d.id && 'bg-accent'
+                  )}
+                >
+                  {isVisible('dsr') && (
+                    <div className="text-muted-foreground w-20 px-2 font-mono">{d.id}</div>
+                  )}
+                  {isVisible('task') && (
+                    <div className="min-w-0 flex-1 px-2">
+                      <div className="truncate font-medium">{d.task}</div>
+                      {d.remarks && (
+                        <div className="text-muted-foreground truncate text-[10px]">
+                          {d.remarks}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {isVisible('chainage') && (
+                    <div className="text-muted-foreground w-32 truncate px-2 font-mono text-[10px]">
+                      {d.chainage}
+                    </div>
+                  )}
+                  {isVisible('planned') && (
+                    <div className="w-20 px-2 text-right font-mono">{d.planned || '—'}</div>
+                  )}
+                  {isVisible('actual') && (
+                    <div
+                      className={cn(
+                        'w-20 px-2 text-right font-mono',
+                        variance > 0 ? 'text-emerald-600' : variance < 0 ? 'text-red-500' : ''
+                      )}
+                    >
+                      {d.actual || '—'}
+                      {variancePct !== null && (
+                        <span className="text-muted-foreground ml-0.5 text-[9px]">
+                          ({variancePct >= 0 ? '+' : ''}
+                          {variancePct.toFixed(0)}%)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {isVisible('uom') && (
+                    <div className="text-muted-foreground w-14 px-2">{d.uom}</div>
+                  )}
+                  {isVisible('status') && (
+                    <div className="w-28 px-2">
+                      <StatusDot status={d.status} />
+                    </div>
+                  )}
+                  {isVisible('actions') && (
+                    <div className="flex w-12 items-center justify-center gap-1 px-2">
+                      {d.hasRfi && <Mail className="h-3 w-3 text-sky-500" />}
+                      {d.hasPhotos && <Camera className="h-3 w-3 text-violet-500" />}
+                      {!d.hasRfi && !d.hasPhotos && (
+                        <span className="text-muted-foreground/30">—</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
         </StickyTableBody>
       </StickyTableShell>
     </>
