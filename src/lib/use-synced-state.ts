@@ -58,6 +58,14 @@ interface SyncConfig {
   fieldMap?: Record<string, string>
   /** The primary key column name in the DB (default: 'id') */
   primaryKey?: string
+  /**
+   * Maximum number of pages (200 rows each) to fetch on initial mount.
+   * Defaults to 3 (600 rows). Increase for tables that genuinely need the
+   * full dataset on first paint (e.g. BOQ, where tree operations require
+   * all rows to be present in memory). When the cap is hit, `truncated`
+   * flips to true and the `loadMore()` callback fetches the next page.
+   */
+  maxPages?: number
 }
 
 /**
@@ -301,7 +309,15 @@ export function useSyncedState<T>(
         let allRows: Record<string, unknown>[] = []
         let cursor: string | null = null
         let page = 0
-        const MAX_PAGES = 10 // safety cap — 2000 rows max
+        // Default cap: 3 pages × 200 rows = 600 rows on initial load. Most
+        // modules don't need more on first paint — the loadMore() callback
+        // (returned as the 5th element of the hook's tuple) fetches the next
+        // page on demand. Lowered from 10 (2000 rows) which was over-fetching
+        // on every page load for projects with thousands of BOQ items.
+        //
+        // To override per-table (e.g. BOQ needs the full tree for tree
+        // operations), pass `config.maxPages` — see SyncConfig.
+        const MAX_PAGES = config?.maxPages ?? 3
 
         while (page < MAX_PAGES) {
           const query = { ...baseQuery }

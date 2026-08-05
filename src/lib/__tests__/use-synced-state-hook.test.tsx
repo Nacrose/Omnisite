@@ -115,13 +115,15 @@ describe('useSyncedState hook (integration smoke)', () => {
 
   it('sets truncated=true when MAX_PAGES cap is hit', async () => {
     // Simulate a large dataset where the API always returns 200 rows + a
-    // nextCursor, so the hook walks all 10 pages and still has more.
+    // nextCursor, so the hook walks all pages and still has more.
+    // Default MAX_PAGES is 3 (600 rows) — the hook should stop after 3
+    // fetches and flag truncation.
     const fullPage = Array.from({ length: 200 }, (_, i) => ({
       id: `item-${i}`,
       description: `Item ${i}`,
       qty: i,
     }))
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 4; i++) {
       mockFetchPaginated.mockResolvedValueOnce({
         data: fullPage,
         nextCursor: `cursor-${i}`,
@@ -136,9 +138,37 @@ describe('useSyncedState hook (integration smoke)', () => {
       expect(result.current[2]).toBe(false) // loading done
     })
 
-    // After 10 pages, the hook should have stopped and flagged truncation.
+    // After 3 pages (default MAX_PAGES), the hook should have stopped and
+    // flagged truncation.
     expect(result.current[3]).toBe(true) // truncated
-    expect(mockFetchPaginated).toHaveBeenCalledTimes(10) // exactly MAX_PAGES
+    expect(mockFetchPaginated).toHaveBeenCalledTimes(3) // exactly MAX_PAGES
+  })
+
+  it('honors a custom maxPages in SyncConfig', async () => {
+    // Caller overrides MAX_PAGES to 5 — the hook should fetch 5 pages
+    // before stopping.
+    const fullPage = Array.from({ length: 200 }, (_, i) => ({
+      id: `item-${i}`,
+      description: `Item ${i}`,
+      qty: i,
+    }))
+    for (let i = 0; i < 6; i++) {
+      mockFetchPaginated.mockResolvedValueOnce({
+        data: fullPage,
+        nextCursor: `cursor-${i}`,
+      })
+    }
+
+    const { result } = renderHook(() =>
+      useSyncedState<TestItem[]>('test-key', 'boq_items', INITIAL, { maxPages: 5 })
+    )
+
+    await waitFor(() => {
+      expect(result.current[2]).toBe(false)
+    })
+
+    expect(mockFetchPaginated).toHaveBeenCalledTimes(5)
+    expect(result.current[3]).toBe(true) // truncated
   })
 
   it('falls back to localStorage when the fetch throws', async () => {

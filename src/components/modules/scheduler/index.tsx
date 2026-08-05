@@ -115,6 +115,10 @@ export function SchedulerModule() {
         resources: 'resources',
       },
       primaryKey: 'id',
+      // Scheduler needs the full task tree in memory for CPM critical-path
+      // computation and resource leveling (which traverse the whole graph).
+      // Default cap of 3 pages (600 rows) is too low for large projects.
+      maxPages: 10,
     }
   )
   // Non-persistent UI state

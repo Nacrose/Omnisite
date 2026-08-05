@@ -99,6 +99,11 @@ export function BoqModule() {
         locationId: 'location_id',
       },
       primaryKey: 'id',
+      // BOQ needs the full tree in memory for tree operations (drag-drop,
+      // rate analysis rollups, CSV export). The default cap of 3 pages
+      // (600 rows) is too low — large projects routinely have 1000+ items.
+      // Cap at 10 pages (2000 rows) which matches the previous default.
+      maxPages: 10,
     }
   )
 
