@@ -61,6 +61,11 @@ jobs:
         # Known pending upgrades (e.g. recharts 2.x → 3.x to drop lodash) are
         # tracked in scripts/audit.mjs and warned but not blocking.
         run: bun run audit
+      - name: Schema drift check
+        # Verifies supabase/CURRENT_SCHEMA.md is in sync with the migration
+        # files — catches documentation drift when a migration modifies a
+        # security-critical function but the doc isn't updated.
+        run: bun run schema-check
 
   build:
     name: Production Build + Size Check

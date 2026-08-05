@@ -14,6 +14,7 @@
     "analyze": "ANALYZE=true next build",
     "audit": "node scripts/audit.mjs",
     "size-check": "node scripts/check-bundle-size.mjs",
+    "schema-check": "node scripts/check-current-schema.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"

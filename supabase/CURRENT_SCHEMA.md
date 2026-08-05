@@ -87,8 +87,10 @@
 -- transaction, so the audit trail can never diverge from the data state.
 --
 
--- LATEST VERSION: migration 13 (added 'drawing_annotations' to the allowlist)
--- PREVIOUS VERSIONS: migrations 7, 9, 11
+-- LATEST VERSION: 00000000000013_drawing_annotations.sql
+-- PREVIOUS VERSIONS: 00000000000007_transactional_audit.sql,
+-- 00000000000009_audit_project_id_indexes_constraints.sql,
+-- 00000000000011_add_vendors_locations_to_audit_allowlist.sql
 --
 
 -- Table allowlist (checked at the top of each function):
@@ -123,8 +125,8 @@
 -- Returns '_**REDACTED**_' for redacted fields, otherwise the value verbatim.
 --
 
--- LATEST VERSION: migration 11 (recreated to add vendors/locations to allowlist)
--- PREVIOUS VERSION: migration 9 (original)
+-- LATEST VERSION: 00000000000011_add_vendors_locations_to_audit_allowlist.sql
+-- PREVIOUS VERSION: 00000000000009_audit_project_id_indexes_constraints.sql (original)
 
 -- ─── 4. CBS rollup trigger (source: 00000000000009_audit_project_id_indexes_constraints.sql) ──
 -- recompute_cbs_subtree() walks up the CBS tree on every INSERT/UPDATE/DELETE
@@ -133,8 +135,8 @@
 -- prevent infinite recursion when a parent update fires the trigger again.
 --
 
--- LATEST VERSION: migration 9 (consolidated to a single SELECT per ancestor)
--- PREVIOUS VERSION: migration 4 (5 SUM subqueries per ancestor — N+1 query)
+-- LATEST VERSION: 00000000000009_audit_project_id_indexes_constraints.sql
+-- PREVIOUS VERSION: 00000000000004_cbs_subtree_trigger.sql (5 SUM subqueries per ancestor — N+1 query)
 --
 
 -- The trigger is attached via:
