@@ -13,21 +13,45 @@ import { test, expect } from '@playwright/test'
  * - Use text-based locators instead of strict role queries (CardTitle is a
  *   div, not a heading)
  * - Allow generous timeouts for module lazy-loading (next/dynamic)
+ * - Use `:visible` pseudo-selector when multiple elements match (the dock
+ *   has both a desktop and mobile version of every button, both with the
+ *   same title — only one is visible at a given viewport)
  */
+
+// Helper: wait for the app shell to be interactive by looking for text
+// that only appears after hydration (the "Demo User" label in the header
+// or the dock). This is viewport-agnostic — works on both desktop and
+// mobile without depending on which dock button is visible.
+async function waitForApp(page: import('@playwright/test').Page) {
+  // The "Demo User" text appears in the header after the AuthProvider
+  // resolves (150ms after hydration). This is the most reliable signal
+  // that the app shell has mounted and is interactive.
+  await expect(page.getByText('Demo User').first()).toBeVisible({
+    timeout: 15000,
+  })
+}
 
 // Helper: navigate to the app and wait for the shell to be interactive.
 async function goToApp(page: import('@playwright/test').Page, path = '/') {
   await page.goto(path)
-  // Wait for the dock to render — proves the app shell mounted.
-  await expect(page.locator('[title="BOQ & Rate Analysis"]').first()).toBeVisible({
-    timeout: 15000,
-  })
+  await waitForApp(page)
   // Dismiss the onboarding tour if it's visible — it traps focus and
   // intercepts keyboard events, which breaks keyboard-shortcut tests.
   const skipTour = page.getByText('Skip tour')
   if (await skipTour.isVisible({ timeout: 1000 }).catch(() => false)) {
     await skipTour.click()
   }
+}
+
+// Helper: click a dock button by its title. Uses `:visible` because the
+// dock renders two versions of every button (desktop + mobile) and only
+// one is visible at a given viewport.
+async function clickDockButton(page: import('@playwright/test').Page, title: string) {
+  // `:visible` filters to the one that's actually shown at the current
+  // viewport, avoiding the "element is hidden" error when CI runs at
+  // a mobile viewport size.
+  const btn = page.locator(`[title="${title}"]`).locator('visible=true').first()
+  await btn.click()
 }
 
 test.describe('OmniSite smoke tests', () => {
@@ -44,15 +68,13 @@ test.describe('OmniSite smoke tests', () => {
     //   Cost Variance (proxy for CPI)
     //   Forecast Cost (proxy for EAC)
     //   Budget Margin (proxy for Margin)
-    // See src/components/modules/dashboard/kpi-strip.tsx for the rationale.
     await expect(body).toContainText('Schedule Progress')
     await expect(body).toContainText('Cost Variance')
   })
 
   test('can navigate to BOQ module via dock', async ({ page }) => {
     await goToApp(page)
-    const boqBtn = page.locator('[title="BOQ & Rate Analysis"]').first()
-    await boqBtn.click()
+    await clickDockButton(page, 'BOQ & Rate Analysis')
     // Wait for the BOQ grid to render (lazy-loaded module).
     await expect(page.locator('body')).toContainText('Description', { timeout: 10000 })
   })
@@ -70,7 +92,6 @@ test.describe('OmniSite smoke tests', () => {
 
   test('keyboard shortcut "b" navigates to BOQ', async ({ page }) => {
     await goToApp(page)
-    // Click somewhere on the page body first to ensure focus is not in an input.
     await page.locator('body').click()
     await page.keyboard.press('b')
     await expect(page).toHaveURL(/\/boq/, { timeout: 10000 })
@@ -108,12 +129,9 @@ test.describe('OmniSite smoke tests', () => {
   test('login page renders with sign-in form', async ({ page }) => {
     await page.goto('/login')
     await page.waitForLoadState('domcontentloaded')
-    // The login page has email + password inputs.
     await expect(page.locator('input#email')).toBeVisible({ timeout: 5000 })
     await expect(page.locator('input#password')).toBeVisible()
-    // Sign in button.
     await expect(page.locator('button:has-text("Sign in")')).toBeVisible()
-    // Brand label.
     await expect(page.locator('body')).toContainText('OmniSite')
   })
 
@@ -125,12 +143,8 @@ test.describe('OmniSite smoke tests', () => {
     })
     const page = await context.newPage()
     await page.goto('/')
-    // Wait for the mobile dock to appear. On mobile, the dock is at the
-    // bottom and shows module icons. Use the BOQ button title (same as
-    // goToApp) since it's always present in the dock regardless of viewport.
-    await expect(page.locator('[title="BOQ & Rate Analysis"]').first()).toBeVisible({
-      timeout: 15000,
-    })
+    // On mobile, the header still shows "Demo User" after hydration.
+    await waitForApp(page)
     await context.close()
   })
 
@@ -147,11 +161,8 @@ test.describe('OmniSite smoke tests', () => {
 
   test('help modal opens with "?" and closes with Escape', async ({ page }) => {
     await goToApp(page)
-    // goToApp already dismisses the onboarding tour.
     await page.locator('body').click()
     await page.keyboard.press('Shift+/')
-    // The modal has role="dialog" and an aria-labelledby pointing to the
-    // "Keyboard Shortcuts" heading.
     const dialog = page.getByRole('dialog', { name: /keyboard shortcuts/i })
     await expect(dialog).toBeVisible({ timeout: 5000 })
     await page.keyboard.press('Escape')
@@ -160,7 +171,6 @@ test.describe('OmniSite smoke tests', () => {
 
   test('help modal has a labelled close button', async ({ page }) => {
     await goToApp(page)
-    // goToApp already dismisses the onboarding tour.
     await page.locator('body').click()
     await page.keyboard.press('Shift+/')
     const dialog = page.getByRole('dialog', { name: /keyboard shortcuts/i })
@@ -190,10 +200,7 @@ test.describe('OmniSite smoke tests', () => {
 
   test('can navigate to Vendors module', async ({ page }) => {
     await goToApp(page)
-    const vendorsBtn = page.locator('[title="Vendors"]').first()
-    await expect(vendorsBtn).toBeVisible()
-    await vendorsBtn.click()
-    // The vendors module should render (lazy-loaded).
+    await clickDockButton(page, 'Vendors')
     await expect(page).toHaveURL(/\/vendors/, { timeout: 10000 })
   })
 })
