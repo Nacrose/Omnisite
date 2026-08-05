@@ -307,9 +307,11 @@ export function DsrInspector({
               <Input
                 className="mt-1 h-8"
                 type="number"
-                // Use `|| ''` so the input shows empty (not 0) when cleared
-                // — same pattern as BOQ/scheduler inputs (audit D1-5).
-                value={entry.planned || ''}
+                // Use === 0 check so a legitimate 0 (e.g. D-091 Dewatering
+                // with planned: 0) shows "0" instead of blanking. The ||
+                // operator treats 0 as falsy. BOQ moved to ?? '' and
+                // Scheduler uses the same === 0 pattern (audit round 11).
+                value={entry.planned === 0 ? '0' : entry.planned || ''}
                 placeholder="0"
                 onChange={(e) => {
                   const num = Number(e.target.value)
@@ -325,7 +327,7 @@ export function DsrInspector({
               <Input
                 className="mt-1 h-8"
                 type="number"
-                value={entry.actual || ''}
+                value={entry.actual === 0 ? '0' : entry.actual || ''}
                 placeholder="0"
                 onChange={(e) => {
                   const num = Number(e.target.value)

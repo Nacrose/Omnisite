@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { create } from 'zustand'
+import { useState, useMemo, useSyncExternalStore } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +22,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { LocationPicker } from '@/components/ui/location-picker'
+import { useSyncedState } from '@/lib/use-synced-state'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,8 +43,9 @@ export interface Rfi {
   scheduleImpact?: string
   severity: 'low' | 'medium' | 'high'
   /** Optional FK to project_locations.id — where the question physically
-   *  applies (e.g. "Pier 3"). Persisted to the `location_id` column
-   *  (added in migration 12). */
+   *  applies (e.g. "Pier 3"). Persisted to localStorage alongside the
+   *  RFI record. NOT yet backed by a DB table — see the persistence
+   *  comment above (audit round 11). */
   locationId?: string
 }
 
@@ -133,61 +134,80 @@ const INITIAL_RFIS: Rfi[] = [
   },
 ]
 
-// ─── Shared RFI store (Zustand) ─────────────────────────────────────────────
-// RFIs need to be mutable so the DSR Inspector can add new drafts that
-// appear in the RFI Register. A Zustand store centralizes the state and
-// notifies all subscribers (RfiTab + DailyOpsModule's open-RFI counter)
-// when addRfi() is called — no prop drilling required.
+// ─── RFI persistence ────────────────────────────────────────────────────────
+// RFIs are persisted via usePersistentState (localStorage) so they survive
+// page reloads. This is a stopgap — the proper solution is a dedicated
+// `rfis` DB table + API route + useSyncedState wiring, matching how
+// dsr_entries, qs_items, and letters are persisted. Until that table
+// exists, usePersistentState gives us cross-reload persistence which the
+// previous Zustand store did not (reload = back to seed data only).
 //
-// The exported `subscribeRfis` / `getRfis` / `addRfi` helpers below wrap the
-// store for backward compat with the previous hand-rolled useSyncExternalStore
-// API used by `daily-ops/index.tsx`.
+// The store uses a module-level state + useSyncExternalStore pattern so
+// the DSR Inspector (which lives in a different component tree) can add
+// RFIs that immediately appear in the RFI Register without prop drilling.
 
-interface RfiStore {
-  rfis: Rfi[]
-  addRfi: (rfi: Rfi) => void
-  /** Update an existing RFI by id. Used by the "Log Consultant Reply" action
-   *  to set status='Replied', reply text, and repliedDate (audit D2-7). */
-  updateRfi: (id: string, updates: Partial<Rfi>) => void
+let rfiState: Rfi[] = [...INITIAL_RFIS]
+const rfiListeners = new Set<() => void>()
+
+function notifyRfiListeners() {
+  rfiListeners.forEach((l) => l())
 }
 
-const useRfiStore = create<RfiStore>((set) => ({
-  rfis: [...INITIAL_RFIS],
-  addRfi: (rfi) => set((s) => ({ rfis: [rfi, ...s.rfis] })),
-  updateRfi: (id, updates) =>
-    set((s) => ({
-      rfis: s.rfis.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-    })),
-}))
+// Load from localStorage on module init.
+if (typeof window !== 'undefined') {
+  try {
+    const stored = localStorage.getItem('omnisite-rfis')
+    if (stored) {
+      const parsed = JSON.parse(stored) as Rfi[]
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        rfiState = parsed
+      }
+    }
+  } catch {
+    // localStorage may be unavailable (SSR, privacy mode) — fall back to seed.
+  }
+}
+
+function persistRfis() {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('omnisite-rfis', JSON.stringify(rfiState))
+    } catch {
+      // Quota exceeded or localStorage unavailable — state still works in-memory.
+    }
+  }
+}
 
 /**
  * Subscribe to RFI store changes (for useSyncExternalStore callers).
- * Wraps Zustand's `subscribe` so existing imports in `daily-ops/index.tsx`
- * keep working without modification.
  */
 export function subscribeRfis(listener: () => void): () => void {
-  return useRfiStore.subscribe(listener)
+  rfiListeners.add(listener)
+  return () => rfiListeners.delete(listener)
 }
 
-/** Get the current RFI snapshot. Wraps Zustand's `getState` for back-compat. */
+/** Get the current RFI snapshot. */
 export function getRfis(): Rfi[] {
-  return useRfiStore.getState().rfis
+  return rfiState
 }
 
 /** Add a new RFI to the store. Used by the DSR Inspector's saveRfi(). */
 export function addRfi(rfi: Rfi): void {
-  useRfiStore.getState().addRfi(rfi)
+  rfiState = [rfi, ...rfiState]
+  persistRfis()
+  notifyRfiListeners()
 }
 
 /** Update an existing RFI by id. Used by the RFI Inspector's "Log Consultant
  *  Reply" action (audit D2-7). */
 export function updateRfi(id: string, updates: Partial<Rfi>): void {
-  useRfiStore.getState().updateRfi(id, updates)
+  rfiState = rfiState.map((r) => (r.id === id ? { ...r, ...updates } : r))
+  persistRfis()
+  notifyRfiListeners()
 }
 
 // Re-export RFIS for backward compat (components that read the initial array
-// directly). This is a snapshot — for live updates, use the Zustand store via
-// useRfiStore or the useSyncExternalStore-style wrappers above.
+// directly). This is a snapshot — for live updates, use subscribeRfis/getRfis.
 export const RFIS: Rfi[] = INITIAL_RFIS
 
 // ─── RFI Tab (list + inspector) ─────────────────────────────────────────────
@@ -200,9 +220,9 @@ export function RfiTab({
    *  (audit D2-3). */
   onOpenDsr?: (dsrId: string) => void
 }) {
-  // Subscribe to the Zustand store so the RFI list re-renders when addRfi()
-  // is called from the DSR Inspector.
-  const rfis = useRfiStore((s) => s.rfis)
+  // Subscribe to the module-level RFI store via useSyncExternalStore
+  // so the list re-renders when addRfi() or updateRfi() is called.
+  const rfis = useSyncExternalStore(subscribeRfis, getRfis, getRfis)
   const [selectedId, setSelectedId] = useState('r1')
   const [filter, setFilter] = useState<'All' | 'Open' | 'Replied' | 'Closed'>('All')
   const [searchQuery, setSearchQuery] = useState('')
@@ -562,7 +582,7 @@ function RfiInspector({
     })
     // Update the RFI in the store: set status to Replied, stamp the reply
     // text and date (audit D2-2/D2-7).
-    useRfiStore.getState().updateRfi(rfi.id, {
+    updateRfi(rfi.id, {
       status: 'Replied',
       reply: replyText.trim(),
       repliedDate: today,
@@ -685,11 +705,7 @@ function RfiInspector({
             <LocationPicker
               value={rfi.locationId}
               onChange={(locationId) => {
-                useRfiStore.setState((s) => ({
-                  rfis: s.rfis.map((r) =>
-                    r.id === rfi.id ? { ...r, locationId: locationId ?? undefined } : r
-                  ),
-                }))
+                updateRfi(rfi.id, { locationId: locationId ?? undefined })
                 toast.success('Location linked to RFI', {
                   description: locationId
                     ? `Linked ${rfi.number} → ${locationId}`
@@ -772,7 +788,7 @@ function RfiInspector({
                     month: 'short',
                     year: 'numeric',
                   })
-                  useRfiStore.getState().updateRfi(rfi.id, {
+                  updateRfi(rfi.id, {
                     status: 'Closed',
                     repliedDate: rfi.repliedDate || today,
                   })
