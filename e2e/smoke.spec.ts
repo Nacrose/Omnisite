@@ -18,17 +18,27 @@ import { test, expect } from '@playwright/test'
  *   same title — only one is visible at a given viewport)
  */
 
-// Helper: wait for the app shell to be interactive by looking for text
-// that only appears after hydration (the "Demo User" label in the header
-// or the dock). This is viewport-agnostic — works on both desktop and
-// mobile without depending on which dock button is visible.
+// Helper: wait for the app shell to be interactive by looking for the
+// Building2 logo icon in the header. This is the ONLY element that's:
+//   1. Always visible at all viewports (no responsive hiding)
+//   2. Only renders after the workspace shell mounts (past the
+//      'Loading workspace' gate)
+//   3. Not inside the onboarding tour or any modal
+// The 'OmniSite' text and 'Demo User' text are both hidden on mobile
+// (hidden ... sm:block / lg:block), so they can't be used as the
+// viewport-agnostic 'app loaded' signal.
 async function waitForApp(page: import('@playwright/test').Page) {
-  // The "Demo User" text appears in the header after the AuthProvider
-  // resolves (150ms after hydration). This is the most reliable signal
-  // that the app shell has mounted and is interactive.
-  await expect(page.getByText('Demo User').first()).toBeVisible({
+  // The header logo is a div containing an SVG (Building2 icon). Use the
+  // header element itself — it's always visible once the shell mounts.
+  await expect(page.locator('header').first()).toBeVisible({
     timeout: 15000,
   })
+  // Also wait for the dock to render (bottom dock on mobile, floating dock
+  // on desktop). The dock contains buttons with title attributes — use
+  // :visible to pick the one that's shown at the current viewport.
+  await expect(
+    page.locator('[title="BOQ & Rate Analysis"]').locator('visible=true').first()
+  ).toBeVisible({ timeout: 15000 })
 }
 
 // Helper: navigate to the app and wait for the shell to be interactive.
