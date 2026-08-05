@@ -150,6 +150,10 @@ export function PdfViewer({
         loadingTaskRef.current = null
       }
     }
+    // INTENTIONAL dep exclusion: this effect loads the PDF document when
+    // `fileUrl` changes. Other state (pageNumber, zoom) is read from refs
+    // and handled by the separate render-page effect below. Re-running this
+    // on every page/zoom change would re-fetch the entire PDF.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileUrl])
 
@@ -233,6 +237,11 @@ export function PdfViewer({
     return () => {
       cancelled = true
     }
+    // INTENTIONAL dep exclusion: `onPageCount`, `onError` are parent
+    // callbacks that change identity on every parent render — including
+    // them would re-render the page on every parent state tick. They're
+    // read via refs inside the effect so we always call the latest version
+    // without re-triggering the effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber, zoom, loading])
 

@@ -2,96 +2,12 @@ import { toast } from 'sonner'
 import type React from 'react'
 import { produce } from 'immer'
 import { undoableToast } from '@/components/ui/confirm-dialog'
-import { BOQ_DATA, type BoqItem } from './types'
-import {
-  flattenTree,
-  rebuildTreeFromRows,
-  findItemAndParent,
-  updateLevels,
-  createTreeRebuilder,
-} from '@/lib/tree-utils'
-import { exportToCsv } from '@/lib/csv-export'
-
-// Deep-clone helper using immer's produce() with a no-op recipe.
-// Intentionally used instead of structuredClone() for undo/redo snapshots:
-// immer's structural sharing means that for large trees where only a few
-// leaves changed, the clone is much cheaper (shares unchanged subtrees by
-// reference) than structuredClone which deep-copies everything.
-const deepClone = <T>(obj: T): T => produce(obj, () => {})
-
-// ─── BOQ-specific tree helpers ────────────────────────────────────────────
-//
-// These wrap the generic tree-utils functions for the BoqItem shape:
-// id field is `id`, parent field is `parentId`, children field is `children`.
-// They also handle the snake_case → camelCase field normalization that the
-// DB layer (useSyncedState) may return.
-
-function normalizeBoqRow(row: Record<string, unknown>): BoqItem {
-  return {
-    id: row.id as string,
-    code: row.code as string,
-    desc: (row.desc || row.description) as string,
-    type: (row.type as BoqItem['type']) || 'Priced',
-    qty: Number(row.qty) || 0,
-    uom: (row.uom as string) || '',
-    rate: Number(row.rate) || 0,
-    hasRA: Boolean(row.hasRA ?? row.has_ra),
-    level: Number(row.level) || 0,
-    // Preserve parentId (with snake_case fallback) so rebuildTreeFromRows can
-    // re-attach children after a flatten→rebuild round-trip. Without this,
-    // every row would become a root after the first edit.
-    parentId: (row.parentId ?? row.parent_id ?? undefined) as string | undefined,
-    // Preserve locationId (with snake_case fallback) so the LocationPicker
-    // in RaInspector shows the correct selection after tree rebuilds.
-    locationId: (row.locationId ?? row.location_id ?? undefined) as string | undefined,
-  }
-}
-
-/**
- * Rebuild a BoqItem tree from flat rows. Rows may be DB rows (with snake_case
- * field names like `parent_id`, `has_ra`) or already-normalized BoqItems.
- *
- * Falls back to a deep clone of BOQ_DATA when rows is empty or yields no
- * roots, so the UI always has something to render.
- *
- * Implemented via the shared `createTreeRebuilder` factory so the
- * rebuild-or-fallback pattern is identical to the Financials module.
- */
-export const rebuildBoqTree = createTreeRebuilder<BoqItem>({
-  seed: BOQ_DATA,
-  cloneSeed: deepClone,
-  idKey: 'id',
-  parentKey: 'parentId',
-  normalize: normalizeBoqRow,
-})
-
-/**
- * Flatten a BoqItem tree for DB storage. Strips `children` and sets
- * `parentId` on each row.
- */
-export function flattenBoqTree(items: BoqItem[], parentId: string | null = null): BoqItem[] {
-  return flattenTree(
-    items as unknown as Record<string, unknown>[],
-    parentId
-  ) as unknown as BoqItem[]
-}
-
-/**
- * Renumber sibling codes as `<parentCode>.1`, `<parentCode>.2`, … recursively
- * down the subtree. Used by `addChildItem` and `reparentItem` so codes stay
- * consistent with tree structure after additions/removals/moves.
- *
- * `parentCode` is `null` for root-level siblings (codes become `1`, `2`, …).
- */
-function recomputeSiblingCodes(items: BoqItem[], parentCode: string | null): void {
-  items.forEach((it, idx) => {
-    const prefix = parentCode ? `${parentCode}.` : ''
-    it.code = `${prefix}${idx + 1}`
-    if (it.children && it.children.length > 0) {
-      recomputeSiblingCodes(it.children, it.code)
-    }
-  })
-}
+import type { BoqItem } from './types'
+import { findItemAndParent, updateLevels } from '@/lib/tree-utils'
+// BOQ-specific tree helpers (deepClone, normalizeBoqRow, rebuildBoqTree,
+// flattenBoqTree, recomputeSiblingCodes) — extracted to ./tree-utils.ts so
+// this file can focus on mutation handlers.
+import { deepClone, rebuildBoqTree, flattenBoqTree, recomputeSiblingCodes } from './tree-utils'
 
 // ─── Handler context ──────────────────────────────────────────────────────
 //
@@ -621,119 +537,15 @@ export function reparentItem(draggedId: string, targetHeadingId: string, ctx: Bo
   })
 }
 
-/**
- * Export a Rate Analysis sheet for a BOQ item as a CSV file (DoR format).
- *
- * Generates a CSV with the item's code/desc/UOM as a header, followed by
- * the standard material / labour / equipment resource rows with their
- * default coefficients, and a computed direct cost + margins section.
- *
- * The CSV is downloaded as `RA-<code>.csv` in the browser. The caller passes
- * the BoqItem (looked up from allFlat) so we can include its metadata.
- *
- * Delegates to `exportToCsv` so the file picks up the BOM (Excel UTF-8
- * compatibility) and CSV-injection mitigation that the hand-rolled writer
- * was missing.
- */
-export function exportRa(item: BoqItem | undefined): void {
-  if (!item) {
-    toast.error('Cannot export RA', { description: 'No item selected.' })
-    return
-  }
+// exportRa() has been extracted to ./export-ra.ts for clarity (it is a pure
+// CSV-generation function with no shared state, while the rest of this file
+// is tree-mutation handlers). Re-exported here so existing imports from
+// './handlers' keep working — but new code should import from './export-ra'
+// directly.
+export { exportRa } from './export-ra'
 
-  // NOTE: exportRa uses DoR default PCC coefficients (the cement/sand/
-  //  aggregate/labour/equipment constants below). These do NOT reflect the
-  //  RA Inspector's user-editable resource rows — the inspector now seeds
-  //  each item with an EMPTY resource list and the user adds their own. The
-  //  export and the inspector will diverge until exportRa is wired to read
-  //  from the inspector's state (or from a persisted RA column on boq_items).
-  //
-  //  Standard DoR resource rows (mirrors the INITIAL_* constants in
-  //  ra-inspector). Kept here so the export works even without the RA
-  //  inspector mounted.
-  const materials = [
-    { code: 'M-CEM-OPC', name: 'Cement OPC 53 Grade (Udaipur)', uom: 'Bag', qty: 4.5, rate: 920 },
-    { code: 'M-SAND-R', name: 'River Sand (Trishuli)', uom: 'cum', qty: 0.45, rate: 3850 },
-    { code: 'M-AGG-20', name: 'Coarse Aggregate 20mm', uom: 'cum', qty: 0.9, rate: 2950 },
-    { code: 'M-WAT', name: 'Water (tanker)', uom: 'ltr', qty: 180, rate: 0.45 },
-  ]
-  const labour = [
-    { code: 'L-MASN', name: 'Mason (Skilled Cat. I)', uom: 'day', qty: 0.6, rate: 1450 },
-    { code: 'L-HEL', name: 'Mazdoor (Unskilled)', uom: 'day', qty: 1.4, rate: 950 },
-    { code: 'L-MIX', name: 'Mixer Operator', uom: 'day', qty: 0.2, rate: 1200 },
-  ]
-  const equipment = [
-    { code: 'E-MIX', name: 'Concrete Mixer 0.4 cum', uom: 'hr', qty: 1.8, rate: 285 },
-    { code: 'E-VIB', name: 'Needle Vibrator 60mm', uom: 'hr', qty: 1.2, rate: 95 },
-  ]
-
-  const directCost = [...materials, ...labour, ...equipment].reduce((s, r) => s + r.qty * r.rate, 0)
-  // Note: this uses DoR default 7.5% additions (2.5% + 1.5% + 3.5%). The RA
-  // Inspector allows user-editable percentage costs — those edits are NOT
-  // reflected in this export. When the inspector's user-editable coefficients
-  // become the source of truth, swap this hardcoded 0.075 for a lookup
-  // against the selected item's coefficient overrides.
-  const pctAdd = directCost * 0.075 // 2.5+1.5+3.5% on direct
-  const opCost = (directCost + pctAdd) * 0.15
-  const totalCost = directCost + pctAdd + opCost
-  const contractRate = item.rate
-  const margin = contractRate - totalCost
-  const marginPct = contractRate > 0 ? (margin / contractRate) * 100 : 0
-
-  // Uniform 7-column table. The first column ("Section") disambiguates the
-  // row kind: 'Item' for the BOQ item being analyzed, 'Material'/'Labour'/
-  // 'Equipment' for resource rows, 'Summary' for the trailing computed
-  // totals. The 'Code' column carries the summary label on Summary rows so
-  // the file stays a single, parser-friendly table — no mixed-shape sections.
-  const headers = ['Section', 'Code', 'Description', 'UOM', 'Qty', 'Rate (NPR)', 'Amount (NPR)']
-
-  const rows: (string | number)[][] = [
-    ['Item', item.code, item.desc, item.uom, item.qty, item.rate, item.qty * item.rate],
-    ...materials.map((r) => [
-      'Material',
-      r.code,
-      r.name,
-      r.uom,
-      r.qty,
-      r.rate,
-      (r.qty * r.rate).toFixed(2),
-    ]),
-    ...labour.map((r) => [
-      'Labour',
-      r.code,
-      r.name,
-      r.uom,
-      r.qty,
-      r.rate,
-      (r.qty * r.rate).toFixed(2),
-    ]),
-    ...equipment.map((r) => [
-      'Equipment',
-      r.code,
-      r.name,
-      r.uom,
-      r.qty,
-      r.rate,
-      (r.qty * r.rate).toFixed(2),
-    ]),
-    // Summary rows: label in the Code column, value in the Amount column.
-    ['Summary', 'Direct Cost', '', '', '', '', directCost.toFixed(2)],
-    ['Summary', 'Percentage Additions (7.5%)', '', '', '', '', pctAdd.toFixed(2)],
-    ['Summary', 'Overhead (15%)', '', '', '', '', opCost.toFixed(2)],
-    ['Summary', 'Total Cost', '', '', '', '', totalCost.toFixed(2)],
-    ['Summary', 'Contract Rate', '', '', '', '', contractRate.toFixed(2)],
-    ['Summary', 'Margin', '', '', '', '', margin.toFixed(2)],
-    ['Summary', 'Margin %', '', '', '', '', marginPct.toFixed(2)],
-  ]
-
-  exportToCsv(`RA-${item.code.replace(/\./g, '-')}.csv`, headers, rows)
-
-  // Warn the user that the export uses DoR default coefficients, NOT the
-  // RA Inspector's user-editable rows. The inspector's state is local-only
-  // (not persisted to the item), so exportRa can't read it. The export and
-  // the inspector will diverge until RA data is persisted to a DB column
-  // and exportRa is wired to read from it (audit B3-7).
-  toast.success('RA exported', {
-    description: `RA-${item.code.replace(/\./g, '-')}.csv downloaded · uses DoR default coefficients (not inspector edits)`,
-  })
-}
+// Tree utilities (rebuildBoqTree, flattenBoqTree, deepClone,
+// normalizeBoqRow, recomputeSiblingCodes) have been extracted to
+// ./tree-utils.ts. Re-exported here so existing imports from './handlers'
+// keep working — but new code should import from './tree-utils' directly.
+export { rebuildBoqTree, flattenBoqTree } from './tree-utils'

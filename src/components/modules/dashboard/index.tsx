@@ -41,11 +41,13 @@ import { MiniGanttChart, SCurveChart, CashFlowChart, BacklogChart } from './char
 import { LocationStripMap } from './location-strip-map'
 import { useApp } from '@/lib/app-store'
 import { getTodayWeek } from '@/lib/project-constants'
+import { PROJECTS } from '@/components/project-switcher'
 
 export function DashboardModule() {
   const router = useRouter()
   const navigateToModule = (id: string) => router.push(`/${id}`)
-  const { activeProject } = useApp()
+  const { activeProject, activeProjectId } = useApp()
+  const projectEpoch = PROJECTS.find((p) => p.id === activeProjectId)?.startDate
 
   const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
@@ -259,15 +261,16 @@ export function DashboardModule() {
     }
 
     // Tasks at 0% progress past their scheduled start week. The scheduler
-    // computes `todayWeek` from a fixed project epoch (see scheduler/index.tsx)
-    // — we mirror that same formula here so "past start week" matches what
-    // the Gantt canvas shows as TODAY. A task with progress === 0 whose
-    // `start` is before this week is genuinely stalled (it should have begun).
+    // computes `todayWeek` from the active project's start date (see
+    // scheduler/index.tsx) — we mirror that same formula here so "past start
+    // week" matches what the Gantt canvas shows as TODAY. A task with
+    // progress === 0 whose `start` is before this week is genuinely stalled
+    // (it should have begun).
     const flatTasks = flattenTasks(taskRows)
     // Use the shared project constants so the dashboard's "today" agrees
     // with the Gantt canvas's red TODAY line (previously both files
     // independently defined `new Date('2026-04-01')` — a drift risk).
-    const SCHEDULER_TODAY_WEEK = getTodayWeek()
+    const SCHEDULER_TODAY_WEEK = getTodayWeek(undefined, projectEpoch)
     for (const { task } of flatTasks) {
       if (task.type === 'Work' && task.progress === 0 && task.start < SCHEDULER_TODAY_WEEK) {
         actions.push({
@@ -296,7 +299,7 @@ export function DashboardModule() {
     }
 
     return actions
-  }, [poRows, qsRows, grnRows, taskRows])
+  }, [poRows, qsRows, grnRows, taskRows, projectEpoch])
 
   return (
     <div className="workspace-bg h-full overflow-y-auto">

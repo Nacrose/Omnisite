@@ -3,6 +3,10 @@ import { flattenTree, rebuildTreeFromRows, findItemAndParent, updateLevels } fro
 
 // Use a permissive row shape so the helpers' dynamic key writes (parentKey,
 // childrenKey) don't trip TS strict checks on object literals.
+// `any` is intentional here: the helpers under test write arbitrary keys
+// onto these records (parentKey, childrenKey) and we want to assert on
+// those dynamic properties without a forest of type assertions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
 
 // ─── flattenTree ────────────────────────────────────────────────────────────

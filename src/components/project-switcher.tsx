@@ -16,6 +16,12 @@ interface Project {
   value: string
   progress: number
   status: 'active' | 'on-hold' | 'closed'
+  /**
+   * Project start date — drives the "today" line on the Gantt chart and the
+   * S-curve on the dashboard. Should eventually come from the `projects`
+   * table; for now it's a static field per demo project.
+   */
+  startDate: Date
 }
 
 export const PROJECTS: Project[] = [
@@ -28,6 +34,7 @@ export const PROJECTS: Project[] = [
     value: 'NPR 487M',
     progress: 62,
     status: 'active',
+    startDate: new Date('2026-04-01'),
   },
   {
     id: 'p2',
@@ -38,6 +45,7 @@ export const PROJECTS: Project[] = [
     value: 'NPR 1.2B',
     progress: 78,
     status: 'active',
+    startDate: new Date('2025-09-15'),
   },
   {
     id: 'p3',
@@ -48,6 +56,7 @@ export const PROJECTS: Project[] = [
     value: 'NPR 640M',
     progress: 45,
     status: 'active',
+    startDate: new Date('2026-01-12'),
   },
   {
     id: 'p4',
@@ -58,6 +67,7 @@ export const PROJECTS: Project[] = [
     value: 'NPR 2.1B',
     progress: 12,
     status: 'active',
+    startDate: new Date('2026-06-01'),
   },
   {
     id: 'p5',
@@ -68,6 +78,7 @@ export const PROJECTS: Project[] = [
     value: 'NPR 320M',
     progress: 100,
     status: 'closed',
+    startDate: new Date('2024-08-01'),
   },
 ]
 

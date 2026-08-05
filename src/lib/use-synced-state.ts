@@ -5,6 +5,16 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { fetchPaginated, upsertOne } from '@/lib/api-client'
 import { useApp } from '@/lib/app-store'
+// Pure helpers extracted to ./use-synced-state-helpers.ts (no side effects,
+// no Supabase dependency — safe to unit-test in isolation).
+import {
+  TABLE_TO_ENDPOINT,
+  endpointFor,
+  snakeToCamel,
+  camelToSnake,
+  shallowEqualRecords,
+  type SyncConfig,
+} from './use-synced-state-helpers'
 
 /**
  * useSyncedState — hybrid storage hook.
@@ -35,64 +45,6 @@ import { useApp } from '@/lib/app-store'
  *   - `loadMore`: fetch the next page when `truncated` is true. Deduplicates
  *     by PK and appends to state. No-op when there is no next cursor.
  */
-
-/**
- * Shallow field-by-field equality check for two record-shaped objects.
- * Used by `setState` to skip unchanged rows before queueing an upsert —
- * a Map-based replacement for the previous `JSON.stringify` comparison
- * (which was both slow for large arrays and didn't preserve key insertion
- * order across runs).
- */
-function shallowEqualRecords(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  const aKeys = Object.keys(a)
-  const bKeys = Object.keys(b)
-  if (aKeys.length !== bKeys.length) return false
-  for (const key of aKeys) {
-    if (a[key] !== b[key]) return false
-  }
-  return true
-}
-
-interface SyncConfig {
-  /** Map app field names to DB column names. e.g., { desc: 'description', hasRA: 'has_ra' } */
-  fieldMap?: Record<string, string>
-  /** The primary key column name in the DB (default: 'id') */
-  primaryKey?: string
-}
-
-/**
- * Map a Supabase table name to its REST API endpoint slug.
- */
-const TABLE_TO_ENDPOINT: Record<string, string> = {
-  boq_items: 'boq',
-  tasks: 'tasks',
-  workers: 'workers',
-  equipment: 'equipment',
-  cbs_nodes: 'cbs-nodes',
-  qs_items: 'qs-items',
-  chat_messages: 'chat-messages',
-  drawing_annotations: 'drawing-annotations',
-  // Tables below were previously missing — without these entries,
-  // `endpointFor(table)` returned the table name verbatim, so POSTs to
-  // `/api/requisitions` (etc.) hit a 404 in Supabase mode and silently
-  // fell back to localStorage. The migration to useSyncedState for these
-  // modules looked correct but data never actually round-tripped.
-  purchase_orders: 'purchase-orders',
-  stock_items: 'stock-items',
-  project_locations: 'project-locations',
-  user_projects: 'user-projects',
-  dsr_entries: 'dsr-entries',
-  letters: 'letters',
-  grns: 'grns',
-  vendors: 'vendors',
-  requisitions: 'requisitions',
-  drawings: 'drawings',
-  subcontractors: 'subcontractors',
-}
-
-function endpointFor(table: string): string {
-  return TABLE_TO_ENDPOINT[table] ?? table
-}
 
 // ─── Shared realtime channel cache ──────────────────────────────────────────
 // Multiple useSyncedState instances for the same table (e.g. BOQ in two
@@ -143,22 +95,6 @@ if (typeof globalThis !== 'undefined') {
   if (typeof window !== 'undefined') {
     scheduleGc()
   }
-}
-
-/**
- * Convert a snake_case string to camelCase.
- * e.g. 'has_ra' → 'hasRa', 'parent_id' → 'parentId', 'created_at' → 'createdAt'
- */
-export function snakeToCamel(s: string): string {
-  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
-}
-
-/**
- * Convert a camelCase string to snake_case.
- * e.g. 'hasRa' → 'has_ra', 'parentId' → 'parent_id'
- */
-export function camelToSnake(s: string): string {
-  return s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
 }
 
 export function useSyncedState<T>(
@@ -301,7 +237,15 @@ export function useSyncedState<T>(
         let allRows: Record<string, unknown>[] = []
         let cursor: string | null = null
         let page = 0
-        const MAX_PAGES = 10 // safety cap — 2000 rows max
+        // Default cap: 3 pages × 200 rows = 600 rows on initial load. Most
+        // modules don't need more on first paint — the loadMore() callback
+        // (returned as the 5th element of the hook's tuple) fetches the next
+        // page on demand. Lowered from 10 (2000 rows) which was over-fetching
+        // on every page load for projects with thousands of BOQ items.
+        //
+        // To override per-table (e.g. BOQ needs the full tree for tree
+        // operations), pass `config.maxPages` — see SyncConfig.
+        const MAX_PAGES = config?.maxPages ?? 3
 
         while (page < MAX_PAGES) {
           const query = { ...baseQuery }
@@ -474,6 +418,13 @@ export function useSyncedState<T>(
         }
       }
     }
+    // Deps: supabaseTable + activeProjectDbId drive the fetch + realtime
+    // subscription. `config?.maxPages` is read inside but intentionally
+    // excluded — changing maxPages at runtime is not a supported use case
+    // (it's a per-table constant set at mount). Including it would re-fetch
+    // the entire dataset if a parent ever passed a dynamic value, which
+    // would be a bug, not a feature.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseTable, activeProjectDbId])
 
   // ─── State setter — race-condition-free, StrictMode-safe ─────────────────
@@ -610,3 +561,8 @@ export function useSyncedState<T>(
 
   return [currentState, setState, loading, truncated, loadMore]
 }
+
+// Re-export pure helpers for backwards compatibility. Existing imports from
+// '@/lib/use-synced-state' keep working — new code should import from
+// '@/lib/use-synced-state-helpers' directly.
+export { snakeToCamel, camelToSnake, type SyncConfig }

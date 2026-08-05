@@ -47,6 +47,10 @@ function buildCspHeader(nonce: string): string {
   ].join('; ')
 }
 
+// Exported for unit tests (see src/lib/__tests__/proxy.test.ts). Not part
+// of the public API — do not import from application code.
+export const __test__ = { buildCspHeader, STATIC_SECURITY_HEADERS }
+
 const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL
 
 /**
