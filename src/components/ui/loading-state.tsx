@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import {
   SPEED,
@@ -13,12 +13,103 @@ import {
   type SkeletonColumn,
 } from './skeleton-config'
 
-// ─── useTypewriter ──────────────────────────────────────────────────────────
+// ─── Matrix Rain ────────────────────────────────────────────────────────────
 //
-// rAF-based typewriter — frame-rate independent, interruptible.
-// Types out `text` at `typeCps` characters per second. When the component
-// unmounts (data loaded), the rAF is cancelled and the skeleton disappears
-// immediately — no waiting for the animation to finish.
+// Full-screen canvas of falling characters (Matrix-style) using the site's
+// theme colors (blue/violet) instead of the classic green. Layered behind
+// the module-specific skeleton structure for depth.
+//
+// Characters are a mix of construction symbols + katakana + digits:
+//   ▓░│┤┐└─┌├┬┴┼═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬
+//   0123456789
+//   アイウエオカキクケコサシスセソタチツテトナニヌネノ
+//   ABCDEFGHIJKLMNOPQRSTUVWXYZ
+//   ╬╬╬ BOQ RF GRN RA NPR CBS CPM FIDIC ╬╬╬
+
+const MATRIX_CHARS =
+  '▓░│┤┐└─┌├┬┴┼═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬0123456789アイウエオカキクケコサシスセソタチツテトナニヌネノABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+function MatrixRain() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    let width = (canvas.width = canvas.offsetWidth)
+    let height = (canvas.height = canvas.offsetHeight)
+    const fontSize = 14
+    let columns = Math.floor(width / fontSize)
+    let drops: number[] = Array(columns)
+      .fill(0)
+      .map(() => Math.random() * -height)
+
+    const handleResize = () => {
+      width = canvas.width = canvas.offsetWidth
+      height = canvas.height = canvas.offsetHeight
+      columns = Math.floor(width / fontSize)
+      drops = Array(columns)
+        .fill(0)
+        .map(() => Math.random() * -height)
+    }
+    window.addEventListener('resize', handleResize)
+
+    // Read theme colors from CSS variables
+    const style = getComputedStyle(document.documentElement)
+    const primaryColor = style.getPropertyValue('--primary').trim() || '#3b82f6'
+    const fgColor = style.getPropertyValue('--foreground').trim() || '#1e293b'
+
+    let frame = 0
+    let rafId: number
+
+    const draw = () => {
+      rafId = requestAnimationFrame(draw)
+      frame++
+
+      // Trail effect — semi-transparent black fill creates the fading trail
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.04)'
+      ctx.fillRect(0, 0, width, height)
+
+      ctx.font = `${fontSize}px monospace`
+
+      for (let i = 0; i < drops.length; i++) {
+        const char = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
+        const x = i * fontSize
+        const y = drops[i]
+
+        // Head character — bright (primary color)
+        ctx.fillStyle = primaryColor
+        ctx.fillText(char, x, y)
+
+        // Trail characters — dimmer (foreground with low opacity)
+        ctx.fillStyle = fgColor
+        ctx.globalAlpha = 0.08
+        ctx.fillText(char, x, y - fontSize)
+        ctx.fillText(char, x, y - fontSize * 2)
+        ctx.globalAlpha = 1
+
+        if (y > height && Math.random() > 0.975) {
+          drops[i] = 0
+        }
+        drops[i] += fontSize * 0.6
+      }
+    }
+    draw()
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  return (
+    <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" style={{ opacity: 0.12 }} />
+  )
+}
+
+// ─── useTypewriter ──────────────────────────────────────────────────────────
 
 function useTypewriter(text: string) {
   const [count, setCount] = useState(0)
@@ -44,9 +135,6 @@ function useTypewriter(text: string) {
 }
 
 // ─── TypingText ─────────────────────────────────────────────────────────────
-//
-// Renders text that types out char by char. Shows a blinking cursor
-// while typing. When done, the cursor disappears.
 
 function TypingText({ text, className }: { text: string; className?: string }) {
   const displayed = useTypewriter(text)
@@ -73,28 +161,30 @@ function ShimmerBar({
   return (
     <motion.div
       initial={{ opacity: 0.2 }}
-      animate={{ opacity: [0.2, 0.5, 0.2] }}
+      animate={{ opacity: [0.2, 0.6, 0.2] }}
       transition={{ duration: 1.2 / SPEED.multiplier, delay, repeat: Infinity, ease: 'easeInOut' }}
-      className={cn('bg-muted/50 h-3 rounded', width, className)}
+      className={cn('bg-primary/20 h-3 rounded', width, className)}
     />
   )
 }
 
 // ─── SkeletonHeader ─────────────────────────────────────────────────────────
-//
-// A header row where each column name types out with a stagger.
 
 function SkeletonHeader({ columns }: { columns: SkeletonColumn[] }) {
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--pane-divider)] px-3 py-2">
+    <div className="flex items-center gap-2 border-b border-[var(--pane-divider)] px-3 py-2 backdrop-blur-sm">
       {columns.map((col, i) => (
         <motion.div
           key={i}
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: cellDelay(i), duration: flyInDuration() / 1000, ease: 'easeOut' }}
+          transition={{
+            delay: cellDelay(i) / 1000,
+            duration: flyInDuration() / 1000,
+            ease: 'easeOut',
+          }}
           className={cn(
-            'text-muted-foreground truncate text-[10px] font-semibold tracking-wider uppercase',
+            'text-primary truncate text-[10px] font-semibold tracking-wider uppercase',
             col.width,
             col.align === 'right' && 'text-right',
             col.align === 'center' && 'text-center'
@@ -108,9 +198,6 @@ function SkeletonHeader({ columns }: { columns: SkeletonColumn[] }) {
 }
 
 // ─── SkeletonRow ────────────────────────────────────────────────────────────
-//
-// A data row with shimmer bars. Slides in from the left with a stagger
-// based on row index.
 
 function SkeletonRow({ columns, rowIndex }: { columns: SkeletonColumn[]; rowIndex: number }) {
   const rDelay = rowDelay(rowIndex)
@@ -119,7 +206,7 @@ function SkeletonRow({ columns, rowIndex }: { columns: SkeletonColumn[]; rowInde
       initial={{ opacity: 0, x: -16 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: rDelay / 1000, duration: flyInDuration() / 1000, ease: 'easeOut' }}
-      className="flex items-center gap-2 border-b border-[var(--pane-divider)] px-3 py-2"
+      className="flex items-center gap-2 border-b border-[var(--pane-divider)] px-3 py-2 backdrop-blur-sm"
     >
       {columns.map((col, j) => (
         <div
@@ -131,7 +218,6 @@ function SkeletonRow({ columns, rowIndex }: { columns: SkeletonColumn[]; rowInde
             delay={rDelay / 1000 + cellDelay(j) / 1000}
             className={cn(
               col.align === 'right' && 'ml-auto',
-              // First column is shorter (like a code/ID), description is longer
               j === 0 && 'w-3/4',
               j === 1 && 'w-full'
             )}
@@ -156,14 +242,12 @@ function SkeletonTable({ columns, rows }: { columns: SkeletonColumn[]; rows: num
 }
 
 // ─── SkeletonInspector ──────────────────────────────────────────────────────
-//
-// Right pane placeholder — shows a header that types, then shimmer fields.
 
 function SkeletonInspector({ label, fields }: { label: string; fields: number }) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col backdrop-blur-sm">
       <div className="border-b border-[var(--pane-divider)] px-4 py-3">
-        <div className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+        <div className="text-primary text-xs font-semibold tracking-wider uppercase">
           <TypingText text={label} />
         </div>
       </div>
@@ -186,19 +270,15 @@ function SkeletonInspector({ label, fields }: { label: string; fields: number })
 }
 
 // ─── SkeletonGantt ──────────────────────────────────────────────────────────
-//
-// Gantt canvas placeholder — horizontal bars on a week grid.
 
 function SkeletonGantt({ barCount }: { barCount: number }) {
   return (
-    <div className="relative flex-1 overflow-hidden">
-      {/* Week grid lines */}
+    <div className="relative flex-1 overflow-hidden backdrop-blur-sm">
       <div className="absolute inset-0 flex">
         {Array.from({ length: 16 }).map((_, i) => (
           <div key={i} className="flex-1 border-r border-[var(--pane-divider)]/50" />
         ))}
       </div>
-      {/* Gantt bars */}
       <div className="relative flex flex-col gap-2 p-3">
         {Array.from({ length: barCount }).map((_, i) => {
           const startWeek = (i * 2) % 12
@@ -220,7 +300,7 @@ function SkeletonGantt({ barCount }: { barCount: number }) {
               }}
               className={cn(
                 'h-5 rounded',
-                i % 4 === 0 ? 'bg-primary/20' : i % 3 === 0 ? 'bg-amber-500/15' : 'bg-muted/40'
+                i % 4 === 0 ? 'bg-primary/30' : i % 3 === 0 ? 'bg-amber-500/20' : 'bg-muted/40'
               )}
             >
               <ShimmerBar width="w-full" delay={rowDelay(i) / 1000 + 0.1} className="h-full" />
@@ -243,9 +323,9 @@ function SkeletonKPI({ cards }: { cards: string[] }) {
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: cellDelay(i) / 1000, duration: flyInDuration() / 1000 }}
-          className="rounded-lg border border-[var(--pane-divider)] p-3"
+          className="bg-background/60 rounded-lg border border-[var(--pane-divider)] p-3 backdrop-blur-sm"
         >
-          <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
+          <div className="text-primary mb-2 text-[10px] font-semibold tracking-wider uppercase">
             <TypingText text={label} />
           </div>
           <ShimmerBar width="w-20" delay={cellDelay(i) / 1000 + 0.1} className="h-5" />
@@ -259,7 +339,7 @@ function SkeletonKPI({ cards }: { cards: string[] }) {
 
 function SkeletonTabs({ tabs }: { tabs: string[] }) {
   return (
-    <div className="flex gap-1 border-b border-[var(--pane-divider)] px-3 py-2">
+    <div className="flex gap-1 border-b border-[var(--pane-divider)] px-3 py-2 backdrop-blur-sm">
       {tabs.map((tab, i) => (
         <motion.div
           key={i}
@@ -282,9 +362,9 @@ function SkeletonTabs({ tabs }: { tabs: string[] }) {
 
 function SkeletonLeftPane({ rows, label }: { rows: number; label: string }) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col backdrop-blur-sm">
       <div className="border-b border-[var(--pane-divider)] px-3 py-2">
-        <div className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+        <div className="text-primary text-xs font-semibold tracking-wider uppercase">
           <TypingText text={label} />
         </div>
       </div>
@@ -308,9 +388,6 @@ function SkeletonLeftPane({ rows, label }: { rows: number; label: string }) {
 }
 
 // ─── ModuleSkeleton ─────────────────────────────────────────────────────────
-//
-// Renders the appropriate skeleton layout based on the current URL pathname.
-// Auto-detects the module from the route.
 
 function useModuleId(): string {
   const [id, setId] = useState<string>('')
@@ -330,14 +407,11 @@ export function ModuleSkeleton({ label }: { label?: string }) {
   const moduleId = useModuleId()
   const layout = getLayout(moduleId)
 
-  // Always render the full module-specific skeleton — ignore the label
-  // prop (modules pass labels like "Loading BOQ items…" for backwards
-  // compat, but we want the full animation, not a text fallback).
-  // The label is used as a subtitle in the skeleton header if present.
-
   return (
     <div className="relative h-full overflow-hidden">
-      <BlueprintGrid />
+      {/* Layer 1: Matrix rain background (site theme colors) */}
+      <MatrixRain />
+      {/* Layer 2: Module-specific skeleton structure */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -356,7 +430,7 @@ function renderLayout(layout: ReturnType<typeof getLayout>, _label?: string) {
       return (
         <div className="flex h-full flex-col">
           <SkeletonKPI cards={layout.kpiCards ?? []} />
-          <div className="grid flex-1 grid-cols-2 gap-3 p-4">
+          <div className="grid flex-1 grid-cols-1 gap-3 overflow-y-auto p-4 md:grid-cols-2">
             <SkeletonBox label="S-Curve" />
             <SkeletonBox label="Cash Flow" />
           </div>
@@ -438,14 +512,17 @@ function renderLayout(layout: ReturnType<typeof getLayout>, _label?: string) {
     case 'chat':
       return (
         <div className="flex h-full flex-col">
-          <div className="flex-1 space-y-3 p-4">
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, x: i % 2 === 0 ? -12 : 12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: rowDelay(i) / 1000, duration: flyInDuration() / 1000 }}
-                className={cn('max-w-md space-y-1.5', i % 2 === 0 ? '' : 'ml-auto')}
+                className={cn(
+                  'bg-background/60 max-w-md space-y-1.5 rounded-lg border border-[var(--pane-divider)] p-3 backdrop-blur-sm',
+                  i % 2 === 0 ? '' : 'ml-auto'
+                )}
               >
                 <ShimmerBar width="w-20" delay={rowDelay(i) / 1000} className="h-2.5" />
                 <ShimmerBar width="w-full" delay={rowDelay(i) / 1000 + 0.05} />
@@ -453,7 +530,7 @@ function renderLayout(layout: ReturnType<typeof getLayout>, _label?: string) {
               </motion.div>
             ))}
           </div>
-          <div className="border-t border-[var(--pane-divider)] p-3">
+          <div className="border-t border-[var(--pane-divider)] p-3 backdrop-blur-sm">
             <ShimmerBar width="w-full" delay={0.5} className="h-8" />
           </div>
         </div>
@@ -469,7 +546,7 @@ function renderLayout(layout: ReturnType<typeof getLayout>, _label?: string) {
   }
 }
 
-// ─── SkeletonBox (generic chart placeholder) ────────────────────────────────
+// ─── SkeletonBox ────────────────────────────────────────────────────────────
 
 function SkeletonBox({ label }: { label: string }) {
   return (
@@ -477,9 +554,9 @@ function SkeletonBox({ label }: { label: string }) {
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: flyInDuration() / 1000 }}
-      className="flex flex-col rounded-lg border border-[var(--pane-divider)] p-3"
+      className="bg-background/60 flex flex-col rounded-lg border border-[var(--pane-divider)] p-3 backdrop-blur-sm"
     >
-      <div className="text-muted-foreground mb-3 text-[10px] font-semibold tracking-wider uppercase">
+      <div className="text-primary mb-3 text-[10px] font-semibold tracking-wider uppercase">
         <TypingText text={label} />
       </div>
       <div className="flex flex-1 items-end gap-1">
@@ -490,7 +567,7 @@ function SkeletonBox({ label }: { label: string }) {
             animate={{ scaleY: 1 }}
             transition={{ delay: cellDelay(i) / 1000 + 0.2, duration: flyInDuration() / 1000 }}
             style={{ height: `${30 + (i % 5) * 15}%`, transformOrigin: 'bottom' }}
-            className="bg-muted/40 flex-1 rounded-t"
+            className="bg-primary/20 flex-1 rounded-t"
           />
         ))}
       </div>
@@ -498,41 +575,12 @@ function SkeletonBox({ label }: { label: string }) {
   )
 }
 
-// ─── BlueprintGrid (background) ─────────────────────────────────────────────
-
-function BlueprintGrid() {
-  return (
-    <div
-      className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
-      style={{
-        backgroundImage: `
-          linear-gradient(to right, var(--foreground) 1px, transparent 1px),
-          linear-gradient(to bottom, var(--foreground) 1px, transparent 1px)
-        `,
-        backgroundSize: '24px 24px',
-        maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 90%)',
-        WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 90%)',
-      }}
-    />
-  )
-}
-
 // ─── Public API ─────────────────────────────────────────────────────────────
-//
-// LoadingState is the drop-in replacement for the old spinner. It renders
-// the full-screen module-specific skeleton. The skeleton is NON-BLOCKING:
-// it only shows while the module's `loading` flag is true, and unmounts
-// the instant data arrives — no minimum display time, no waiting for the
-// animation to finish.
 
 export function LoadingState({ label }: { label?: string }) {
   return <ModuleSkeleton label={label} />
 }
 
-/**
- * Skeleton rows — shown in place of table data while loading.
- * Kept for backwards compat with modules that use <TableSkeleton />.
- */
 export function TableSkeleton({ count = 5, cols = 6 }: { count?: number; cols?: number }) {
   return (
     <div className="flex flex-col">
