@@ -18,6 +18,7 @@ import {
   Wind,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { usePersistentState } from '@/lib/use-persistent-state'
 
 // ─── Daily Site Log ─────────────────────────────────────────────────────────
 //
@@ -35,6 +36,11 @@ import { toast } from 'sonner'
 // props for `useSyncedState` bindings.
 
 export function DailySiteLogView({ date }: { date: string }) {
+  // Persist sky condition and delays text to localStorage keyed by date so
+  // they survive tab switches and reloads. Previously these were
+  // uncontrolled defaultValue="" inputs — lost on every unmount.
+  const [skyCondition, setSkyCondition] = usePersistentState(`omnisite-site-log-${date}-sky`, '')
+  const [delays, setDelays] = usePersistentState(`omnisite-site-log-${date}-delays`, '')
   // Format the ISO date as "30 July 2026" for the header.
   const formatted = date
     ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', {
@@ -90,7 +96,8 @@ export function DailySiteLogView({ date }: { date: string }) {
             <Input
               className="h-8 text-xs"
               placeholder="Sky condition (clear / overcast / rainy)…"
-              defaultValue=""
+              value={skyCondition}
+              onChange={(e) => setSkyCondition(e.target.value)}
             />
           </div>
         </Card>
@@ -143,7 +150,8 @@ export function DailySiteLogView({ date }: { date: string }) {
         <Card title="Delays / Interruptions" icon={<Clock className="h-4 w-4" />}>
           <Textarea
             className="min-h-[60px] text-xs"
-            defaultValue=""
+            value={delays}
+            onChange={(e) => setDelays(e.target.value)}
             placeholder="Describe any delays or interruptions (e.g. equipment breakdown, weather stoppage, missing material)…"
           />
         </Card>

@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { BoqItem } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
+import { usePersistentState } from '@/lib/use-persistent-state'
 
 interface RaRow {
   id: string
@@ -167,28 +168,29 @@ export function RaInspector({
   // scheduler's R5-1).
   const locationId = item.locationId
 
-  // Live state for RA resource rows — drives real-time recalculation of
-  // directCost / pctCostBase / totalCost / margin when the user edits a
-  // qty or rate cell in the RA Builder tab.
-  const [materials, setMaterials] = useState<RaRow[]>(INITIAL_MATERIALS)
-  const [labour, setLabour] = useState<RaRow[]>(INITIAL_LABOUR)
-  const [equipment, setEquipment] = useState<RaRow[]>(INITIAL_EQUIPMENT)
-  // Live state for RA coefficients — drives real-time recalculation of the Financial Summary
-  const [pctCosts, setPctCosts] = useState({
+  // RA state is persisted to localStorage keyed by BOQ item ID so it
+  // survives tab switches and page reloads. Previously this was pure
+  // useState — users could build a complete rate analysis and lose it
+  // by clicking a different BOQ item. Now each item has its own RA
+  // slot in localStorage. This is a stopgap — the proper solution is
+  // an ra_data JSONB column on boq_items + useSyncedState wiring.
+  const raKey = `omnisite-boq-ra-${item.id}`
+  const [materials, setMaterials] = usePersistentState<RaRow[]>(
+    `${raKey}-materials`,
+    () => [] as RaRow[]
+  )
+  const [labour, setLabour] = usePersistentState<RaRow[]>(`${raKey}-labour`, () => [] as RaRow[])
+  const [equipment, setEquipment] = usePersistentState<RaRow[]>(
+    `${raKey}-equipment`,
+    () => [] as RaRow[]
+  )
+  const [pctCosts, setPctCosts] = usePersistentState(`${raKey}-pctCosts`, () => ({
     labour: { on: true, pct: 2.5 },
     material: { on: true, pct: 1.5 },
     equipment: { on: true, pct: 3.5 },
     tp: { on: false, pct: 0 },
-  })
-  // User-added custom indirect-cost rows. The four rows above are kept as
-  // first-class knobs (labour / material / equipment / T&P) because they're
-  // the standard DoR headings; `customPctCosts` is the extension point for
-  // project-specific indirects (insurance, contingency, contractor's profit,
-  // etc.). Each row carries its own base selector so a custom row can be
-  // levied on direct cost OR on any of the three sub-costs — matching how
-  // the built-in rows behave. Previously the "+" button showed a "coming
-  // soon" toast and the user could not add any indirect cost row at all.
-  const [customPctCosts, setCustomPctCosts] = useState<
+  }))
+  const [customPctCosts, setCustomPctCosts] = usePersistentState<
     {
       id: string
       label: string
@@ -196,10 +198,10 @@ export function RaInspector({
       on: boolean
       base: 'direct' | 'labour' | 'material' | 'equipment'
     }[]
-  >([])
-  const [opOnDirect, setOpOnDirect] = useState(true)
-  const [opOnPct, setOpOnPct] = useState(true)
-  const [opPct, setOpPct] = useState(15)
+  >(`${raKey}-customPctCosts`, () => [])
+  const [opOnDirect, setOpOnDirect] = usePersistentState(`${raKey}-opOnDirect`, true)
+  const [opOnPct, setOpOnPct] = usePersistentState(`${raKey}-opOnPct`, true)
+  const [opPct, setOpPct] = usePersistentState(`${raKey}-opPct`, 15)
 
   // Helper to update a single row's field. Field is any keyof RaRow so the
   // inline-editable inputs (code/name/uom) on user-added rows can write back

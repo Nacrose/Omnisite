@@ -127,7 +127,10 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
   const channelsList = channels ?? DEFAULT_CHANNELS
   const teamMembersList = teamMembers ?? DEFAULT_TEAM_MEMBERS
   const [activeChannel, setActiveChannel] = usePersistentState('omnisite-chat-channel', 'general')
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = usePersistentState<ChatMessage[]>(
+    'omnisite-chat-messages',
+    () => [] as ChatMessage[]
+  )
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
   const [showMembers, setShowMembers] = useState(false)

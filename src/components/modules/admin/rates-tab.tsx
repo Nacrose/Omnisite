@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Edit3 } from 'lucide-react'
 import { toast } from 'sonner'
+import { usePersistentState } from '@/lib/use-persistent-state'
 import { MATERIALS } from './types'
 
 // Tier 1 org baseline rates by district — read-only reference rows.
@@ -21,13 +21,19 @@ export function RatesView() {
   // previously the Input was uncontrolled (defaultValue), so edits were
   // lost on every re-render. The state is keyed by material code so each
   // Input binds to a stable identity across renders.
-  const [projectRates, setProjectRates] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {}
-    for (const m of MATERIALS.slice(0, 3)) {
-      init[m.code] = m.projectRate ?? m.rate
+  // Persist project rates to localStorage so they survive reloads.
+  // Previously this was pure useState — edits to cement/sand/aggregate
+  // project rates were lost on every page refresh.
+  const [projectRates, setProjectRates] = usePersistentState<Record<string, number>>(
+    'omnisite-admin-project-rates',
+    () => {
+      const init: Record<string, number> = {}
+      for (const m of MATERIALS.slice(0, 3)) {
+        init[m.code] = m.projectRate ?? m.rate
+      }
+      return init
     }
-    return init
-  })
+  )
 
   return (
     <PaneBody className="space-y-3 p-4">

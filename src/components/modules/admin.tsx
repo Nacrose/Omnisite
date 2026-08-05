@@ -38,7 +38,16 @@ export function AdminModule() {
   const [cat, setCat] = useState<Cat>('users')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRole, setSelectedRole] = useState<Role>(ROLES[4])
-  const [selectedMaterial, setSelectedMaterial] = useState<Material>(MATERIALS[0])
+  // Persist materials to localStorage so alt-UOM rate edits survive reloads.
+  // Previously this was useState(MATERIALS[0]) — edits to alt-UOM rates
+  // were lost on every page refresh.
+  const [materialsStore, setMaterialsStore] = usePersistentState<Material[]>(
+    'omnisite-admin-materials',
+    () => MATERIALS
+  )
+  const [selectedMaterial, setSelectedMaterial] = useState<Material>(
+    materialsStore[0] ?? MATERIALS[0]
+  )
 
   // Locations are a full CRUD surface, so we persist them to localStorage.
   // Synced via /api/project_locations when Supabase is configured; falls back
@@ -245,12 +254,12 @@ export function AdminModule() {
           <MaterialInspector
             material={selectedMaterial}
             onUpdateAltUomRate={(altIndex, rate) => {
-              // Persist alt-UOM rate edits into the selectedMaterial state so
-              // the inspector re-renders with the new value. Previously the
-              // input was uncontrolled (`defaultValue`), so edits were
-              // silently dropped on blur.
-              setSelectedMaterial((cur) =>
-                cur.altUoms
+              // Persist alt-UOM rate edits into the selectedMaterial state
+              // AND the materialsStore (localStorage) so they survive
+              // reloads. Previously the input was uncontrolled, and even
+              // after the controlled fix, edits were lost on page refresh.
+              setSelectedMaterial((cur) => {
+                const updated = cur.altUoms
                   ? {
                       ...cur,
                       altUoms: cur.altUoms.map((alt, i) =>
@@ -258,7 +267,11 @@ export function AdminModule() {
                       ),
                     }
                   : cur
-              )
+                setMaterialsStore((prev) =>
+                  prev.map((m) => (m.code === updated.code ? updated : m))
+                )
+                return updated
+              })
             }}
           />
         ) : cat === 'rates' ? (
