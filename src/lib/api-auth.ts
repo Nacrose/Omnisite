@@ -202,9 +202,9 @@ export async function requireAuth(req: NextRequest): Promise<{
   error: NextResponse | null
 }> {
   // True demo mode — no Supabase configured at all. Safe to allow.
-  // (OMNISITE_DEMO_MODE bypass removed: it allowed PM-level demo access
-  // even when a real Supabase backend was configured, which is a privilege
-  // escalation risk on staging/production deployments.)
+  // (The old OMNISITE_DEMO_MODE env var bypass was removed because it
+  // allowed PM-level demo access even when a real Supabase backend was
+  // configured — a privilege escalation risk on staging/production.)
   if (!isServerSupabaseConfigured()) {
     return {
       user: { id: 'demo-user', email: 'demo@omnisite', role: 'PM', accessToken: '' },
@@ -302,12 +302,13 @@ export function requireRole(user: AuthenticatedUser | null, table: string): Next
   // where there is no database to enforce RLS against.
   if (!isServerSupabaseConfigured()) return null
 
-  // Defense-in-depth: even when OMNISITE_DEMO_MODE=true allows requireAuth()
-  // to return a demo user, block writes to sensitive tables if the user has
-  // no real access token. This prevents a demo user from mutating a real
-  // Supabase database when both demo mode AND Supabase are configured
-  // (e.g., a staging environment). RLS would also reject these, but this
-  // makes the guard explicit and fails fast with a clear error.
+  // Defense-in-depth: block writes to sensitive tables if the user has no
+  // real access token. This catches the case where `requireAuth()` returned
+  // a demo user (because Supabase isn't configured) but a route handler is
+  // somehow reached with a configured Supabase backend — e.g. a race
+  // condition during deployment, or a misconfigured staging environment.
+  // RLS would also reject these writes, but this guard fails fast with a
+  // clear error message instead of a generic RLS denial.
   if (!user.accessToken) {
     return NextResponse.json(
       {
