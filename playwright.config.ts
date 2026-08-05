@@ -19,6 +19,23 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    // Firefox + WebKit — broader browser coverage. Disabled by default to
+    // keep local `bun playwright test` fast; CI runs them via the
+    // `PLAYWRIGHT_BROWSERS=all` env var. To run locally:
+    //   bunx playwright test --project=firefox
+    //   bunx playwright test --project=webkit
+    ...(process.env.PLAYWRIGHT_BROWSERS === 'all' || process.env.CI
+      ? [
+          {
+            name: 'firefox',
+            use: { ...devices['Desktop Firefox'] },
+          },
+          {
+            name: 'webkit',
+            use: { ...devices['Desktop Safari'] },
+          },
+        ]
+      : []),
   ],
   webServer: {
     // In CI, use the pre-built production server (faster, closer to real
