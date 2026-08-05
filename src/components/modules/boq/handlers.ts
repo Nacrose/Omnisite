@@ -11,6 +11,7 @@ import {
   createTreeRebuilder,
 } from '@/lib/tree-utils'
 import { exportToCsv } from '@/lib/csv-export'
+import { DOR_PCT_ADD, DOR_OVERHEAD_RATE } from '@/lib/project-constants'
 
 // Deep-clone helper using immer's produce() with a no-op recipe.
 // Intentionally used instead of structuredClone() for undo/redo snapshots:
@@ -668,13 +669,13 @@ export function exportRa(item: BoqItem | undefined): void {
   ]
 
   const directCost = [...materials, ...labour, ...equipment].reduce((s, r) => s + r.qty * r.rate, 0)
-  // Note: this uses DoR default 7.5% additions (2.5% + 1.5% + 3.5%). The RA
-  // Inspector allows user-editable percentage costs — those edits are NOT
-  // reflected in this export. When the inspector's user-editable coefficients
-  // become the source of truth, swap this hardcoded 0.075 for a lookup
+  // DoR default percentage additions on direct cost: 2.5% + 1.5% + 3.5% = 7.5%.
+  // The RA Inspector allows user-editable percentage costs — those edits are
+  // NOT reflected in this export. When the inspector's user-editable
+  // coefficients become the source of truth, swap `DOR_PCT_ADD` for a lookup
   // against the selected item's coefficient overrides.
-  const pctAdd = directCost * 0.075 // 2.5+1.5+3.5% on direct
-  const opCost = (directCost + pctAdd) * 0.15
+  const pctAdd = directCost * DOR_PCT_ADD
+  const opCost = (directCost + pctAdd) * DOR_OVERHEAD_RATE
   const totalCost = directCost + pctAdd + opCost
   const contractRate = item.rate
   const margin = contractRate - totalCost

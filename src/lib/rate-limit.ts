@@ -23,15 +23,35 @@ let ratelimit: Ratelimit | null = null
 // Redis isn't configured or errors at runtime. That's safe but silent — in
 // production this could mean rate limiting quietly stops working with zero
 // signal. `logFailOpen` emits a single `console.warn` per minute per process
-// so the operator gets a signal without log spam on every request.
+// AND (if Sentry is configured) captures a single Sentry event with a dedup
+// key, so operators get paged instead of finding out from a postmortem.
 let lastFailOpenLog = 0
+let lastFailOpenSentryEvent = 0
 const FAIL_OPEN_LOG_INTERVAL = 60_000 // only log once per minute
+const FAIL_OPEN_SENTRY_INTERVAL = 5 * 60_000 // Sentry event at most once per 5 min per process
 
-function logFailOpen(reason: string) {
+async function logFailOpen(reason: string) {
   const now = Date.now()
   if (now - lastFailOpenLog > FAIL_OPEN_LOG_INTERVAL) {
     console.warn(`[rate-limit] Failing open: ${reason}. Rate limiting is not active.`)
     lastFailOpenLog = now
+  }
+
+  // Emit a Sentry event (dedup'd) so operators get paged. Imported lazily to
+  // avoid pulling Sentry into the client bundle and to keep this no-op when
+  // Sentry isn't configured.
+  if (process.env.NEXT_PUBLIC_SENTRY_DSN && now - lastFailOpenSentryEvent > FAIL_OPEN_SENTRY_INTERVAL) {
+    lastFailOpenSentryEvent = now
+    try {
+      const { Sentry } = await import('./sentry')
+      Sentry.captureMessage(`Rate limiter failing open: ${reason}`, {
+        level: 'warning',
+        tags: { component: 'rate-limit', fail_open: 'true' },
+      })
+    } catch {
+      // Sentry not initialized — swallow, the console.warn above is the
+      // fallback signal.
+    }
   }
 }
 
@@ -64,13 +84,18 @@ function getRatelimit(): Ratelimit {
  * Resolve the client identifier for rate-limiting purposes.
  *
  * Prefers the authenticated user's id; otherwise falls back to IP. The
- * `x-forwarded-for` header is only trusted when `TRUST_PROXY=true` is set
- * (e.g. behind Caddy/Nginx). Without that flag we deliberately ignore it
+ * `x-forwarded-for` header is trusted when `TRUST_PROXY=true` is set
+ * (e.g. behind Caddy/Nginx) OR when running on Vercel (auto-detected via
+ * `process.env.VERCEL === '1'`). Without that flag we deliberately ignore it
  * to prevent trivial spoofing.
  */
 function resolveIdentifier(req: NextRequest, userId?: string): string {
   if (userId) return userId
-  if (process.env.TRUST_PROXY === 'true') {
+  // Vercel always sits behind a proxy that sets x-forwarded-for correctly.
+  // Auto-trust it so rate limiting works out-of-the-box without forcing the
+  // operator to set TRUST_PROXY=true in their Vercel env vars.
+  const trustProxy = process.env.TRUST_PROXY === 'true' || process.env.VERCEL === '1'
+  if (trustProxy) {
     const xff = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     if (xff) return `ip:${xff}`
   }
@@ -97,7 +122,7 @@ export async function checkRateLimit(
   // If Redis is not configured, skip rate limiting (fail-open).
   // Rate limiting is optional — the README documents Upstash as optional.
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    logFailOpen('Upstash Redis env vars not configured')
+    void logFailOpen('Upstash Redis env vars not configured')
     return null
   }
 
@@ -128,10 +153,11 @@ export async function checkRateLimit(
     return null
   } catch (e) {
     // Redis error (connection, auth, timeout, etc.) — fail open (allow the
-    // request). Logging this would require a logger available in this module;
-    // for now we silently degrade. The 429 path above is preserved for the
-    // normal rate-limited case.
-    logFailOpen('Redis error: ' + (e instanceof Error ? e.message : String(e)))
+    // request). `logFailOpen` emits both a console.warn and a Sentry event
+    // (dedup'd) so operators get paged instead of finding out from a
+    // postmortem. The 429 path above is preserved for the normal
+    // rate-limited case.
+    void logFailOpen('Redis error: ' + (e instanceof Error ? e.message : String(e)))
     return null
   }
 }

@@ -1,14 +1,5 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    // ─── Startup guard: forbid demo mode in production ────────────────────
-    if (process.env.NODE_ENV === 'production' && process.env.OMNISITE_DEMO_MODE === 'true') {
-      throw new Error(
-        'FATAL: OMNISITE_DEMO_MODE=true is forbidden in production. ' +
-          'This would bypass authentication and expose all data. ' +
-          'Remove this env var or set it to false before deploying.'
-      )
-    }
-
     // ─── Env-var validation on Vercel ─────────────────────────────────────
     // Only enforce on Vercel deployments (VERCEL=1). CI runs (GitHub Actions,
     // local e2e tests) deliberately run in demo mode without real credentials

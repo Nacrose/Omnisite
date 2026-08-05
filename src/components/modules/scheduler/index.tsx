@@ -44,6 +44,19 @@ function flattenTaskTree(items: Task[], parentId: string | null = null): Task[] 
 // scheduler and dashboard can never drift apart (previously both files
 // independently defined `new Date('2026-04-01')`).
 import { getTodayWeek } from '@/lib/project-constants'
+import { useApp } from '@/lib/app-store'
+import { PROJECTS } from '@/components/project-switcher'
+
+/**
+ * Resolve the active project's start date for the "today" line. Falls back
+ * to `DEFAULT_PROJECT_EPOCH` (inside `getTodayWeek`) when the active project
+ * isn't in the static `PROJECTS` array — e.g. when Supabase returns a project
+ * that wasn't seeded client-side.
+ */
+function useProjectEpoch(): Date | undefined {
+  const { activeProjectId } = useApp()
+  return PROJECTS.find((p) => p.id === activeProjectId)?.startDate
+}
 
 export function SchedulerModule() {
   // Synced state — uses Supabase when configured, falls back to localStorage
@@ -500,10 +513,13 @@ export function SchedulerModule() {
     return rows
   }
 
-  // Gantt canvas — TODAY line is computed from the shared project epoch
-  // so it advances as real time passes (was previously hardcoded to `16`).
-  // Clamped to [0, effectiveWeeks] via the shared helper (audit R4-5).
-  const todayWeek = getTodayWeek(effectiveWeeks)
+  // Gantt canvas — TODAY line is computed from the active project's start
+  // date so it advances as real time passes (was previously hardcoded to `16`,
+  // then to a fixed 2026-04-01 epoch that was wrong for any project that
+  // didn't start on that date). Clamped to [0, effectiveWeeks] via the shared
+  // helper (audit R4-5).
+  const projectEpoch = useProjectEpoch()
+  const todayWeek = getTodayWeek(effectiveWeeks, projectEpoch)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // Mouse handlers for drag-to-move on Gantt bars. Wrapped in useCallback
