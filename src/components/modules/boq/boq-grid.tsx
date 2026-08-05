@@ -10,29 +10,66 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { BoqItem } from './types'
 
 export interface BoqEditingState {
+  /** The ID of the BOQ item currently being edited. */
   id: string
+  /** Which field is being edited — only `qty` and `rate` are inline-editable. */
   field: 'qty' | 'rate'
 }
 
+/**
+ * Props for the BOQ grid component.
+ *
+ * The grid renders the BOQ tree as a virtualized table (one row per item,
+ * indented by depth). It supports inline editing of `qty` and `rate` fields,
+ * drag-and-drop reordering, multi-select via checkboxes, and context menus
+ * for row-level actions.
+ *
+ * Performance: uses `@tanstack/react-virtual` for row virtualization — only
+ * the visible rows (plus a small overscan buffer) are mounted. With 2000+
+ * BOQ items, this is the difference between a usable and unusable grid.
+ *
+ * Undo semantics: the `skipUndo` parameter on `onUpdateItem` collapses rapid
+ * keystrokes into a single undo entry. See `UNDO_DEBOUNCE_MS` below.
+ */
 export interface BoqGridProps {
+  /** The BOQ tree (root-level items, each with optional `children`). */
   items: BoqItem[]
+  /** Set of expanded item IDs (collapsed items hide their children). */
   expanded: Set<string>
+  /** The currently selected item ID (highlighted, drives the inspector). */
   selectedId: string
+  /** Set of item IDs selected via checkbox (for bulk operations). */
   selected: Set<string>
+  /** Current inline-edit state — null when no cell is being edited. */
   editing: BoqEditingState | null
+  /** The item currently being dragged (for DnD reordering). */
   draggedItem: BoqItem | null
+  /** The heading (level code) currently being hovered during a drag — used
+   *  to show the drop indicator. */
   dragOverHeading: string | null
+  /** Callback when the user clicks a row to select it (drives the inspector). */
   onSelectId: (id: string) => void
+  /** Callback when the user right-clicks a row — opens the context menu at
+   *  the cursor position. */
   onContextMenu: (e: { x: number; y: number; itemId: string }) => void
+  /** Callback when the user clicks the expand/collapse chevron on a parent item. */
   onToggleExpand: (id: string) => void
+  /** Callback when the user toggles a row's checkbox (for bulk select). */
   onToggleSelect: (id: string, value: boolean) => void
-  /** Push an item update to the parent. `skipUndo` (optional) suppresses the
-   *  undo snapshot — used by the grid's debounced keystroke handler so rapid
-   *  edits to the same field collapse into a single undo entry instead of
-   *  one entry per keystroke. */
+  /**
+   * Push an item update to the parent. `skipUndo` (optional) suppresses the
+   * undo snapshot — used by the grid's debounced keystroke handler so rapid
+   * edits to the same field collapse into a single undo entry instead of
+   * one entry per keystroke.
+   */
   onUpdateItem: (id: string, field: 'qty' | 'rate', value: number, skipUndo?: boolean) => void
+  /** Callback to set/clear the inline-edit state. Pass null to exit edit mode. */
   onSetEditing: (e: BoqEditingState | null) => void
+  /** Optional visibility filter — if provided, rows where `isVisible(item.id)`
+   *  returns false are skipped during virtualization. Used by the search box. */
   isVisible?: (key: string) => boolean
+  /** Optional column width overrides — keys are column IDs ('code',
+   *  'description', 'uom', 'qty', 'rate', 'amount'). */
   colWidths?: Record<string, number>
 }
 

@@ -5,25 +5,59 @@ import { ChevronRight, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WEEK_WIDTH, type Task, type DragState } from './types'
 
+/**
+ * Props for the Gantt canvas component.
+ *
+ * The canvas renders the task tree as horizontal bars on a time-grid (one
+ * column per week). It handles bar selection, hover, drag-to-move, and
+ * drag-to-resize — the actual state lives in the parent `SchedulerModule`
+ * and is threaded down via these props.
+ *
+ * Performance: the canvas uses `React.memo` on `TaskBar` so individual bars
+ * don't re-render when unrelated state changes. With 200+ tasks, this is the
+ * difference between smooth and janky dragging.
+ */
 export interface GanttCanvasProps {
+  /** The task tree (root-level tasks, each with optional `children`). */
   tasks: Task[]
-  /** Flattened task list (from flattenTasks) — used for dependency arrow lookup. */
+  /**
+   * Flattened task list (from `flattenTasks`) — used for dependency arrow
+   * lookup. Each entry pairs the task with its tree depth (for indentation
+   * on the canvas).
+   */
   flatTasks: { task: Task; depth: number }[]
+  /** Set of expanded task IDs (collapsed tasks hide their children). */
   expanded: Set<string>
+  /** The currently selected task ID (highlighted on the canvas). */
   selectedId: string
+  /** Callback when the user clicks a task bar to select it. */
   onSelect: (id: string) => void
+  /** The currently hovered task ID (highlighted on the canvas). */
   hoveredId: string | null
+  /** Callback when the user hovers/unhovers a task bar. Pass null to clear. */
   onHover: (id: string | null) => void
+  /** Current drag state — null when no drag is in progress, otherwise
+   *  contains the task being dragged + the drag offset. */
   dragging: DragState
+  /** Callback when the user clicks the expand/collapse chevron on a parent task. */
   onToggleExpand: (id: string) => void
+  /** Callback when the user mouse-downs on a task bar body (initiates drag-to-move). */
   onBarMouseDown: (e: React.MouseEvent, t: Task) => void
+  /** Callback when the user mouse-downs on a task bar's resize handle (initiates drag-to-resize). */
   onResizeMouseDown: (e: React.MouseEvent, t: Task) => void
+  /** Whether to show resource labels on each bar. */
   showResources: boolean
+  /** The current week number (drives the red "today" line). Computed from
+   *  the active project's start date via `getTodayWeek()`. */
   todayWeek: number
-  /** Effective project weeks — dynamically computed from the task tree.
-   *  Replaces the hardcoded TOTAL_WEEKS=52 so projects longer than a year
-   *  aren't truncated. */
+  /**
+   * Effective project weeks — dynamically computed from the task tree.
+   * Replaces the hardcoded `TOTAL_WEEKS=52` so projects longer than a
+   * year aren't truncated.
+   */
   totalWeeks: number
+  /** Ref to the scrollable canvas container (for measuring scroll position
+   *  during drag operations). */
   canvasRef: React.RefObject<HTMLDivElement | null>
 }
 
