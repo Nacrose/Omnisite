@@ -330,25 +330,10 @@ export function ModuleSkeleton({ label }: { label?: string }) {
   const moduleId = useModuleId()
   const layout = getLayout(moduleId)
 
-  // If a custom label is passed, show a simple typed message instead of
-  // the full skeleton (backwards compat for modules that pass labels).
-  if (label) {
-    return (
-      <div className="relative flex h-full items-center justify-center overflow-hidden p-6">
-        <BlueprintGrid />
-        <div className="relative flex flex-col items-center gap-3">
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: flyInDuration() / 1000 }}
-          >
-            <TypingText text={label} className="text-muted-foreground text-xs font-medium" />
-          </motion.div>
-          <ShimmerBar width="w-32" delay={0.2} />
-        </div>
-      </div>
-    )
-  }
+  // Always render the full module-specific skeleton — ignore the label
+  // prop (modules pass labels like "Loading BOQ items…" for backwards
+  // compat, but we want the full animation, not a text fallback).
+  // The label is used as a subtitle in the skeleton header if present.
 
   return (
     <div className="relative h-full overflow-hidden">
@@ -359,13 +344,13 @@ export function ModuleSkeleton({ label }: { label?: string }) {
         transition={{ duration: 0.1 }}
         className="relative h-full"
       >
-        {renderLayout(layout)}
+        {renderLayout(layout, label)}
       </motion.div>
     </div>
   )
 }
 
-function renderLayout(layout: ReturnType<typeof getLayout>) {
+function renderLayout(layout: ReturnType<typeof getLayout>, _label?: string) {
   switch (layout.pattern) {
     case 'kpi+charts':
       return (
@@ -381,7 +366,7 @@ function renderLayout(layout: ReturnType<typeof getLayout>) {
     case '3-pane':
       return (
         <div className="flex h-full">
-          <div className="w-80 border-r border-[var(--pane-divider)]">
+          <div className="hidden w-80 border-r border-[var(--pane-divider)] md:block">
             <SkeletonLeftPane
               rows={layout.leftPane?.rows ?? 6}
               label={layout.leftPane?.label ?? 'Outline'}
@@ -391,7 +376,7 @@ function renderLayout(layout: ReturnType<typeof getLayout>) {
             <SkeletonHeader columns={layout.columns} />
             <SkeletonGantt barCount={layout.ganttBars ?? 6} />
           </div>
-          <div className="w-96">
+          <div className="hidden w-96 md:block">
             <SkeletonInspector
               label={layout.rightPane?.label ?? 'Inspector'}
               fields={layout.rightPane?.fields ?? 5}
@@ -403,13 +388,13 @@ function renderLayout(layout: ReturnType<typeof getLayout>) {
     case 'tree+table':
       return (
         <div className="flex h-full">
-          <div className="w-72 border-r border-[var(--pane-divider)]">
+          <div className="hidden w-72 border-r border-[var(--pane-divider)] md:block">
             <SkeletonLeftPane
               rows={layout.leftPane?.rows ?? 8}
               label={layout.leftPane?.label ?? 'Tree'}
             />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 overflow-x-auto">
             <SkeletonTable columns={layout.columns} rows={layout.rows} />
           </div>
         </div>
@@ -418,10 +403,10 @@ function renderLayout(layout: ReturnType<typeof getLayout>) {
     case 'table+inspector':
       return (
         <div className="flex h-full">
-          <div className="flex-1 border-r border-[var(--pane-divider)]">
+          <div className="flex-1 overflow-x-auto border-r border-[var(--pane-divider)]">
             <SkeletonTable columns={layout.columns} rows={layout.rows} />
           </div>
-          <div className="w-96">
+          <div className="hidden w-96 md:block">
             <SkeletonInspector
               label={layout.rightPane?.label ?? 'Inspector'}
               fields={layout.rightPane?.fields ?? 5}
@@ -435,11 +420,11 @@ function renderLayout(layout: ReturnType<typeof getLayout>) {
         <div className="flex h-full flex-col">
           {layout.tabs && <SkeletonTabs tabs={layout.tabs} />}
           <div className="flex flex-1">
-            <div className="flex-1 border-r border-[var(--pane-divider)]">
+            <div className="flex-1 overflow-x-auto border-r border-[var(--pane-divider)]">
               <SkeletonTable columns={layout.columns} rows={layout.rows} />
             </div>
             {layout.rightPane && (
-              <div className="w-96">
+              <div className="hidden w-96 md:block">
                 <SkeletonInspector
                   label={layout.rightPane.label}
                   fields={layout.rightPane.fields}
@@ -476,7 +461,11 @@ function renderLayout(layout: ReturnType<typeof getLayout>) {
 
     case 'full-table':
     default:
-      return <SkeletonTable columns={layout.columns} rows={layout.rows} />
+      return (
+        <div className="h-full overflow-x-auto">
+          <SkeletonTable columns={layout.columns} rows={layout.rows} />
+        </div>
+      )
   }
 }
 
