@@ -161,9 +161,11 @@ export function DrawingViewer({ dwg }: DrawingViewerProps) {
     overlayRef.current.load(pageAnnotations)
     loadedKeyRef.current = loadKey
     setDirty(false)
-    // We intentionally exclude pageAnnotations from the deps — we want this
-    // to fire only on drawing/page change, not when annotations update from
-    // the realtime channel (the overlay is the source of truth between saves).
+    // INTENTIONAL dep exclusion: we exclude `pageAnnotations` because this
+    // effect should fire ONLY on drawing/page change (loadKey), NOT when
+    // annotations update from the realtime channel. The overlay is the
+    // source of truth between saves — reloading it on every realtime
+    // patch would discard the user's in-progress edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadKey])
 

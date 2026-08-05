@@ -195,6 +195,12 @@ export const MarkupOverlay = forwardRef<MarkupOverlayHandle, MarkupOverlayProps>
         canvas.dispose()
         fabricRef.current = null
       }
+      // INTENTIONAL dep exclusion: this is a mount-once effect that
+      // initializes the Fabric.js canvas. All dynamic props (tool, color,
+      // strokeWidth) are read via the refs updated by the subsequent
+      // effects below, so the canvas picks up changes without re-init.
+      // Re-running this on every prop change would destroy and recreate
+      // the canvas, discarding all user drawings.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 

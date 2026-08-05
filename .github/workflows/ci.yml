@@ -32,10 +32,29 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Lint
         run: bun run lint
+      - name: Lint (strict — non-blocking)
+        # Reports the warning count. Non-blocking until we pay down the
+        # existing 253 warnings (mostly console.* in server-side logging
+        # and non-null assertions in tests). Promote to blocking once at 0.
+        continue-on-error: true
+        run: bun run lint:strict
       - name: Type check
-        run: npx tsc --noEmit
+        run: bun run typecheck
       - name: Test
         run: bun run test
+      - name: Test coverage (non-blocking)
+        # Generates a coverage report. Non-blocking — thresholds are at 0
+        # for now (see vitest.config.ts). Upload the report so we can
+        # track the trend over time.
+        continue-on-error: true
+        run: bun run test:coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
       - name: Audit dependencies
         # Fails CI on HIGH/CRITICAL vulns in production-reachable deps.
         # Dev-only transitive vulns (eslint, vitest, etc.) are non-blocking.
@@ -92,7 +111,9 @@ jobs:
         # to the real deployment.
         run: bun run build
       - name: Install Playwright browsers
-        run: bunx playwright install --with-deps chromium
+        # Install all 3 browsers — playwright.config.ts runs chromium,
+        # firefox, and webkit in CI (process.env.CI === '1').
+        run: bunx playwright install --with-deps chromium firefox webkit
       - name: Run Playwright tests
         run: bunx playwright test --reporter=line
       - name: Upload Playwright report

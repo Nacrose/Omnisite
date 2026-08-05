@@ -490,6 +490,13 @@ export function useSyncedState<T>(
         }
       }
     }
+    // Deps: supabaseTable + activeProjectDbId drive the fetch + realtime
+    // subscription. `config?.maxPages` is read inside but intentionally
+    // excluded — changing maxPages at runtime is not a supported use case
+    // (it's a per-table constant set at mount). Including it would re-fetch
+    // the entire dataset if a parent ever passed a dynamic value, which
+    // would be a bug, not a feature.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseTable, activeProjectDbId])
 
   // ─── State setter — race-condition-free, StrictMode-safe ─────────────────

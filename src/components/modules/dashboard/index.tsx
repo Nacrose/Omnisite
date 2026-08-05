@@ -299,7 +299,7 @@ export function DashboardModule() {
     }
 
     return actions
-  }, [poRows, qsRows, grnRows, taskRows])
+  }, [poRows, qsRows, grnRows, taskRows, projectEpoch])
 
   return (
     <div className="workspace-bg h-full overflow-y-auto">

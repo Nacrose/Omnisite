@@ -527,27 +527,35 @@ export function SchedulerModule() {
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // Mouse handlers for drag-to-move on Gantt bars. Wrapped in useCallback
-  // (empty dep array — they only close over setState setters, which are
-  // stable) so the memoized `TaskBar` children of the Gantt canvas don't
-  // re-render on every parent render due to a new function identity.
-  const onBarMouseDown = useCallback((e: React.MouseEvent, t: Task) => {
-    if (t.type === 'Milestone' || t.type === 'Summary') return
-    e.stopPropagation()
-    e.preventDefault()
-    setSelectedId(t.id)
-    setDragging({ id: t.id, startX: e.clientX, originalStart: t.start, mode: 'move' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // so the memoized `TaskBar` children of the Gantt canvas don't re-render
+  // on every parent render due to a new function identity.
+  //
+  // Deps: setSelectedId comes from usePersistentState (returns the raw
+  // useState setter — stable by React guarantee), setDragging comes from
+  // useState (stable by React guarantee). Listing them satisfies
+  // exhaustive-deps without changing behavior.
+  const onBarMouseDown = useCallback(
+    (e: React.MouseEvent, t: Task) => {
+      if (t.type === 'Milestone' || t.type === 'Summary') return
+      e.stopPropagation()
+      e.preventDefault()
+      setSelectedId(t.id)
+      setDragging({ id: t.id, startX: e.clientX, originalStart: t.start, mode: 'move' })
+    },
+    [setSelectedId, setDragging]
+  )
 
   // Mouse handler for resize (right-edge drag) on Gantt bars
-  const onResizeMouseDown = useCallback((e: React.MouseEvent, t: Task) => {
-    if (t.type === 'Milestone' || t.type === 'Summary') return
-    e.stopPropagation()
-    e.preventDefault()
-    setSelectedId(t.id)
-    setDragging({ id: t.id, startX: e.clientX, originalDuration: t.duration, mode: 'resize' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const onResizeMouseDown = useCallback(
+    (e: React.MouseEvent, t: Task) => {
+      if (t.type === 'Milestone' || t.type === 'Summary') return
+      e.stopPropagation()
+      e.preventDefault()
+      setSelectedId(t.id)
+      setDragging({ id: t.id, startX: e.clientX, originalDuration: t.duration, mode: 'resize' })
+    },
+    [setSelectedId, setDragging]
+  )
 
   // ─── Breach detection ──────────────────────────────────────────────────
   // Extracted into a reusable function so it can be called from both the
