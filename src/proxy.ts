@@ -73,18 +73,28 @@ export async function proxy(req: NextRequest) {
   // Next.js 16 reads the `x-nonce` header and passes it to RSCs so inline
   // scripts (hydration data) get the nonce automatically.
   const nonce = randomUUID()
+  const csp = buildCspHeader(nonce)
+
+  // Set nonce + CSP on the REWRITTEN REQUEST headers so:
+  //   1. `headers().get('x-nonce')` works in server components
+  //   2. Next.js can parse the CSP during SSR and inject the nonce into
+  //      inline <script> tags (RSC payload, hydration data)
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('Content-Security-Policy', csp)
+
   const res = NextResponse.next({
-    request: { headers: new Headers(req.headers) },
+    request: { headers: requestHeaders },
   })
-  // Set the nonce on the request headers so Next.js can read it via headers()
+
+  // Also set on the RESPONSE so the browser enforces the CSP.
   res.headers.set('x-nonce', nonce)
+  res.headers.set('Content-Security-Policy', csp)
 
   // Set static security headers
   for (const [key, value] of Object.entries(STATIC_SECURITY_HEADERS)) {
     res.headers.set(key, value)
   }
-  // Set the per-request CSP with the nonce
-  res.headers.set('Content-Security-Policy', buildCspHeader(nonce))
 
   const { pathname } = req.nextUrl
 
