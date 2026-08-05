@@ -5,6 +5,16 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import { fetchPaginated, upsertOne } from '@/lib/api-client'
 import { useApp } from '@/lib/app-store'
+// Pure helpers extracted to ./use-synced-state-helpers.ts (no side effects,
+// no Supabase dependency — safe to unit-test in isolation).
+import {
+  TABLE_TO_ENDPOINT,
+  endpointFor,
+  snakeToCamel,
+  camelToSnake,
+  shallowEqualRecords,
+  type SyncConfig,
+} from './use-synced-state-helpers'
 
 /**
  * useSyncedState — hybrid storage hook.
@@ -35,72 +45,6 @@ import { useApp } from '@/lib/app-store'
  *   - `loadMore`: fetch the next page when `truncated` is true. Deduplicates
  *     by PK and appends to state. No-op when there is no next cursor.
  */
-
-/**
- * Shallow field-by-field equality check for two record-shaped objects.
- * Used by `setState` to skip unchanged rows before queueing an upsert —
- * a Map-based replacement for the previous `JSON.stringify` comparison
- * (which was both slow for large arrays and didn't preserve key insertion
- * order across runs).
- */
-function shallowEqualRecords(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  const aKeys = Object.keys(a)
-  const bKeys = Object.keys(b)
-  if (aKeys.length !== bKeys.length) return false
-  for (const key of aKeys) {
-    if (a[key] !== b[key]) return false
-  }
-  return true
-}
-
-interface SyncConfig {
-  /** Map app field names to DB column names. e.g., { desc: 'description', hasRA: 'has_ra' } */
-  fieldMap?: Record<string, string>
-  /** The primary key column name in the DB (default: 'id') */
-  primaryKey?: string
-  /**
-   * Maximum number of pages (200 rows each) to fetch on initial mount.
-   * Defaults to 3 (600 rows). Increase for tables that genuinely need the
-   * full dataset on first paint (e.g. BOQ, where tree operations require
-   * all rows to be present in memory). When the cap is hit, `truncated`
-   * flips to true and the `loadMore()` callback fetches the next page.
-   */
-  maxPages?: number
-}
-
-/**
- * Map a Supabase table name to its REST API endpoint slug.
- */
-const TABLE_TO_ENDPOINT: Record<string, string> = {
-  boq_items: 'boq',
-  tasks: 'tasks',
-  workers: 'workers',
-  equipment: 'equipment',
-  cbs_nodes: 'cbs-nodes',
-  qs_items: 'qs-items',
-  chat_messages: 'chat-messages',
-  drawing_annotations: 'drawing-annotations',
-  // Tables below were previously missing — without these entries,
-  // `endpointFor(table)` returned the table name verbatim, so POSTs to
-  // `/api/requisitions` (etc.) hit a 404 in Supabase mode and silently
-  // fell back to localStorage. The migration to useSyncedState for these
-  // modules looked correct but data never actually round-tripped.
-  purchase_orders: 'purchase-orders',
-  stock_items: 'stock-items',
-  project_locations: 'project-locations',
-  user_projects: 'user-projects',
-  dsr_entries: 'dsr-entries',
-  letters: 'letters',
-  grns: 'grns',
-  vendors: 'vendors',
-  requisitions: 'requisitions',
-  drawings: 'drawings',
-  subcontractors: 'subcontractors',
-}
-
-function endpointFor(table: string): string {
-  return TABLE_TO_ENDPOINT[table] ?? table
-}
 
 // ─── Shared realtime channel cache ──────────────────────────────────────────
 // Multiple useSyncedState instances for the same table (e.g. BOQ in two
@@ -151,22 +95,6 @@ if (typeof globalThis !== 'undefined') {
   if (typeof window !== 'undefined') {
     scheduleGc()
   }
-}
-
-/**
- * Convert a snake_case string to camelCase.
- * e.g. 'has_ra' → 'hasRa', 'parent_id' → 'parentId', 'created_at' → 'createdAt'
- */
-export function snakeToCamel(s: string): string {
-  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
-}
-
-/**
- * Convert a camelCase string to snake_case.
- * e.g. 'hasRa' → 'has_ra', 'parentId' → 'parent_id'
- */
-export function camelToSnake(s: string): string {
-  return s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
 }
 
 export function useSyncedState<T>(
@@ -633,3 +561,8 @@ export function useSyncedState<T>(
 
   return [currentState, setState, loading, truncated, loadMore]
 }
+
+// Re-export pure helpers for backwards compatibility. Existing imports from
+// '@/lib/use-synced-state' keep working — new code should import from
+// '@/lib/use-synced-state-helpers' directly.
+export { snakeToCamel, camelToSnake, type SyncConfig }
