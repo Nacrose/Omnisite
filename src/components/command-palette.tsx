@@ -8,6 +8,7 @@ import { ModuleIcon } from '@/components/module-icon'
 import { searchAll, SearchResult, type SearchDataSources } from '@/lib/search-index'
 import { cn } from '@/lib/utils'
 import { useFocusTrap } from '@/lib/use-focus-trap'
+import { useSyncedState } from '@/lib/use-synced-state'
 
 type CmdEntry = { id: string; label: string; hint?: string; icon: string; action: () => void }
 
@@ -25,6 +26,36 @@ const TYPE_COLORS: Record<SearchResult['type'], string> = {
   'CBS Node': 'text-teal-500',
 }
 
+// ─── Lightweight type stubs for the search data sources ─────────────────────
+// The actual module types (BoqItem, Task, etc.) are heavier — for the
+// search index we only need a handful of fields, so we declare minimal
+// shapes here and trust the runtime to provide them.
+interface BoqSearchItem {
+  id?: string
+  code?: string
+  description?: string
+  qty?: number
+  uom?: string
+}
+interface TaskSearchItem {
+  id: string
+  name?: string
+}
+interface CbsSearchItem {
+  code: string
+  name?: string
+}
+interface VendorSearchItem {
+  id: string
+  name?: string
+  scope?: string
+  category?: string
+}
+interface QsSearchItem {
+  id: string
+  title?: string
+}
+
 export function CommandPalette() {
   const { commandOpen, setCommandOpen, setQuickAddOpen } = useApp()
   const router = useRouter()
@@ -37,6 +68,55 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   useFocusTrap(modalRef, commandOpen)
+
+  // ─── Live data sources from React state (NOT localStorage) ──────────────
+  // Each useSyncedState call subscribes to the same Supabase realtime
+  // channel the corresponding module uses, so search results are always
+  // in sync with the live view. The shared channel cache (in
+  // use-synced-state.ts) dedupes the subscriptions so this doesn't add
+  // extra network traffic — the data is already in memory because the
+  // user has navigated to those modules at least once.
+  //
+  // If the user hasn't visited a module yet, its data simply isn't
+  // loaded — the search index won't include those items until they
+  // navigate there. That's the correct tradeoff: no extra fetches for
+  // data the user hasn't shown interest in.
+  //
+  // Replaces the previous localStorage-based read which was a bridge
+  // — in Supabase mode, useSyncedState writes to Supabase + localStorage
+  // backup, but the localStorage write happens after the state update,
+  // so search results could lag behind the live view by one render
+  // cycle. (P1-19 in gap analysis.)
+  const [boqItems] = useSyncedState<BoqSearchItem[]>(
+    'omnisite-boq-data',
+    'boq_items',
+    () => [] as BoqSearchItem[],
+    { primaryKey: 'id' }
+  )
+  const [tasks] = useSyncedState<TaskSearchItem[]>(
+    'omnisite-scheduler-tasks',
+    'tasks',
+    () => [] as TaskSearchItem[],
+    { primaryKey: 'id' }
+  )
+  const [cbsNodes] = useSyncedState<CbsSearchItem[]>(
+    'omnisite-financials-cbs',
+    'cbs_nodes',
+    () => [] as CbsSearchItem[],
+    { primaryKey: 'code' }
+  )
+  const [vendors] = useSyncedState<VendorSearchItem[]>(
+    'omnisite-vendors',
+    'vendors',
+    () => [] as VendorSearchItem[],
+    { primaryKey: 'id' }
+  )
+  const [qsItems] = useSyncedState<QsSearchItem[]>(
+    'omnisite-qs-items',
+    'qs_items',
+    () => [] as QsSearchItem[],
+    { primaryKey: 'id' }
+  )
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -66,38 +146,24 @@ export function CommandPalette() {
     setWasOpen(false)
   }
 
-  // Global search results — pass live data from localStorage (written by
-  // useSyncedState). This is a bridge: ideally the palette would subscribe
-  // to each module's React state directly, but that requires a larger
-  // refactor (context or zustand store for all module data). The localStorage
-  // read here is at least explicit about what it's doing, and the searchAll
-  // function no longer reads localStorage itself.
+  // Global search results — uses the live React state arrays above.
+  // The searchAll function caches the FlexSearch index keyed by the
+  // sources' references, so a search query keystroke doesn't rebuild
+  // the whole index unless the underlying data actually changed.
   const searchResults = useMemo(() => {
-    const readLocal = (key: string) => {
-      if (typeof window === 'undefined') return undefined
-      try {
-        const raw = window.localStorage.getItem(key)
-        return raw ? JSON.parse(raw) : undefined
-      } catch {
-        return undefined
-      }
-    }
     const sources: SearchDataSources = {
-      boqItems: readLocal('omnisite-boq-data'),
-      tasks: readLocal('omnisite-scheduler-tasks'),
-      cbsNodes: readLocal('omnisite-financials-cbs'),
-      // The vendors module persists its full vendor list under 'omnisite-vendors'
-      // (replacing the old 'omnisite-scs' key). Filter to subcontractors so the
-      // existing "Subcontractor" search-result type stays accurate; surfacing
-      // suppliers in the palette is a follow-up.
-      subcontractors: (
-        readLocal('omnisite-vendors') as
-          Array<{ id: string; name?: string; scope?: string; category?: string }> | undefined
-      )?.filter((v) => v.category === 'subcontractor'),
-      qsItems: readLocal('omnisite-qs-items'),
+      boqItems,
+      tasks,
+      cbsNodes,
+      // The vendors module stores suppliers + subcontractors in one
+      // table. Filter to subcontractors so the existing "Subcontractor"
+      // search-result type stays accurate; surfacing suppliers in the
+      // palette is a follow-up.
+      subcontractors: vendors?.filter((v) => v.category === 'subcontractor'),
+      qsItems,
     }
     return searchAll(query, sources, 30)
-  }, [query])
+  }, [query, boqItems, tasks, cbsNodes, vendors, qsItems])
 
   // Default actions (shown when query is empty)
   const defaultActions: CmdEntry[] = [
