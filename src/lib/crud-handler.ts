@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { z } from 'zod'
-import { createUserClient } from '@/lib/supabase-server'
+import { createUserClient, isServerSupabaseConfigured } from '@/lib/supabase-server'
 import {
   requireAuth,
   requireRole,
@@ -12,6 +12,27 @@ import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { logDbError } from '@/lib/safe-log'
 import { validateBody } from '@/lib/validation'
+
+// ─── Demo-mode guard ────────────────────────────────────────────────────────
+//
+// In demo mode (no Supabase configured), requireAuth() returns a demo user
+// with `accessToken: ''`. createUserClient('') then throws "Supabase not
+// configured" because the client constructor checks the env vars. This
+// affects every project-scoped CRUD route — the bell's /api/notifications
+// fetch, /api/boq, /api/tasks, etc. all 500 in demo mode.
+//
+// The fix: short-circuit demo mode at each route handler. GET returns []
+// (or the pagination envelope with empty data) — the client-side
+// useSyncedState hook already falls back to localStorage in demo mode, so
+// the empty server response is never actually consumed. POST/DELETE return
+// 503 with a clear message — demo writes go through usePersistentState,
+// not the API.
+//
+// In production (Supabase configured) this guard is a no-op — the real
+// client is constructed as before.
+function isDemoUser(user: AuthenticatedUser | null): boolean {
+  return !isServerSupabaseConfigured() || (user != null && !user.accessToken)
+}
 
 // ─── createCrudHandler ──────────────────────────────────────────────────────
 // Eliminates the ~2400 lines of copy-paste across the 15 business-table API
@@ -113,6 +134,20 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
     const limit = parseInt(searchParams.get('limit') || '0', 10)
     const cursor = searchParams.get('cursor')
 
+    // ─── Demo mode short-circuit ───────────────────────────────────────────
+    // In demo mode there's no DB to query — return an empty result so the
+    // client-side useSyncedState hook falls back to localStorage without
+    // seeing a 500. Mirrors the pagination envelope shape when limit>0.
+    if (isDemoUser(user)) {
+      if (limit > 0 && cursorField) {
+        return NextResponse.json({ data: [], nextCursor: null })
+      }
+      if (emptyArrayOnEmpty) {
+        return NextResponse.json([])
+      }
+      return NextResponse.json([])
+    }
+
     const userClient = createUserClient(user.accessToken)
     let query = userClient.from(table).select('*')
     if (projectId) query = query.eq('project_id', projectId)
@@ -181,6 +216,21 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
     if (transformBody) {
       const transformed = await transformBody(body, user)
       if (transformed !== undefined) body = transformed as T
+    }
+
+    // ─── Demo mode short-circuit ───────────────────────────────────────────
+    // Demo writes go through usePersistentState (localStorage), not the API.
+    // Return 503 with a clear message instead of letting createUserClient
+    // throw "Supabase not configured" (which becomes a generic 500 + the
+    // global error toast fires on every keystroke).
+    if (isDemoUser(user)) {
+      return NextResponse.json(
+        {
+          error:
+            'Demo mode — writes are stored in the browser only. Configure Supabase to persist server-side.',
+        },
+        { status: 503 }
+      )
     }
 
     const userClient = createUserClient(user.accessToken)
@@ -289,6 +339,18 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
         : searchParams.get(pk)
     if (!id) {
       return NextResponse.json({ error: `${pk} required` }, { status: 400 })
+    }
+
+    // ─── Demo mode short-circuit ───────────────────────────────────────────
+    // Same as POST — demo deletes are local-only. Return 503 with a clear
+    // message instead of letting createUserClient throw "Supabase not configured".
+    if (isDemoUser(user)) {
+      return NextResponse.json(
+        {
+          error: 'Demo mode — deletes are local-only. Configure Supabase to persist server-side.',
+        },
+        { status: 503 }
+      )
     }
 
     // Pre-flight read via the user-scoped client (RLS-gated) — proves the
