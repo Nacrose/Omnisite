@@ -26,14 +26,80 @@ export class ApiClientError extends Error {
   readonly status: number
   /** The endpoint (without `/api/` prefix) that was called. */
   readonly endpoint: string
+  /** Short error ID — quote this to support to correlate with server logs. */
+  readonly errorId: string
 
   constructor(message: string, status: number, endpoint: string) {
     super(message)
     this.name = 'ApiClientError'
     this.status = status
     this.endpoint = endpoint
+    // 6-char error ID — short enough to read over the phone, unique enough
+    // to grep server logs (we hash Date.now() with the endpoint so two
+    // errors in the same millisecond on different endpoints don't collide).
+    this.errorId = `${endpoint.slice(0, 4)}-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 4)}`
     // Restore the prototype chain (Error subclassing quirk under ES5 targets)
     Object.setPrototypeOf(this, ApiClientError.prototype)
+  }
+}
+
+// ─── Global error toast deduplication ──────────────────────────────────────
+//
+// Without a global handler, every component re-implements its own error UX
+// — and most just swallow the rejection (no toast at all). The handler below
+// fires ONE toast per (endpoint, status) pair within a 5-second window so a
+// burst of identical failures (e.g. the first render after a deployment
+// rolls the auth cookie) doesn't spam the user.
+//
+// The toast includes:
+//   - The HTTP status + endpoint (what failed)
+//   - The server's error message (why)
+//   - A short error ID (for support correlation)
+//
+// Lazy-loaded `sonner` so the api-client stays pure-HTTP and doesn't pull
+// the toast UI into chunks that don't need it.
+
+const recentErrorToasts = new Map<string, number>() // key → timestamp
+const ERROR_TOAST_DEDUP_MS = 5000
+
+async function fireErrorToast(err: ApiClientError): Promise<void> {
+  // 401 is handled by the proxy (redirect to /login) — don't double-toast it
+  if (err.status === 401) return
+
+  const key = `${err.endpoint}:${err.status}`
+  const now = Date.now()
+  const lastShown = recentErrorToasts.get(key)
+  if (lastShown !== undefined && now - lastShown < ERROR_TOAST_DEDUP_MS) return
+  recentErrorToasts.set(key, now)
+  // GC: drop entries older than the dedup window so the map doesn't grow
+  // unbounded over a long session.
+  if (recentErrorToasts.size > 50) {
+    for (const [k, t] of recentErrorToasts) {
+      if (now - t > ERROR_TOAST_DEDUP_MS) recentErrorToasts.delete(k)
+    }
+  }
+
+  try {
+    const { toast } = await import('sonner')
+    const label =
+      err.status === 0
+        ? 'Network error'
+        : err.status === 403
+          ? 'Permission denied'
+          : err.status === 404
+            ? 'Not found'
+            : err.status === 429
+              ? 'Too many requests'
+              : err.status >= 500
+                ? 'Server error'
+                : `Request failed (HTTP ${err.status})`
+    toast.error(label, {
+      description: `${err.message} · ${err.endpoint} · ref ${err.errorId}`,
+      duration: 6000,
+    })
+  } catch {
+    // sonner not yet loaded (very early boot) — swallow. The caller's
+    // own try/catch will still see the ApiClientError.
   }
 }
 
@@ -140,15 +206,19 @@ export async function fetchAll<T>(endpoint: string, query?: Record<string, strin
       cache: 'no-store',
     })
   } catch (e) {
-    throw new ApiClientError(
+    const err = new ApiClientError(
       `Network error fetching ${endpoint}: ${e instanceof Error ? e.message : String(e)}`,
       0,
       endpoint
     )
+    void fireErrorToast(err)
+    throw err
   }
   if (!res.ok) {
     const message = await readError(res, endpoint)
-    throw new ApiClientError(message, res.status, endpoint)
+    const err = new ApiClientError(message, res.status, endpoint)
+    void fireErrorToast(err)
+    throw err
   }
   const data = await res.json()
   // Support both plain array (no pagination) and { data, nextCursor } (paginated)
@@ -200,7 +270,11 @@ export async function fetchPaginated<T>(
       headers: { Accept: 'application/json', ...authHeaders },
       cache: 'no-store',
     })
-    if (!res.ok) throw new ApiClientError(await readError(res, endpoint), res.status, endpoint)
+    if (!res.ok) {
+      const err = new ApiClientError(await readError(res, endpoint), res.status, endpoint)
+      void fireErrorToast(err)
+      throw err
+    }
     const json = await res.json()
     if (Array.isArray(json)) return { data: json as T[], nextCursor: null }
     if (json && Array.isArray(json.data))
@@ -242,15 +316,19 @@ export async function upsertOne<T>(endpoint: string, item: T): Promise<T | undef
       body: JSON.stringify(item),
     })
   } catch (e) {
-    throw new ApiClientError(
+    const err = new ApiClientError(
       `Network error upserting ${endpoint}: ${e instanceof Error ? e.message : String(e)}`,
       0,
       endpoint
     )
+    void fireErrorToast(err)
+    throw err
   }
   if (!res.ok) {
     const message = await readError(res, endpoint)
-    throw new ApiClientError(message, res.status, endpoint)
+    const err = new ApiClientError(message, res.status, endpoint)
+    void fireErrorToast(err)
+    throw err
   }
   const data = await res.json()
   // Drop any in-flight reads for this endpoint so the next GET fires a
@@ -276,15 +354,19 @@ export async function deleteOne(endpoint: string, id: string): Promise<void> {
       headers: { Accept: 'application/json', ...authHeaders },
     })
   } catch (e) {
-    throw new ApiClientError(
+    const err = new ApiClientError(
       `Network error deleting ${endpoint}:${id}: ${e instanceof Error ? e.message : String(e)}`,
       0,
       endpoint
     )
+    void fireErrorToast(err)
+    throw err
   }
   if (!res.ok) {
     const message = await readError(res, endpoint)
-    throw new ApiClientError(message, res.status, endpoint)
+    const err = new ApiClientError(message, res.status, endpoint)
+    void fireErrorToast(err)
+    throw err
   }
   try {
     await res.json()

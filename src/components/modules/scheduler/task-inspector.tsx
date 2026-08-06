@@ -97,6 +97,7 @@ export function TaskInspector({
   onUpdateProgress,
   onUpdateLocation,
   onUpdateConstraint,
+  onUpdateResources,
 }: {
   task: Task
   /** Effective project weeks — replaces the hardcoded TOTAL_WEEKS=52. */
@@ -122,6 +123,16 @@ export function TaskInspector({
    * EOT breach detector (which inspects the `constraints` string).
    */
   onUpdateConstraint?: (constraint: string) => void
+  /**
+   * Fired when the user adds or removes a resource in the Assign tab.
+   * The parent mutates the synced tasks store so the resources array
+   * persists to Supabase (the tasks.resources JSONB column from
+   * migration 18) and is visible to resource leveling. Previously the
+   * inspector's add/remove handlers called a no-op localStorage.setItem
+   * that deep-cloned the existing value back without applying the change
+   * — UI showed the resource as added; refresh erased it.
+   */
+  onUpdateResources?: (id: string, newResources: string[]) => void
 }) {
   // Use task.locationId directly as the LocationPicker value — no local
   // mirror needed. The parent's onUpdateLocation callback propagates the
@@ -152,7 +163,9 @@ export function TaskInspector({
         const rows = JSON.parse(stored)
         return rows.filter((r: Record<string, unknown>) => r.type !== 'Heading')
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return []
   })
 
@@ -522,7 +535,10 @@ export function TaskInspector({
             <div className="space-y-1.5">
               {taskResources.length > 0 ? (
                 taskResources.map((r, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2">
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2"
+                  >
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-[10px] font-semibold text-white">
                       {r.charAt(0).toUpperCase()}
                     </div>
@@ -531,7 +547,13 @@ export function TaskInspector({
                       onClick={() => {
                         const updated = taskResources.filter((_, idx) => idx !== i)
                         setTaskResources(updated)
-                        try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
+                        // Propagate to the synced tasks store so the change
+                        // persists to Supabase (tasks.resources JSONB column).
+                        // The previous implementation called a no-op
+                        // localStorage.setItem that deep-cloned the existing
+                        // value back without applying the removal — UI showed
+                        // the resource as removed; refresh restored it.
+                        onUpdateResources?.(task.id, updated)
                       }}
                       className="text-muted-foreground hover:text-red-500"
                       title="Remove"
@@ -558,7 +580,10 @@ export function TaskInspector({
                     if (!newResource.trim()) return
                     const updated = [...taskResources, newResource.trim()]
                     setTaskResources(updated)
-                    try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
+                    // Propagate to the synced tasks store (Supabase +
+                    // localStorage backup) so the resource persists across
+                    // reloads and is visible to resource leveling.
+                    onUpdateResources?.(task.id, updated)
                     setNewResource('')
                     toast.success('Resource added', { description: newResource.trim() })
                   }
@@ -572,7 +597,10 @@ export function TaskInspector({
                   if (!newResource.trim()) return
                   const updated = [...taskResources, newResource.trim()]
                   setTaskResources(updated)
-                  try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
+                  // Propagate to the synced tasks store (Supabase +
+                  // localStorage backup) so the resource persists across
+                  // reloads and is visible to resource leveling.
+                  onUpdateResources?.(task.id, updated)
                   setNewResource('')
                   toast.success('Resource added', { description: newResource.trim() })
                 }}
@@ -582,7 +610,8 @@ export function TaskInspector({
               </Button>
             </div>
             <p className="text-muted-foreground text-[10px]">
-              Resource names drive the leveling tool's peak-load detection. Enter role + count (e.g. "Mason x2", "Mazdoor x4").
+              Resource names drive the leveling tool's peak-load detection. Enter role + count (e.g.
+              "Mason x2", "Mazdoor x4").
             </p>
           </TabsContent>
 
@@ -595,7 +624,9 @@ export function TaskInspector({
               <>
                 <div className="rounded-md border border-[var(--pane-divider)] p-3">
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="font-mono text-[10px] font-semibold">{String(linkedBoqItem.code || linkedBoqItem.id)}</span>
+                    <span className="font-mono text-[10px] font-semibold">
+                      {String(linkedBoqItem.code || linkedBoqItem.id)}
+                    </span>
                     <button
                       onClick={() => setLinkedBoqId(undefined)}
                       className="text-muted-foreground hover:text-red-500"
@@ -604,16 +635,30 @@ export function TaskInspector({
                       <X className="h-3 w-3" />
                     </button>
                   </div>
-                  <div className="text-xs font-medium">{String(linkedBoqItem.desc || linkedBoqItem.description || '—')}</div>
+                  <div className="text-xs font-medium">
+                    {String(linkedBoqItem.desc || linkedBoqItem.description || '—')}
+                  </div>
                   <div className="text-muted-foreground mt-1 flex items-center gap-3 text-[10px]">
-                    <span>Qty: {String(linkedBoqItem.qty)} {String(linkedBoqItem.uom || '')}</span>
+                    <span>
+                      Qty: {String(linkedBoqItem.qty)} {String(linkedBoqItem.uom || '')}
+                    </span>
                     <span>·</span>
                     <span>Rate: NPR {Number(linkedBoqItem.rate || 0).toLocaleString()}</span>
                     <span>·</span>
-                    <span className="font-semibold">Amount: NPR {(Number(linkedBoqItem.qty || 0) * Number(linkedBoqItem.rate || 0)).toLocaleString()}</span>
+                    <span className="font-semibold">
+                      Amount: NPR{' '}
+                      {(
+                        Number(linkedBoqItem.qty || 0) * Number(linkedBoqItem.rate || 0)
+                      ).toLocaleString()}
+                    </span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setBoqPickerOpen(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={() => setBoqPickerOpen(true)}
+                >
                   <Search className="h-3 w-3" /> Change BOQ Item
                 </Button>
               </>
@@ -622,51 +667,93 @@ export function TaskInspector({
                 <Link2 className="h-6 w-6 opacity-50" />
                 <div className="text-xs font-medium">No BOQ item linked</div>
                 <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-                  Link this task to a BOQ line item to track cost, quantity, and rate analysis against the schedule.
+                  Link this task to a BOQ line item to track cost, quantity, and rate analysis
+                  against the schedule.
                 </p>
-                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setBoqPickerOpen(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={() => setBoqPickerOpen(true)}
+                >
                   <Plus className="h-3 w-3" /> Link BOQ Item
                 </Button>
               </div>
             )}
 
             {boqPickerOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setBoqPickerOpen(false)}>
-                <div className="pane w-full max-w-lg overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+                onClick={() => setBoqPickerOpen(false)}
+              >
+                <div
+                  className="pane w-full max-w-lg overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] px-4">
                     <span className="text-sm font-semibold">Link BOQ Item</span>
-                    <button onClick={() => setBoqPickerOpen(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+                    <button
+                      onClick={() => setBoqPickerOpen(false)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      ✕
+                    </button>
                   </div>
                   <div className="p-3">
-                    <Input className="h-8 text-xs" placeholder="Search by code or description…" value={boqQuery} onChange={(e) => setBoqQuery(e.target.value)} autoFocus />
+                    <Input
+                      className="h-8 text-xs"
+                      placeholder="Search by code or description…"
+                      value={boqQuery}
+                      onChange={(e) => setBoqQuery(e.target.value)}
+                      autoFocus
+                    />
                   </div>
                   <div className="max-h-80 overflow-y-auto">
-                    {boqItems.filter((i: Record<string, unknown>) => {
-                      const q = boqQuery.toLowerCase()
-                      const code = String(i.code || '')
-                      const desc = String(i.desc || i.description || '')
-                      return !q || code.toLowerCase().includes(q) || desc.toLowerCase().includes(q)
-                    }).map((item: Record<string, unknown>) => (
-                      <button
-                        key={String(item.id)}
-                        onClick={() => {
-                          const id = String(item.id)
-                          setLinkedBoqId(id)
-                          try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
-                          setBoqPickerOpen(false)
-                          toast.success('BOQ item linked', {
-                            description: `${String(item.code || '')} — ${String(item.desc || item.description || '')}`,
-                          })
-                        }}
-                        className="hover:bg-accent flex w-full items-center gap-3 border-b border-[var(--pane-divider)] px-4 py-2 text-left transition-colors"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-medium">{String(item.desc || item.description || '—')}</div>
-                          <div className="text-muted-foreground text-[10px]">{String(item.code)} · {String(item.qty)} {String(item.uom || '')}</div>
-                        </div>
-                        <div className="font-mono text-xs font-semibold">NPR {Number(item.rate || 0).toLocaleString()}</div>
-                      </button>
-                    ))}
+                    {boqItems
+                      .filter((i: Record<string, unknown>) => {
+                        const q = boqQuery.toLowerCase()
+                        const code = String(i.code || '')
+                        const desc = String(i.desc || i.description || '')
+                        return (
+                          !q || code.toLowerCase().includes(q) || desc.toLowerCase().includes(q)
+                        )
+                      })
+                      .map((item: Record<string, unknown>) => (
+                        <button
+                          key={String(item.id)}
+                          onClick={() => {
+                            const id = String(item.id)
+                            setLinkedBoqId(id)
+                            try {
+                              localStorage.setItem(
+                                'omnisite-scheduler-tasks',
+                                JSON.stringify(
+                                  JSON.parse(
+                                    localStorage.getItem('omnisite-scheduler-tasks') || '[]'
+                                  )
+                                )
+                              )
+                            } catch {}
+                            setBoqPickerOpen(false)
+                            toast.success('BOQ item linked', {
+                              description: `${String(item.code || '')} — ${String(item.desc || item.description || '')}`,
+                            })
+                          }}
+                          className="hover:bg-accent flex w-full items-center gap-3 border-b border-[var(--pane-divider)] px-4 py-2 text-left transition-colors"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium">
+                              {String(item.desc || item.description || '—')}
+                            </div>
+                            <div className="text-muted-foreground text-[10px]">
+                              {String(item.code)} · {String(item.qty)} {String(item.uom || '')}
+                            </div>
+                          </div>
+                          <div className="font-mono text-xs font-semibold">
+                            NPR {Number(item.rate || 0).toLocaleString()}
+                          </div>
+                        </button>
+                      ))}
                     {boqItems.length === 0 && (
                       <div className="text-muted-foreground p-8 text-center text-xs">
                         No BOQ items found. Build the BOQ first in the BOQ module.
@@ -688,7 +775,9 @@ export function TaskInspector({
               try {
                 const stored = localStorage.getItem('omnisite-procurement-requisitions')
                 if (stored) reqs = JSON.parse(stored) as Array<Record<string, unknown>>
-              } catch { /* ignore */ }
+              } catch {
+                /* ignore */
+              }
               const taskReqs = reqs.filter((r) => r.task_id === task.id || r.source === task.name)
               if (taskReqs.length === 0) {
                 return (
@@ -696,7 +785,8 @@ export function TaskInspector({
                     <Package className="h-6 w-6 opacity-50" />
                     <div className="text-xs font-medium">No materials requisitioned</div>
                     <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-                      Create a requisition in Procurement and link it to this task to see lead-time status here.
+                      Create a requisition in Procurement and link it to this task to see lead-time
+                      status here.
                     </p>
                   </div>
                 )
@@ -706,8 +796,12 @@ export function TaskInspector({
                   {taskReqs.map((req, i) => (
                     <div key={i} className="rounded-md border border-[var(--pane-divider)] p-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium">{String(req.item || req.id || '—')}</span>
-                        <Badge variant="outline" className="text-[9px]">{String(req.status || 'Draft')}</Badge>
+                        <span className="text-xs font-medium">
+                          {String(req.item || req.id || '—')}
+                        </span>
+                        <Badge variant="outline" className="text-[9px]">
+                          {String(req.status || 'Draft')}
+                        </Badge>
                       </div>
                       <div className="text-muted-foreground text-[10px]">
                         {String(req.qty || 0)} {String(req.uom || '')}
@@ -734,8 +828,8 @@ export function TaskInspector({
                     <Gauge className="text-muted-foreground h-6 w-6 opacity-50" />
                     <div className="text-xs font-medium">Link a BOQ item to compute EVM</div>
                     <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-                      EVM requires a BOQ item link (BCWS = rate × qty) and task progress (BCWP = BCWS × %).
-                      Link one in the BOQ tab above.
+                      EVM requires a BOQ item link (BCWS = rate × qty) and task progress (BCWP =
+                      BCWS × %). Link one in the BOQ tab above.
                     </p>
                   </div>
                 )
@@ -753,13 +847,16 @@ export function TaskInspector({
                 <div className="space-y-2">
                   <div className="rounded-md border border-[var(--pane-divider)] p-3">
                     <div className="text-muted-foreground mb-2 text-[10px]">
-                      Computed from linked BOQ item: {String(linkedBoqItem.code)} · {String(linkedBoqItem.desc || linkedBoqItem.description || '')}
+                      Computed from linked BOQ item: {String(linkedBoqItem.code)} ·{' '}
+                      {String(linkedBoqItem.desc || linkedBoqItem.description || '')}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {metrics.map((m) => (
-                        <div key={m.label} className="rounded bg-secondary/30 p-2">
+                        <div key={m.label} className="bg-secondary/30 rounded p-2">
                           <div className="text-muted-foreground text-[9px]">{m.label}</div>
-                          <div className={cn('font-mono text-xs font-semibold', statusColor(m.status))}>
+                          <div
+                            className={cn('font-mono text-xs font-semibold', statusColor(m.status))}
+                          >
                             {m.value}
                           </div>
                         </div>
@@ -767,9 +864,9 @@ export function TaskInspector({
                     </div>
                   </div>
                   <p className="text-muted-foreground text-[10px] leading-relaxed">
-                    BCWS = BOQ rate × qty. BCWP = BCWS × task progress ({task.progress}%).
-                    ACWP requires CBS linkage (actual cost tracking) — not yet wired per-task.
-                    SPI &lt; 1 = behind schedule. CPI &lt; 1 = over budget.
+                    BCWS = BOQ rate × qty. BCWP = BCWS × task progress ({task.progress}%). ACWP
+                    requires CBS linkage (actual cost tracking) — not yet wired per-task. SPI &lt; 1
+                    = behind schedule. CPI &lt; 1 = over budget.
                   </p>
                 </div>
               )
@@ -778,7 +875,11 @@ export function TaskInspector({
 
           {/* Productivity tab — planned vs actual manhours */}
           <TabsContent value="productivity" className="mt-0 space-y-3 px-4 py-3 text-xs">
-            <ProductivityTab taskId={task.id} taskResources={taskResources} taskProgress={task.progress} />
+            <ProductivityTab
+              taskId={task.id}
+              taskResources={taskResources}
+              taskProgress={task.progress}
+            />
           </TabsContent>
         </Tabs>
       </PaneBody>
@@ -859,32 +960,53 @@ function ProductivityTab({
       {result && (
         <div className="rounded-md border border-[var(--pane-divider)] p-3">
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded bg-secondary/30 p-2">
+            <div className="bg-secondary/30 rounded p-2">
               <div className="text-muted-foreground text-[9px]">Variance (hrs)</div>
-              <div className={cn('font-mono text-xs font-semibold', result.varianceManhours > 0 ? 'text-red-500' : 'text-emerald-500')}>
-                {result.varianceManhours >= 0 ? '+' : ''}{result.varianceManhours}
+              <div
+                className={cn(
+                  'font-mono text-xs font-semibold',
+                  result.varianceManhours > 0 ? 'text-red-500' : 'text-emerald-500'
+                )}
+              >
+                {result.varianceManhours >= 0 ? '+' : ''}
+                {result.varianceManhours}
               </div>
             </div>
-            <div className="rounded bg-secondary/30 p-2">
+            <div className="bg-secondary/30 rounded p-2">
               <div className="text-muted-foreground text-[9px]">Variance %</div>
-              <div className={cn('font-mono text-xs font-semibold', Math.abs(result.variancePercent) > 20 ? 'text-red-500' : 'text-emerald-500')}>
-                {result.variancePercent >= 0 ? '+' : ''}{result.variancePercent}%
+              <div
+                className={cn(
+                  'font-mono text-xs font-semibold',
+                  Math.abs(result.variancePercent) > 20 ? 'text-red-500' : 'text-emerald-500'
+                )}
+              >
+                {result.variancePercent >= 0 ? '+' : ''}
+                {result.variancePercent}%
               </div>
             </div>
-            <div className="rounded bg-secondary/30 p-2">
+            <div className="bg-secondary/30 rounded p-2">
               <div className="text-muted-foreground text-[9px]">Productivity ratio</div>
-              <div className="font-mono text-xs font-semibold">{result.productivityRatio.toFixed(2)}</div>
+              <div className="font-mono text-xs font-semibold">
+                {result.productivityRatio.toFixed(2)}
+              </div>
             </div>
-            <div className="rounded bg-secondary/30 p-2">
+            <div className="bg-secondary/30 rounded p-2">
               <div className="text-muted-foreground text-[9px]">Status</div>
-              <div className={cn('text-xs font-semibold',
-                result.status === 'OK' ? 'text-emerald-500' :
-                result.status === 'ROOT_CAUSE_REQUIRED' ? 'text-red-500' :
-                'text-amber-500'
-              )}>
-                {result.status === 'OK' ? 'OK' :
-                 result.status === 'ROOT_CAUSE_REQUIRED' ? 'Root cause required' :
-                 'Root cause logged'}
+              <div
+                className={cn(
+                  'text-xs font-semibold',
+                  result.status === 'OK'
+                    ? 'text-emerald-500'
+                    : result.status === 'ROOT_CAUSE_REQUIRED'
+                      ? 'text-red-500'
+                      : 'text-amber-500'
+                )}
+              >
+                {result.status === 'OK'
+                  ? 'OK'
+                  : result.status === 'ROOT_CAUSE_REQUIRED'
+                    ? 'Root cause required'
+                    : 'Root cause logged'}
               </div>
             </div>
           </div>
@@ -892,16 +1014,23 @@ function ProductivityTab({
           {/* Root cause selector — shown when variance > 20% */}
           {result.status !== 'OK' && (
             <div className="mt-2">
-              <label className="text-[10px] font-medium">Root cause {result.status === 'ROOT_CAUSE_REQUIRED' && <span className="text-red-500">*</span>}</label>
+              <label className="text-[10px] font-medium">
+                Root cause{' '}
+                {result.status === 'ROOT_CAUSE_REQUIRED' && <span className="text-red-500">*</span>}
+              </label>
               <select
                 className="mt-0.5 h-7 w-full rounded border border-[var(--pane-divider)] bg-transparent px-2 text-xs"
                 value={rootCause}
                 onChange={(e) => setRootCause(e.target.value as RootCauseCode)}
               >
                 <option value="">— Select root cause —</option>
-                {(Object.entries(ROOT_CAUSE_LABELS) as [RootCauseCode, string][]).map(([code, label]) => (
-                  <option key={code} value={code}>{label}</option>
-                ))}
+                {(Object.entries(ROOT_CAUSE_LABELS) as [RootCauseCode, string][]).map(
+                  ([code, label]) => (
+                    <option key={code} value={code}>
+                      {label}
+                    </option>
+                  )
+                )}
               </select>
               {result.status === 'ROOT_CAUSE_LOGGED' && (
                 <div className="mt-1 text-[10px] text-emerald-600">
@@ -914,8 +1043,8 @@ function ProductivityTab({
       )}
 
       <p className="text-muted-foreground text-[10px] leading-relaxed">
-        Variance threshold: ±20%. Tasks exceeding this require root cause logging.
-        Productivity ratio = planned ÷ actual (1.0 = on target, &lt;1 = over budget).
+        Variance threshold: ±20%. Tasks exceeding this require root cause logging. Productivity
+        ratio = planned ÷ actual (1.0 = on target, &lt;1 = over budget).
       </p>
     </>
   )

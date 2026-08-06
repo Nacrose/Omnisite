@@ -50,17 +50,22 @@ export async function createBillingHoldForNCR(
 
 /**
  * Release a billing hold (when NCR is closed).
+ *
+ * Uses POST (upsert) instead of PATCH because the createCrudHandler
+ * factory only exposes GET / POST / DELETE — PATCH isn't implemented.
+ * The POST path treats the call as an UPDATE because the hold row
+ * already exists (matched by PK `id`), so upsertWithAudit updates the
+ * status + release metadata.
  */
-export async function releaseBillingHold(
-  holdId: string,
-  releaseNotes: string
-): Promise<boolean> {
-  const res = await fetch(`/api/billing-holds?id=${holdId}`, {
-    method: 'PATCH',
+export async function releaseBillingHold(holdId: string, releaseNotes: string): Promise<boolean> {
+  const res = await fetch('/api/billing-holds', {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      id: holdId,
       status: 'RELEASED',
       releaseNotes,
+      releasedAt: new Date().toISOString(),
     }),
   })
   return res.ok

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS labor_rates (
   ot_rate NUMERIC DEFAULT 0,
   source TEXT DEFAULT 'DoR Norm 2075',
   archived BOOLEAN DEFAULT false,
-  created_at TIMESTAMITTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

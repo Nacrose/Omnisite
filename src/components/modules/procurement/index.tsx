@@ -36,6 +36,7 @@ import { useFocusTrap } from '@/lib/use-focus-trap'
 import { ReqCenterView } from './req-view'
 import { PoCenterView, GrnCenterView, StockCenterView, MinCenterView } from './po-grn-views'
 import { ProcurementInspector } from './inspector'
+import { performThreeWayMatch } from '@/lib/three-way-match'
 
 export function ProcurementModule() {
   const [tab, setTab] = useState<Tab>('req')
@@ -496,13 +497,24 @@ export function ProcurementModule() {
                   setGrns((prev) =>
                     prev.map((g) => {
                       if (g.id !== grnId) return g
-                      const matched =
-                        g.poQty === g.grnQty &&
-                        g.grnQty === g.invoiceQty &&
-                        (g.poRate === undefined || g.poRate === g.rate)
-                      if (!matched) {
+                      // 3-way match using the same tolerance-based service
+                      // that gates the Approve button in po-grn-views.tsx
+                      // (default: 5% qty, 2% rate, 3% amount). The previous
+                      // exact-equality check (poQty === grnQty === invoiceQty
+                      // && poRate === rate) blocked within-tolerance GRNs
+                      // with "Payment locked" — directly contradicting the
+                      // tolerance check that enabled the button.
+                      const match = performThreeWayMatch({
+                        poQty: g.poQty,
+                        poRate: g.poRate ?? g.rate,
+                        grnQty: g.grnQty,
+                        grnRate: g.rate,
+                        invoiceQty: g.invoiceQty,
+                        invoiceRate: g.rate,
+                      })
+                      if (match.status !== 'MATCHED') {
                         toast.error('Payment locked', {
-                          description: `${g.poId} fails 3-way match.`,
+                          description: `${g.poId} fails 3-way match — ${match.details.join(' · ')}`,
                         })
                         return g
                       }

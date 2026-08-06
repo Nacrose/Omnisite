@@ -199,17 +199,47 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
           .single()
       : { data: null }
 
-    // For INSERTs (no existing row), verify the user has access to the
-    // target project_id. upsertWithAudit uses the service-role client which
-    // bypasses RLS, so this explicit check is mandatory.
-    if (!oldData && isProjectScopedTable(table)) {
-      const projectId = bodyRecord.project_id as string | undefined
-      const hasAccess = await verifyProjectAccess(userClient, user.id, projectId)
-      if (!hasAccess) {
-        return NextResponse.json(
-          { error: 'Forbidden — no access to this project' },
-          { status: 403 }
-        )
+    // Project-scoped write gate.
+    //
+    // INSERT (no oldData): the body's project_id is the target. Verify the
+    // user has access to it — without this, a malicious user with a valid
+    // session could craft a body with a foreign project_id and write to a
+    // project they're not assigned to (upsertWithAudit uses the service
+    // role, which bypasses RLS).
+    //
+    // UPDATE (oldData present): the user already proved read access to the
+    // row's existing project_id (the RLS-gated pre-flight read above).
+    // BUT a malicious user could re-POST the row with a different
+    // project_id, silently moving the row into a project they have no
+    // assignment to. Reject any project_id change — project transfer is
+    // not allowed via this generic CRUD route.
+    if (isProjectScopedTable(table)) {
+      const bodyProjectId = bodyRecord.project_id as string | undefined
+
+      if (oldData) {
+        const oldProjectId = (oldData as Record<string, unknown>).project_id as string | undefined
+        if (bodyProjectId && oldProjectId && bodyProjectId !== oldProjectId) {
+          return NextResponse.json(
+            {
+              error:
+                'Forbidden — cannot change project_id via update. Use the project transfer endpoint.',
+            },
+            { status: 403 }
+          )
+        }
+        // If body omits project_id, restore the existing one so the upsert
+        // doesn't null it out (upsertWithAudit uses the body verbatim).
+        if (!bodyProjectId && oldProjectId) {
+          bodyRecord.project_id = oldProjectId
+        }
+      } else {
+        const hasAccess = await verifyProjectAccess(userClient, user.id, bodyProjectId)
+        if (!hasAccess) {
+          return NextResponse.json(
+            { error: 'Forbidden — no access to this project' },
+            { status: 403 }
+          )
+        }
       }
     }
 
