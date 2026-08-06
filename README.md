@@ -199,6 +199,55 @@ Run these in order against your Supabase project:
 | 11  | `00000000000011_add_vendors_locations_to_audit_allowlist.sql` | Add vendors + locations to audit functions                                                   |
 | 12  | `00000000000012_add_location_id_columns.sql`                  | Add location_id to tasks, dsr_entries, qs_items, boq_items                                   |
 
+> **Tip:** Run `bun run migrations-check` to verify every migration file has been applied to your live Supabase DB. The script connects via the service role key and compares the local `supabase/migrations/` directory against the `supabase_migrations` tracking table. Exits 0 if everything's in sync, 1 if a migration is missing.
+
+---
+
+## Backup & Restore
+
+`bun run backup` dumps every business table to a timestamped JSON file under `backups/`. Requires `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` env vars (server-side only, bypasses RLS so all rows are exported regardless of project membership).
+
+```bash
+bun run backup                       # → backups/omnisite-backup-2026-08-06T07-30-00.json
+bun run backup --table boq_items      # → only the BOQ table
+bun run backup --out custom.json      # → custom output path
+```
+
+The output is a single self-contained JSON file with this shape:
+
+```json
+{
+  "metadata": {
+    "createdAt": "2026-08-06T07:30:00.000Z",
+    "supabaseUrl": "https://xxx.supabase.co",
+    "tableCount": 21,
+    "rowCount": 4523
+  },
+  "tables": {
+    "boq_items": [{...}, {...}],
+    "tasks": [...]
+  }
+}
+```
+
+**Restore** is manual — there is no `restore` script. The JSON is
+human-readable; load it into a fresh Supabase project via a one-off
+Node script using the same REST API. For full DB backups (including
+RLS policies, triggers, and the audit_log), use the Supabase
+Dashboard's pg_dump UI.
+
+**Recommended cadence:** daily, wired into a cron job. Vercel cron
+can hit a `/api/cron/backup` endpoint (not yet implemented — see
+P1-17 in the gap analysis). For self-hosting, add a system cron
+entry:
+
+```cron
+0 2 * * * cd /path/to/Omnisite && bun run backup >> /var/log/omnisite-backup.log 2>&1
+```
+
+The `backups/` directory is in `.gitignore` — never commit a backup
+file (it may contain PII like vendor PAN/GST).
+
 ---
 
 ## Project Structure
