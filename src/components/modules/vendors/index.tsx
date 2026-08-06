@@ -212,7 +212,7 @@ export function VendorsModule() {
       >
         <Building2 className="h-3.5 w-3.5" />
         Vendors
-        <span className="bg-secondary text-muted-foreground ml-1 rounded-full px-1 py-0.5 text-[9px] font-semibold">
+        <span className="bg-secondary text-muted-foreground ml-1 rounded-full px-1 py-0.5 text-[11px] font-semibold">
           {vendors.length}
         </span>
       </Button>
@@ -309,7 +309,7 @@ export function VendorsModule() {
                       <span className="text-muted-foreground font-mono text-[10px]">{v.id}</span>
                       <Badge
                         variant="secondary"
-                        className={cn('text-[9px]', CATEGORY_BADGE_CLASS[v.category])}
+                        className={cn('text-[11px]', CATEGORY_BADGE_CLASS[v.category])}
                       >
                         {v.category === 'supplier' ? (
                           <Package className="mr-0.5 h-2 w-2" />
@@ -321,13 +321,13 @@ export function VendorsModule() {
                       {v.category === 'subcontractor' && v.isTunneling && (
                         <Badge
                           variant="secondary"
-                          className="bg-violet-500/15 text-[9px] text-violet-700 dark:text-violet-300"
+                          className="bg-violet-500/15 text-[11px] text-violet-700 dark:text-violet-300"
                         >
                           <Mountain className="mr-0.5 h-2 w-2" />
                           Tunneling
                         </Badge>
                       )}
-                      <Badge variant="secondary" className="text-[9px]">
+                      <Badge variant="secondary" className="text-[11px]">
                         {v.status}
                       </Badge>
                     </div>
@@ -398,10 +398,10 @@ function VendorInspector({
         { value: 'profile', label: 'Profile' },
         { value: 'subboq', label: 'Sub-BOQ' },
         { value: 'material', label: 'Material' },
-        { value: 'consumables', label: 'Consum.' },
+        { value: 'consumables', label: 'Consumables' },
         { value: 'bill', label: 'Bill' },
         { value: 'schedule', label: 'Schedule' },
-        { value: 'performance', label: 'Perf.' },
+        { value: 'performance', label: 'Performance' },
       ] as const)
 
   return (
@@ -451,7 +451,7 @@ function VendorInspector({
               style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
             >
               {tabs.map((t) => (
-                <TabsTrigger key={t.value} value={t.value} className="px-1 text-[9px]">
+                <TabsTrigger key={t.value} value={t.value} className="px-1 text-[11px]">
                   {t.label}
                 </TabsTrigger>
               ))}

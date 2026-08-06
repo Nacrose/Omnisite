@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 // ─── Onboarding wizard ─────────────────────────────────────────────────────
 //
@@ -189,6 +190,26 @@ export default function OnboardingPage() {
       </div>
 
       <Card className="w-full max-w-md">
+        {/* Step indicator */}
+        {step !== 'done' && step !== 'assign' && (
+          <div className="flex items-center justify-center gap-2 pt-4">
+            {(['welcome', 'profile', 'project'] as const).map((s, i) => {
+              const stepOrder = ['welcome', 'profile', 'project', 'assign', 'done']
+              const currentIdx = stepOrder.indexOf(step)
+              const isDone = i < currentIdx
+              const isActive = i === currentIdx
+              return (
+                <div
+                  key={s}
+                  className={cn(
+                    'h-1.5 rounded-full transition-all',
+                    isDone ? 'bg-primary w-6' : isActive ? 'bg-primary w-8' : 'bg-muted w-6'
+                  )}
+                />
+              )
+            })}
+          </div>
+        )}
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             {step === 'welcome' && <Sparkles className="text-primary h-4 w-4" />}

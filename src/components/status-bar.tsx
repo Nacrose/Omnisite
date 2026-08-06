@@ -164,19 +164,7 @@ export function StatusBar() {
 
       <div className="h-3 w-px bg-[var(--pane-divider)]" />
 
-      {/* Reset button */}
-      <button
-        onClick={handleReset}
-        className="hover:text-foreground flex items-center gap-1 transition-colors"
-        title={t('status.resetTitle')}
-      >
-        <RotateCcw className="h-3 w-3" />
-        <span>{t('status.reset')}</span>
-      </button>
-
-      <div className="h-3 w-px bg-[var(--pane-divider)]" />
-
-      <span className="font-mono">v1.0.0</span>
+      <span className="font-mono">v0.1.0-beta</span>
     </footer>
   )
 }

@@ -441,11 +441,18 @@
 }
 
 /* ─── Mobile safe areas (notched phones) ──────────────────────────────────── */
-.safe-area-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* Must be in @layer utilities so Tailwind's height/padding utilities
+   (h-14, pb-16, etc.) can override them via specificity. Previously
+   these were unlayered, which gave them higher priority than Tailwind's
+   @layer utilities — pb-16 was silently overridden by safe-area-bottom's
+   padding-bottom, hiding content behind the bottom nav. */
+@layer utilities {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 /* ─── Mobile-specific tweaks ──────────────────────────────────────────────── */

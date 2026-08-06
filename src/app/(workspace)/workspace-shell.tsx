@@ -27,6 +27,7 @@ import {
   Loader2,
   LogOut,
   Plus,
+  RotateCcw,
 } from 'lucide-react'
 
 // Derive the active module from the URL pathname. Each module lives at
@@ -276,6 +277,26 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
                     {roleLabel}
                   </div>
                 </div>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        'Reset all local data? This clears all browser-stored OmniSite data and reloads the page.'
+                      )
+                    ) {
+                      import('@/lib/use-persistent-state').then(({ clearAllPersistentState }) => {
+                        clearAllPersistentState()
+                        setTimeout(() => window.location.reload(), 500)
+                      })
+                    }
+                  }}
+                  className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset local data
+                </button>
+                <div className="border-t border-[var(--pane-divider)]" />
                 <button
                   role="menuitem"
                   onClick={handleSignOut}

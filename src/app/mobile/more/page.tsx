@@ -94,7 +94,7 @@ export default function MobileMorePage() {
       </button>
 
       {/* Footer */}
-      <div className="text-muted-foreground pt-4 text-center text-[10px]">
+      <div className="text-muted-foreground pt-4 text-center text-[11px]">
         OmniSite v0.1.0-beta · Field Reporting Mode
       </div>
     </div>

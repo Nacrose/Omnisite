@@ -27,9 +27,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Lazy initializer reads localStorage once on client; safe for SSR (returns 'classic' default).
   const [theme, setThemeState] = useState<OmniSiteTheme>(readStoredTheme)
 
-  // Sync DOM attribute with current theme state. No setState inside effect — just external system sync.
+  // Sync DOM attribute + .dark class with current theme state.
+  // P0 fix: 'darkfield' theme must add the `.dark` class to <html> so
+  // Tailwind's `dark:` variants work. Without this, every `dark:text-*`
+  // silently falls back to light colors on a dark background.
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
+    const el = document.documentElement
+    el.setAttribute('data-theme', theme)
+    if (theme === 'darkfield') {
+      el.classList.add('dark')
+    } else {
+      el.classList.remove('dark')
+    }
   }, [theme])
 
   const setTheme = (t: OmniSiteTheme) => {

@@ -94,11 +94,11 @@ export default function MobileAttendancePage() {
       <div className="grid grid-cols-2 gap-2">
         <div className="border-border bg-card rounded-xl border p-3">
           <div className="text-2xl font-bold text-emerald-600">{presentCount}</div>
-          <div className="text-muted-foreground text-[10px]">Present</div>
+          <div className="text-muted-foreground text-[11px]">Present</div>
         </div>
         <div className="border-border bg-card rounded-xl border p-3">
           <div className="text-2xl font-bold">{totalHours.toFixed(1)}h</div>
-          <div className="text-muted-foreground text-[10px]">Total hours</div>
+          <div className="text-muted-foreground text-[11px]">Total hours</div>
         </div>
       </div>
 
@@ -121,14 +121,14 @@ export default function MobileAttendancePage() {
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{w.name}</div>
-                  <div className="text-muted-foreground text-[10px]">
+                  <div className="text-muted-foreground text-[11px]">
                     {w.trade} · {w.id}
                   </div>
                 </div>
                 {logged ? (
                   <span
                     className={cn(
-                      'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                      'rounded-full px-2 py-0.5 text-[11px] font-semibold',
                       att.hours > 0
                         ? 'bg-emerald-500/15 text-emerald-600'
                         : 'bg-red-500/15 text-red-600'
@@ -137,7 +137,7 @@ export default function MobileAttendancePage() {
                     {att.hours > 0 ? `${att.hours}h` : 'Absent'}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground text-[10px]">Not logged</span>
+                  <span className="text-muted-foreground text-[11px]">Not logged</span>
                 )}
               </div>
 

@@ -126,7 +126,7 @@ export default function MobileGrnPage() {
               <div className="text-muted-foreground truncate text-xs">
                 {po.vendorName || po.vendor}
               </div>
-              <div className="text-muted-foreground text-[10px]">
+              <div className="text-muted-foreground text-[11px]">
                 PO: {po.poQty} · Received: {po.grnQty} · Rate: {po.rate}
               </div>
             </div>
@@ -164,7 +164,7 @@ export default function MobileGrnPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono">{grn.grnQty} units</span>
-                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600">
+                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-600">
                     {grn.status}
                   </span>
                 </div>

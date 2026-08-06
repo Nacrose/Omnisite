@@ -308,7 +308,7 @@ export default function MobileChatPage() {
               {count > 0 && (
                 <span
                   className={cn(
-                    'rounded-full px-1 text-[9px]',
+                    'rounded-full px-1 text-[11px]',
                     filter === f.id ? 'bg-primary-foreground/20' : 'bg-muted'
                   )}
                 >
@@ -343,7 +343,7 @@ export default function MobileChatPage() {
             <div key={gi}>
               {/* Date separator */}
               <div className="flex items-center justify-center py-2">
-                <span className="bg-secondary text-muted-foreground rounded-full px-3 py-0.5 text-[10px] font-medium">
+                <span className="bg-secondary text-muted-foreground rounded-full px-3 py-0.5 text-[11px] font-medium">
                   {group.date}
                 </span>
               </div>
@@ -359,7 +359,7 @@ export default function MobileChatPage() {
                     className={cn('mb-1 flex flex-col', isMe ? 'items-end' : 'items-start')}
                   >
                     {!isMe && (
-                      <span className="text-muted-foreground mb-0.5 ml-2 text-[10px] font-medium">
+                      <span className="text-muted-foreground mb-0.5 ml-2 text-[11px] font-medium">
                         {msg.sender_name}
                       </span>
                     )}
@@ -383,7 +383,7 @@ export default function MobileChatPage() {
                           {catStyle && (
                             <span
                               className={cn(
-                                'absolute top-2 left-2 rounded-full px-2 py-0.5 text-[9px] font-semibold backdrop-blur-sm',
+                                'absolute top-2 left-2 rounded-full px-2 py-0.5 text-[11px] font-semibold backdrop-blur-sm',
                                 catStyle.bg,
                                 catStyle.text
                               )}
@@ -414,7 +414,7 @@ export default function MobileChatPage() {
                             <div className="truncate text-sm font-medium">
                               {msg.doc_name || 'Document'}
                             </div>
-                            <div className="text-[10px] opacity-70">
+                            <div className="text-[11px] opacity-70">
                               {msg.doc_type} ·{' '}
                               {expired
                                 ? 'Expired'
@@ -441,7 +441,7 @@ export default function MobileChatPage() {
                           {!msg._isPhoto && !msg._isDoc && catStyle && (
                             <span
                               className={cn(
-                                'mb-1 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold',
+                                'mb-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold',
                                 catStyle.bg,
                                 catStyle.text
                               )}
@@ -454,7 +454,7 @@ export default function MobileChatPage() {
                           </p>
                           {/* GPS + timestamp for photo messages */}
                           {msg._isPhoto && (msg.photo_gps || msg.photo_timestamp) && (
-                            <div className="mt-1.5 space-y-0.5 text-[9px] opacity-70">
+                            <div className="mt-1.5 space-y-0.5 text-[11px] opacity-70">
                               {msg.photo_timestamp && (
                                 <div className="flex items-center gap-1">
                                   <Clock className="h-2.5 w-2.5" />
@@ -475,7 +475,7 @@ export default function MobileChatPage() {
                       {/* Timestamp + read receipt */}
                       <div
                         className={cn(
-                          'flex items-center justify-end gap-1 px-2.5 pb-1.5 text-[9px] opacity-60'
+                          'flex items-center justify-end gap-1 px-2.5 pb-1.5 text-[11px] opacity-60'
                         )}
                       >
                         {formatTime(msg.created_at)}
@@ -503,7 +503,7 @@ export default function MobileChatPage() {
             </div>
             <div>
               <div className="text-sm font-medium">Photo Report</div>
-              <div className="text-muted-foreground text-[10px]">Capture + categorize + GPS</div>
+              <div className="text-muted-foreground text-[11px]">Capture + categorize + GPS</div>
             </div>
           </button>
           <button
@@ -515,7 +515,7 @@ export default function MobileChatPage() {
             </div>
             <div>
               <div className="text-sm font-medium">Document</div>
-              <div className="text-muted-foreground text-[10px]">PDF, image · 7-day expiry</div>
+              <div className="text-muted-foreground text-[11px]">PDF, image · 7-day expiry</div>
             </div>
           </button>
         </div>
