@@ -50,6 +50,7 @@ export const TABLE_TO_ENDPOINT: Record<string, string> = {
   subcontractors: 'subcontractors',
   rfis: 'rfis',
   material_issue_notes: 'material-issue-notes',
+  notifications: 'notifications',
 }
 
 /**

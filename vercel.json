@@ -3,6 +3,12 @@
   "buildCommand": "bun run build",
   "installCommand": "bun install",
   "healthCheckPath": "/api/health",
+  "crons": [
+    {
+      "path": "/api/cron/notifications-scan",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
   }

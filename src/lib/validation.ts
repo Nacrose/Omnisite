@@ -475,6 +475,23 @@ export const materialIssueNoteSchema = z.object({
   status: z.enum(['Issued', 'N/A']).default('Issued'),
 })
 
+// Notifications — backed by migration 30. The cron route inserts rows
+// (service-role, no API surface for user-side inserts). Users can only
+// update read_at and delete (PM-only cleanup).
+export const notificationSchema = z.object({
+  id: z.string().uuid().optional(),
+  project_id: z.string().uuid().optional(),
+  user_id: z.string().uuid().nullable().optional(),
+  type: z.enum(['rfi_overdue', 'ncr_hold', 'po_approval', 'dsr_review', 'variation_threshold']),
+  title: z.string().min(1),
+  message: z.string().min(1),
+  severity: z.enum(['info', 'warning', 'critical']).default('info'),
+  module: z.string().nullable().optional(),
+  context: z.any().optional(),
+  read_at: z.string().nullable().optional(),
+  dispatch_status: z.string().nullable().optional(),
+})
+
 // ─── Helper: validate and return error response ─────────────────────────────
 
 import { NextResponse } from 'next/server'

@@ -57,6 +57,11 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   // material is issued directly to a task without going through the store).
   // PMs can do everything; Foremen are read-only. Matches migration 29 RLS.
   material_issue_notes: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  // Notifications. Users can UPDATE their own read_at (RLS gates to
+  // user_id = auth.uid()). PMs can DELETE for admin cleanup. INSERTs only
+  // happen via the service-role cron route. All authenticated roles need
+  // write so the bell's mark-as-read works for everyone.
+  notifications: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
 }
 
 /**
@@ -92,6 +97,7 @@ export const TABLE_PRIMARY_KEYS: Record<string, string> = {
   drawing_annotations: 'id',
   rfis: 'id',
   material_issue_notes: 'id',
+  notifications: 'id',
 }
 
 /** Get the PK column for a table (defaults to 'id'). */
@@ -127,6 +133,7 @@ const PROJECT_SCOPED_TABLES = new Set([
   'drawing_annotations',
   'rfis',
   'material_issue_notes',
+  'notifications',
 ])
 
 /**
