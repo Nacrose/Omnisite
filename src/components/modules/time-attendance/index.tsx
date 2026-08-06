@@ -407,7 +407,7 @@ export function TimeAttendanceModule() {
                   aria-label="Pay period end date"
                 />
               </div>
-              <div className="text-muted-foreground text-[9px]">
+              <div className="text-muted-foreground text-[10px]">
                 {formatPayPeriodLabel(payPeriodStart, payPeriodEnd)}
               </div>
             </div>

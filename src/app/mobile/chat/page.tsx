@@ -290,7 +290,7 @@ export default function MobileChatPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Filter chips */}
-      <div className="border-border flex flex-shrink-0 gap-1.5 overflow-x-auto border-b px-3 py-2">
+      <div className="border-border no-scrollbar flex flex-shrink-0 gap-1.5 overflow-x-auto border-b px-3 py-2">
         {FILTERS.map((f) => {
           const count = f.id === 'all' ? parsedMessages.length : categoryCounts[f.id] || 0
           return (
@@ -525,6 +525,7 @@ export default function MobileChatPage() {
       <div className="border-border bg-background safe-area-bottom flex items-center gap-1.5 border-t p-2">
         <button
           onClick={() => setShowAttach((v) => !v)}
+          aria-label="Attach file"
           className="text-muted-foreground active:bg-accent flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
         >
           {showAttach ? <X className="h-4 w-4" /> : <Paperclip className="h-4 w-4" />}
@@ -542,6 +543,7 @@ export default function MobileChatPage() {
         <button
           onClick={() => sendMessage(input)}
           disabled={!input.trim() || sending}
+          aria-label="Send message"
           className="bg-primary text-primary-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full active:opacity-80 disabled:opacity-50"
         >
           <Send className="h-4 w-4" />

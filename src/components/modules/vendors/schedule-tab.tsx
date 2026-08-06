@@ -24,7 +24,7 @@ export function ScheduleTab({ sc }: { sc: Subcontractor }) {
               <Badge
                 variant="secondary"
                 className={cn(
-                  'text-[9px]',
+                  'text-[10px]',
                   t.status === 'delayed' && 'bg-red-500/15 text-red-700 dark:text-red-300',
                   t.status === 'on-track' &&
                     'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'

@@ -183,7 +183,7 @@ export function CorrespondenceModule() {
                       {f === 'All' && <Mail className="text-muted-foreground h-3 w-3" />}
                       {f}
                     </span>
-                    <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
                       {count}
                     </Badge>
                   </button>
@@ -298,7 +298,7 @@ export function CorrespondenceModule() {
                     {f === 'All' && <Mail className="text-muted-foreground h-3 w-3" />}
                     {f}
                   </span>
-                  <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+                  <Badge variant="secondary" className="h-4 px-1 text-[10px]">
                     {count}
                   </Badge>
                 </button>
@@ -366,7 +366,7 @@ export function CorrespondenceModule() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          'h-4 px-1 text-[9px]',
+                          'h-4 px-1 text-[10px]',
                           l.type === 'Incoming' &&
                             'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
                           l.type === 'Outgoing' &&
@@ -378,7 +378,7 @@ export function CorrespondenceModule() {
                         {l.type}
                       </Badge>
                       {isOverdue && (
-                        <span className="ml-auto flex items-center gap-0.5 text-[9px] font-medium text-red-600">
+                        <span className="ml-auto flex items-center gap-0.5 text-[10px] font-medium text-red-600">
                           <Clock className="h-2.5 w-2.5" />
                           Overdue
                         </span>
@@ -581,11 +581,14 @@ function CommercialImpactSection({
       })
       setAssessed(true)
       toast.success('Commercial impact assessed', {
-        description: [
-          affectsCost && 'Variation record created',
-          affectsTime && 'EOT claim drafted',
-          affectsBoq && 'BOQ items flagged for revision',
-        ].filter(Boolean).join(' · ') || 'No impacts selected.',
+        description:
+          [
+            affectsCost && 'Variation record created',
+            affectsTime && 'EOT claim drafted',
+            affectsBoq && 'BOQ items flagged for revision',
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'No impacts selected.',
       })
     } catch {
       toast.info('Impact assessment saved locally', {
@@ -635,13 +638,25 @@ function CommercialImpactSection({
               {affectsCost && (
                 <div>
                   <label className="text-[10px] font-medium">Est. cost impact (NPR)</label>
-                  <Input className="mt-0.5 h-7 text-xs" type="number" placeholder="e.g. 250000" value={estCost} onChange={(e) => setEstCost(e.target.value)} />
+                  <Input
+                    className="mt-0.5 h-7 text-xs"
+                    type="number"
+                    placeholder="e.g. 250000"
+                    value={estCost}
+                    onChange={(e) => setEstCost(e.target.value)}
+                  />
                 </div>
               )}
               {affectsTime && (
                 <div>
                   <label className="text-[10px] font-medium">Est. time impact (days)</label>
-                  <Input className="mt-0.5 h-7 text-xs" type="number" placeholder="e.g. 14" value={estDays} onChange={(e) => setEstDays(e.target.value)} />
+                  <Input
+                    className="mt-0.5 h-7 text-xs"
+                    type="number"
+                    placeholder="e.g. 14"
+                    value={estDays}
+                    onChange={(e) => setEstDays(e.target.value)}
+                  />
                 </div>
               )}
             </div>
@@ -660,7 +675,11 @@ function CommercialImpactSection({
             onClick={handleAssess}
             disabled={!hasAnyImpact || assessing}
           >
-            {assessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3 w-3" />}
+            {assessing ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <ArrowRight className="h-3 w-3" />
+            )}
             Assess Impact
           </Button>
         </>

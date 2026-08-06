@@ -146,7 +146,7 @@ export function ConsumablesTab({
                   {isVisible('item') && (
                     <div className="w-44 min-w-0 px-2">
                       <div className="truncate font-medium">{c.name}</div>
-                      <div className="text-muted-foreground text-[9px]">
+                      <div className="text-muted-foreground text-[10px]">
                         {c.date} · {fmtNPR(c.rate)}/{c.uom}
                       </div>
                     </div>

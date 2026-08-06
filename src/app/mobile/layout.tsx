@@ -126,6 +126,8 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
             <button
               key={tab.id}
               onClick={() => navigateTo(tab.id)}
+              aria-label={tab.label}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 'flex flex-1 flex-col items-center justify-center gap-0.5 py-1',
                 isActive ? 'text-primary' : 'text-muted-foreground'

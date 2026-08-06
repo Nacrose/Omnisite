@@ -247,7 +247,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 <div className="flex items-center gap-1.5 text-xs font-medium">
                   {displayName}
                   {isDemo && (
-                    <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-normal text-amber-700 dark:text-amber-300">
+                    <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-normal text-amber-700 dark:text-amber-300">
                       demo
                     </span>
                   )}
@@ -273,7 +273,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 <div className="border-b border-[var(--pane-divider)] px-3 py-2.5">
                   <div className="truncate text-xs font-semibold">{displayName}</div>
                   <div className="text-muted-foreground truncate text-[10px]">{user?.email}</div>
-                  <div className="bg-primary/10 text-primary mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium">
+                  <div className="bg-primary/10 text-primary mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
                     {roleLabel}
                   </div>
                 </div>

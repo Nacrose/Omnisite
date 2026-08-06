@@ -136,7 +136,7 @@ export function RfiTab({
                       className="h-7 flex-1 text-xs"
                       onClick={() => setFilter(f)}
                     >
-                      {f} <span className="ml-1 text-[9px] opacity-70">{count}</span>
+                      {f} <span className="ml-1 text-[10px] opacity-70">{count}</span>
                     </Button>
                   )
                 })}
@@ -186,7 +186,7 @@ export function RfiTab({
                         <Badge
                           variant="outline"
                           className={cn(
-                            'h-4 px-1 text-[9px]',
+                            'h-4 px-1 text-[10px]',
                             r.status === 'Open' &&
                               'border-amber-500/40 text-amber-700 dark:text-amber-300',
                             r.status === 'Replied' &&
@@ -200,13 +200,13 @@ export function RfiTab({
                         {r.severity === 'high' && (
                           <Badge
                             variant="outline"
-                            className="h-4 border-red-500/40 px-1 text-[9px] text-red-700 dark:text-red-300"
+                            className="h-4 border-red-500/40 px-1 text-[10px] text-red-700 dark:text-red-300"
                           >
                             HIGH
                           </Badge>
                         )}
                         {isOverdue && (
-                          <span className="ml-auto flex items-center gap-0.5 text-[9px] font-medium text-red-600">
+                          <span className="ml-auto flex items-center gap-0.5 text-[10px] font-medium text-red-600">
                             <Clock className="h-2.5 w-2.5" />
                             Overdue
                           </span>

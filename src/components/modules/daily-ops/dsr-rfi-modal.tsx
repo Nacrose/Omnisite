@@ -129,7 +129,7 @@ export function DsrRfiModal({ entry, rfiId, initialDraft, onClose }: DsrRfiModal
             <div>
               <label className="flex items-center gap-1.5 text-xs font-medium">
                 Background
-                <span className="rounded bg-sky-500/15 px-1 py-0.5 text-[9px] font-normal text-sky-700 dark:text-sky-300">
+                <span className="rounded bg-sky-500/15 px-1 py-0.5 text-[10px] font-normal text-sky-700 dark:text-sky-300">
                   auto-filled from DSR
                 </span>
               </label>
@@ -145,7 +145,7 @@ export function DsrRfiModal({ entry, rfiId, initialDraft, onClose }: DsrRfiModal
               <label className="flex items-center gap-1 text-xs font-medium">
                 Question <span className="text-red-500">*</span>
                 {!rfiDraft.question.trim() && (
-                  <span className="flex items-center gap-0.5 text-[9px] text-amber-600">
+                  <span className="flex items-center gap-0.5 text-[10px] text-amber-600">
                     <AlertTriangle className="h-2.5 w-2.5" /> mandatory — missing
                   </span>
                 )}
@@ -167,7 +167,7 @@ export function DsrRfiModal({ entry, rfiId, initialDraft, onClose }: DsrRfiModal
               <label className="flex items-center gap-1 text-xs font-medium">
                 Impact <span className="text-red-500">*</span>
                 {!rfiDraft.impact.trim() && (
-                  <span className="flex items-center gap-0.5 text-[9px] text-amber-600">
+                  <span className="flex items-center gap-0.5 text-[10px] text-amber-600">
                     <AlertTriangle className="h-2.5 w-2.5" /> mandatory — missing
                   </span>
                 )}

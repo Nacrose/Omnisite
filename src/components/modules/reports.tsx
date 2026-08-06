@@ -258,7 +258,7 @@ export function ReportsModule() {
                   >
                     <Icon className="text-primary h-4 w-4" />
                     <div className="text-[10px] leading-tight font-medium">{w.name}</div>
-                    <div className="text-muted-foreground text-[9px]">{w.cat}</div>
+                    <div className="text-muted-foreground text-[10px]">{w.cat}</div>
                   </button>
                 )
               })}
@@ -385,7 +385,7 @@ export function ReportsModule() {
               </div>
 
               {/* Page footer */}
-              <div className="absolute right-0 bottom-0 left-0 flex items-center justify-between border-t border-slate-200 px-6 py-3 text-[9px] text-slate-400">
+              <div className="absolute right-0 bottom-0 left-0 flex items-center justify-between border-t border-slate-200 px-6 py-3 text-[10px] text-slate-400">
                 <span>OmniSite · Weekly Progress Report</span>
                 <span>Page 1 of 1</span>
               </div>
@@ -704,16 +704,9 @@ function SCurveWidget() {
     earned.push((e / totalDuration) * 100)
   }
 
-  // Render as a simple ASCII-style bar chart (no chart library in the
-  // reports module — keeps the print output lightweight). Each row is
-  // a week; bars are filled with █ chars scaled to the percentage.
-  const barWidth = 30
-  const fmtBar = (pct: number) => {
-    const filled = Math.round((pct / 100) * barWidth)
-    return '█'.repeat(filled) + '░'.repeat(barWidth - filled)
-  }
-
-  // Sample every Nth week so the chart fits on the page.
+  // Render as CSS bar chart (replaces ASCII █/░ bars which looked bad in
+  // print and weren't accessible). Each row has two horizontal bars:
+  // blue for planned, green for earned.
   const sampleStep = Math.max(1, Math.ceil(weeks.length / 12))
 
   return (
@@ -721,26 +714,59 @@ function SCurveWidget() {
       <div className="mb-2 text-[10px] font-semibold text-slate-700">
         S-Curve · Planned vs Earned (cumulative %)
       </div>
-      <div className="rounded-md border border-slate-200 bg-white p-3 text-[9px] leading-tight">
-        <div className="mb-1 font-mono text-slate-500">
-          {'Wk'.padEnd(4)} {'Planned'.padEnd(barWidth + 2)} {'Earned'}
+      <div className="rounded-md border border-slate-200 bg-white p-3 text-[10px]">
+        {/* Legend */}
+        <div className="mb-2 flex items-center gap-4 text-[10px] text-slate-600">
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-3 rounded-sm bg-blue-500" /> Planned
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-3 rounded-sm bg-emerald-500" /> Earned
+          </span>
         </div>
-        {weeks
-          .filter((_, i) => i % sampleStep === 0 || i === weeks.length - 1)
-          .map((w, idx) => {
-            const i = weeks.indexOf(w)
-            return (
-              <div key={idx} className="font-mono text-slate-700">
-                {String(w).padStart(2, '0')}{' '}
-                <span className="text-blue-600">{fmtBar(planned[i])}</span> {planned[i].toFixed(0)}%
-                <span className="ml-2 text-emerald-600">{fmtBar(earned[i])}</span>{' '}
-                {earned[i].toFixed(0)}%
-              </div>
-            )
-          })}
+        {/* Bar rows */}
+        <div className="space-y-1">
+          {weeks
+            .filter((_, i) => i % sampleStep === 0 || i === weeks.length - 1)
+            .map((w, idx) => {
+              const i = weeks.indexOf(w)
+              return (
+                <div key={idx} className="flex items-center gap-2 text-[10px]">
+                  <span className="w-6 flex-shrink-0 font-mono text-slate-500">
+                    {String(w).padStart(2, '0')}
+                  </span>
+                  {/* Planned bar */}
+                  <div className="flex-1">
+                    <div className="relative h-3 overflow-hidden rounded-sm bg-slate-100">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-sm bg-blue-500 transition-all"
+                        style={{ width: `${Math.min(100, planned[i])}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="w-8 flex-shrink-0 text-right font-mono text-blue-600">
+                    {planned[i].toFixed(0)}%
+                  </span>
+                  {/* Earned bar */}
+                  <div className="flex-1">
+                    <div className="relative h-3 overflow-hidden rounded-sm bg-slate-100">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-sm bg-emerald-500 transition-all"
+                        style={{ width: `${Math.min(100, earned[i])}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="w-8 flex-shrink-0 text-right font-mono text-emerald-600">
+                    {earned[i].toFixed(0)}%
+                  </span>
+                </div>
+              )
+            })}
+        </div>
       </div>
-      <div className="mt-1 text-[9px] text-slate-500">
-        Cumulative planned vs earned progress across {tasks.length} tasks · {maxWeek} weeks total.
+      <div className="mt-1 text-[10px] text-slate-500">
+        Cumulative planned vs earned progress across {safeTasks.length} tasks · {maxWeek} weeks
+        total.
       </div>
     </div>
   )
@@ -784,7 +810,7 @@ function BoqTableWidget() {
       <div className="mb-2 text-[10px] font-semibold text-slate-700">
         BOQ Progress Summary ({priced.length} of {boqItems.length} items shown)
       </div>
-      <table className="w-full border-collapse text-[9px]">
+      <table className="w-full border-collapse text-[10px]">
         <thead>
           <tr className="border-b border-slate-300 text-left text-slate-500">
             <th className="py-1 pr-2 font-medium">Code</th>
@@ -819,7 +845,7 @@ function BoqTableWidget() {
         </tfoot>
       </table>
       {boqItems.length > 10 && (
-        <div className="mt-1 text-[9px] text-slate-500">
+        <div className="mt-1 text-[10px] text-slate-500">
           Showing first 10 of {boqItems.length} items. Full BOQ available in the BOQ module.
         </div>
       )}
@@ -862,7 +888,7 @@ function PhotoGalleryWidget() {
             </div>
           ))}
         </div>
-        <div className="mt-1 text-[9px] text-slate-500">
+        <div className="mt-1 text-[10px] text-slate-500">
           No DSR entries with photos this period. Mark has_photos on a DSR entry to include it here.
         </div>
       </div>
@@ -878,7 +904,7 @@ function PhotoGalleryWidget() {
         {withPhotos.map((d) => (
           <div
             key={d.id}
-            className="flex items-center gap-2 rounded border border-slate-200 p-1.5 text-[9px]"
+            className="flex items-center gap-2 rounded border border-slate-200 p-1.5 text-[10px]"
           >
             <div className="bg-muted text-muted-foreground flex h-8 w-8 flex-shrink-0 items-center justify-center rounded">
               <ImageIcon className="h-3 w-3 opacity-50" />
@@ -893,7 +919,7 @@ function PhotoGalleryWidget() {
           </div>
         ))}
       </div>
-      <div className="mt-1 text-[9px] text-slate-500">
+      <div className="mt-1 text-[10px] text-slate-500">
         Photos are stored in Supabase Storage (signed URLs, 1h expiry). Print this report from the
         Daily Ops module to embed actual photo thumbnails.
       </div>

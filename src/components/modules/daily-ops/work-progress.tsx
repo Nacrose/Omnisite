@@ -191,7 +191,7 @@ export function WorkProgressView({
                     >
                       {d.actual || '—'}
                       {variancePct !== null && (
-                        <span className="text-muted-foreground ml-0.5 text-[9px]">
+                        <span className="text-muted-foreground ml-0.5 text-[10px]">
                           ({variancePct >= 0 ? '+' : ''}
                           {variancePct.toFixed(0)}%)
                         </span>

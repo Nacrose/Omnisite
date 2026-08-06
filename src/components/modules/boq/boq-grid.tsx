@@ -486,7 +486,7 @@ export function ContextMenuItem({
       <span className={cn('text-muted-foreground', danger && 'text-red-500')}>{icon}</span>
       <span className="flex-1">{label}</span>
       {shortcut && (
-        <kbd className="bg-secondary text-muted-foreground rounded px-1 py-0.5 font-mono text-[9px]">
+        <kbd className="bg-secondary text-muted-foreground rounded px-1 py-0.5 font-mono text-[10px]">
           {shortcut}
         </kbd>
       )}

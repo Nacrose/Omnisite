@@ -79,7 +79,7 @@ export function ProcurementInspector({
           <div className="space-y-1.5 rounded-md border border-[var(--pane-divider)] p-2.5 text-xs">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
-              <Badge variant="secondary" className="text-[9px]">
+              <Badge variant="secondary" className="text-[10px]">
                 {req.status}
               </Badge>
             </div>

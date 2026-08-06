@@ -319,7 +319,7 @@ function SummaryCard({
     <div className={cn('rounded-md border p-2.5', toneClass[tone])}>
       <div className="flex items-center gap-1.5">
         <Icon className={cn('h-3 w-3', iconTone[tone])} />
-        <div className="text-muted-foreground text-[9px] font-semibold tracking-wider uppercase">
+        <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
           {label}
         </div>
       </div>
@@ -345,7 +345,7 @@ function FilterPills<T extends string>({
           key={f.id}
           onClick={() => onChange(f.id)}
           className={cn(
-            'rounded-md px-1.5 py-0.5 text-[9px] font-medium transition-colors',
+            'rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors',
             active === f.id
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:bg-accent'
@@ -366,7 +366,7 @@ function PoStatusBadge({ status }: { status: Po['status'] }) {
         ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
         : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
   return (
-    <Badge variant="secondary" className={cn('text-[9px]', cls)}>
+    <Badge variant="secondary" className={cn('text-[10px]', cls)}>
       {status}
     </Badge>
   )
@@ -382,7 +382,7 @@ function GrnPayStatusBadge({ payStatus }: { payStatus: Grn['payStatus'] }) {
           ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
           : 'bg-muted text-muted-foreground'
   return (
-    <Badge variant="secondary" className={cn('text-[9px]', cls)}>
+    <Badge variant="secondary" className={cn('text-[10px]', cls)}>
       {payStatus}
     </Badge>
   )

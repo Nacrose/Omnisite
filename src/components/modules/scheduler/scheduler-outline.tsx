@@ -97,7 +97,7 @@ export function SchedulerOutline({
             {/* Duration is in WEEKS (matches types.ts `start: week offset`). */}
             <span className="font-mono tabular-nums">{t.duration}w</span>
             {t.baseline && t.baseline[1] - t.baseline[0] !== t.duration && t.type !== 'Summary' && (
-              <span className="text-muted-foreground ml-1 text-[9px] line-through">
+              <span className="text-muted-foreground ml-1 text-[10px] line-through">
                 {t.baseline[1] - t.baseline[0]}w
               </span>
             )}

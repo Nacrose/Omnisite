@@ -143,7 +143,7 @@ export function NotificationsBell() {
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[var(--critical)] px-1 text-[9px] font-bold text-white">
+          <span className="absolute top-1 right-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[var(--critical)] px-1 text-[10px] font-bold text-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -193,7 +193,7 @@ export function NotificationsBell() {
                   )}
                 >
                   {tab}
-                  {count > 0 && <span className="ml-1 text-[9px] opacity-70">{count}</span>}
+                  {count > 0 && <span className="ml-1 text-[10px] opacity-70">{count}</span>}
                 </button>
               )
             })}
@@ -241,7 +241,7 @@ export function NotificationsBell() {
                       <div className="flex items-center gap-2">
                         <span className="truncate text-xs font-medium">{n.title}</span>
                         {n.severity === 'critical' && (
-                          <span className="flex-shrink-0 rounded bg-red-500/15 px-1 py-0.5 text-[9px] font-semibold text-red-700 dark:text-red-300">
+                          <span className="flex-shrink-0 rounded bg-red-500/15 px-1 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-300">
                             URGENT
                           </span>
                         )}

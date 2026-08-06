@@ -289,7 +289,7 @@ function DockLabel({ item, show }: { item: DockItem; show: boolean }) {
             className="pane rounded-lg border border-[var(--pane-divider)] px-2.5 py-1 whitespace-nowrap shadow-lg"
           >
             <div className="text-[11px] font-medium">{item.name}</div>
-            <div className="text-muted-foreground text-[9px]">{item.group}</div>
+            <div className="text-muted-foreground text-[10px]">{item.group}</div>
           </motion.div>
         )}
       </AnimatePresence>

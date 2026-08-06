@@ -100,7 +100,7 @@ const TaskBar = memo(function TaskBar({
       onMouseEnter={() => onHover(task.id)}
       onMouseLeave={() => onHover(null)}
       className={cn(
-        'group absolute top-1.5 flex h-5 items-center overflow-hidden rounded-sm px-1.5 text-[9px] font-medium text-white shadow-sm transition-shadow',
+        'group absolute top-1.5 flex h-5 items-center overflow-hidden rounded-sm px-1.5 text-[10px] font-medium text-white shadow-sm transition-shadow',
         isDragging && 'z-30 scale-y-110 cursor-grabbing shadow-lg ring-2 ring-white/50',
         !isDragging && 'cursor-grab hover:shadow-md',
         task.type === 'Summary' && 'bg-muted-foreground/60 cursor-default',
@@ -144,7 +144,7 @@ const TaskBar = memo(function TaskBar({
       )}
       {/* Hover tooltip */}
       {isHovered && !isDragging && (
-        <div className="pane text-foreground pointer-events-none absolute -top-7 left-1/2 z-40 -translate-x-1/2 rounded border border-[var(--pane-divider)] px-1.5 py-0.5 text-[9px] whitespace-nowrap shadow-md">
+        <div className="pane text-foreground pointer-events-none absolute -top-7 left-1/2 z-40 -translate-x-1/2 rounded border border-[var(--pane-divider)] px-1.5 py-0.5 text-[10px] whitespace-nowrap shadow-md">
           Wk {task.start + 1} → Wk {task.start + task.duration + 1} · drag body or left edge to
           move, right edge to resize
         </div>
@@ -397,7 +397,7 @@ export function GanttCanvas({
                     {r.varianceWeeks !== 0 && t.type === 'Work' && (
                       <span
                         className={cn(
-                          'ml-2 rounded px-1 font-mono text-[9px]',
+                          'ml-2 rounded px-1 font-mono text-[10px]',
                           r.varianceWeeks > 0
                             ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                             : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
@@ -493,7 +493,7 @@ export function GanttCanvas({
               className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-red-500"
               style={{ left: `calc(480px + ${todayWeek * WEEK_WIDTH}px)` }}
             >
-              <div className="absolute -top-0 -translate-x-1/2 rounded-b bg-red-500 px-1 py-0.5 text-[9px] font-semibold text-white">
+              <div className="absolute -top-0 -translate-x-1/2 rounded-b bg-red-500 px-1 py-0.5 text-[10px] font-semibold text-white">
                 TODAY
               </div>
             </div>

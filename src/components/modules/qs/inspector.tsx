@@ -268,7 +268,7 @@ export function QsInspector({
                         </div>
                         <div
                           className={cn(
-                            'text-center text-[9px] leading-tight',
+                            'text-center text-[10px] leading-tight',
                             isCurrent ? 'text-foreground font-semibold' : 'text-muted-foreground'
                           )}
                         >

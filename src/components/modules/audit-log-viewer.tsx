@@ -296,7 +296,7 @@ export function AuditLogViewer({ tableName, recordId, recordLabel, onClose }: Au
                           <div className="flex items-center gap-2">
                             <Badge
                               variant="outline"
-                              className={cn('gap-1 text-[9px]', style.className)}
+                              className={cn('gap-1 text-[10px]', style.className)}
                             >
                               <ActionIcon className="h-3 w-3" />
                               {style.label}

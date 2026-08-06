@@ -128,12 +128,12 @@ export function ReqCenterView({
                       </div>
                       <div className="mt-0.5 font-mono">NPR {v.rate.toLocaleString()}</div>
                       {v.selected && (
-                        <div className="text-primary mt-0.5 text-[9px] font-semibold">
+                        <div className="text-primary mt-0.5 text-[10px] font-semibold">
                           ✓ Selected
                         </div>
                       )}
                       {isLowest && !v.selected && (
-                        <div className="mt-0.5 text-[9px] text-emerald-600">Lowest bid</div>
+                        <div className="mt-0.5 text-[10px] text-emerald-600">Lowest bid</div>
                       )}
                     </button>
                   )
@@ -448,11 +448,11 @@ function SupplierBidRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-xs font-medium">{supplier.name}</span>
-          <Badge variant="outline" className="text-[9px]">
+          <Badge variant="outline" className="text-[10px]">
             {supplier.id}
           </Badge>
           {supplier.tradeName && supplier.tradeName !== '—' && (
-            <Badge variant="secondary" className="text-[9px]">
+            <Badge variant="secondary" className="text-[10px]">
               {supplier.tradeName}
             </Badge>
           )}

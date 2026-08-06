@@ -556,7 +556,7 @@ export function RaInspector({
                     <div className="font-mono text-xs font-semibold">
                       NPR {m.projectRate || m.rate}
                     </div>
-                    <div className="text-muted-foreground text-[9px]">
+                    <div className="text-muted-foreground text-[10px]">
                       {m.org ? 'Org' : 'Project'}
                     </div>
                   </div>

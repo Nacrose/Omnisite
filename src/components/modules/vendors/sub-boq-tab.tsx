@@ -108,7 +108,7 @@ export function SubBoqTab({
                 <div className="p-2.5">
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-muted-foreground font-mono text-[10px]">{it.code}</span>
-                    <Badge variant="outline" className="text-[9px]">
+                    <Badge variant="outline" className="text-[10px]">
                       {it.type}
                     </Badge>
                   </div>
@@ -154,7 +154,7 @@ export function SubBoqTab({
                 {/* Mapping table */}
                 {it.mapping && it.mapping.length > 0 && (
                   <div className="bg-secondary/20 border-t border-[var(--pane-divider)] p-2.5">
-                    <div className="text-muted-foreground mb-1.5 text-[9px] font-semibold tracking-wider uppercase">
+                    <div className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
                       Mapping → Main BOQ (coefficients per {it.uom})
                     </div>
                     <div className="space-y-1">
@@ -170,7 +170,7 @@ export function SubBoqTab({
                         </div>
                       ))}
                     </div>
-                    <div className="text-muted-foreground mt-1.5 border-t border-[var(--pane-divider)] pt-1.5 text-[9px]">
+                    <div className="text-muted-foreground mt-1.5 border-t border-[var(--pane-divider)] pt-1.5 text-[10px]">
                       Derived BOQ quantities shown for {it.actualQty} {it.uom} actual completion
                     </div>
                   </div>
@@ -204,7 +204,7 @@ export function SubBoqTab({
                     <span className="text-muted-foreground font-mono text-[10px]">{it.code}</span>
                     <Badge
                       variant="secondary"
-                      className="bg-violet-500/15 text-[9px] text-violet-700 dark:text-violet-300"
+                      className="bg-violet-500/15 text-[10px] text-violet-700 dark:text-violet-300"
                     >
                       {it.rockClass}
                     </Badge>

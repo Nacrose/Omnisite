@@ -82,7 +82,7 @@ export function MaterialsView({
               {isVisible('material') && (
                 <div className="flex flex-1 items-center gap-1.5 px-2 font-medium">
                   {m.archived && (
-                    <Badge variant="outline" className="text-[9px]">
+                    <Badge variant="outline" className="text-[10px]">
                       Archived
                     </Badge>
                   )}
@@ -103,7 +103,7 @@ export function MaterialsView({
                   <Badge
                     variant="outline"
                     className={cn(
-                      'text-[9px]',
+                      'text-[10px]',
                       m.org && 'border-sky-500/40 text-sky-700 dark:text-sky-300'
                     )}
                   >
@@ -114,7 +114,7 @@ export function MaterialsView({
               {isVisible('altuom') && (
                 <div className="w-16 px-2 text-center">
                   {m.altUoms ? (
-                    <Badge variant="secondary" className="text-[9px]">
+                    <Badge variant="secondary" className="text-[10px]">
                       {m.altUoms.length + 1}
                     </Badge>
                   ) : (

@@ -89,7 +89,7 @@ export function DrawingsRegister({
                   <Badge
                     variant="outline"
                     className={cn(
-                      'text-[9px]',
+                      'text-[10px]',
                       d.status === 'Approved for Construction' &&
                         'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
                       d.status === 'Pending' &&

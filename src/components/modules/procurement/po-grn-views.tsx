@@ -220,7 +220,8 @@ export function GrnCenterView({
                         title={
                           matched
                             ? 'Toggle payment approval'
-                            : matchData?.match.details.join('\n') || 'Locked — variance exceeds tolerance'
+                            : matchData?.match.details.join('\n') ||
+                              'Locked — variance exceeds tolerance'
                         }
                       >
                         {matched ? (g.payStatus === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
@@ -383,7 +384,7 @@ export function MinCenterView({ mins }: { mins: MinNote[] }) {
             <div className="mb-1 flex items-center gap-2">
               <span className="text-muted-foreground font-mono text-xs">{m.id}</span>
               <span className="text-muted-foreground text-xs">{m.date}</span>
-              <Badge variant="secondary" className="text-[9px]">
+              <Badge variant="secondary" className="text-[10px]">
                 {m.status}
               </Badge>
               <span className="ml-auto text-xs">{m.task}</span>

@@ -30,11 +30,16 @@ export function IngestionQueueView() {
         const data = await res.json()
         setDrafts(data)
       }
-    } catch { /* demo mode */ }
-    finally { setLoading(false) }
+    } catch {
+      /* demo mode */
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { fetchDrafts() }, [fetchDrafts])
+  useEffect(() => {
+    fetchDrafts()
+  }, [fetchDrafts])
 
   const approve = async (id: string) => {
     try {
@@ -47,7 +52,9 @@ export function IngestionQueueView() {
         toast.success('Draft approved', { description: 'Official record will be created.' })
         fetchDrafts()
       }
-    } catch { toast.error('Failed to approve') }
+    } catch {
+      toast.error('Failed to approve')
+    }
   }
 
   const reject = async (id: string) => {
@@ -61,7 +68,9 @@ export function IngestionQueueView() {
         toast.info('Draft rejected')
         fetchDrafts()
       }
-    } catch { toast.error('Failed to reject') }
+    } catch {
+      toast.error('Failed to reject')
+    }
   }
 
   const pending = drafts.filter((d) => d.validation_status === 'PENDING_VALIDATION')
@@ -71,7 +80,13 @@ export function IngestionQueueView() {
   return (
     <>
       <PaneHeader title="Ingestion Queue">
-        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={fetchDrafts} disabled={loading}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={fetchDrafts}
+          disabled={loading}
+        >
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Refresh'}
         </Button>
       </PaneHeader>
@@ -81,7 +96,8 @@ export function IngestionQueueView() {
             <Inbox className="h-8 w-8 opacity-30" />
             <div className="text-sm font-medium">No drafts in queue</div>
             <p className="text-muted-foreground max-w-xs text-[11px]">
-              Drafts from field data ingestion (DSR, attendance, material receipts) will appear here for validation.
+              Drafts from field data ingestion (DSR, attendance, material receipts) will appear here
+              for validation.
             </p>
           </div>
         )}
@@ -102,7 +118,9 @@ export function IngestionQueueView() {
             <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
               Validated ({validated.length})
             </div>
-            {validated.map((d) => <DraftRow key={d.id} draft={d} onApprove={() => {}} onReject={() => {}} />)}
+            {validated.map((d) => (
+              <DraftRow key={d.id} draft={d} onApprove={() => {}} onReject={() => {}} />
+            ))}
           </div>
         )}
 
@@ -111,7 +129,9 @@ export function IngestionQueueView() {
             <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
               Rejected ({rejected.length})
             </div>
-            {rejected.map((d) => <DraftRow key={d.id} draft={d} onApprove={() => {}} onReject={() => {}} />)}
+            {rejected.map((d) => (
+              <DraftRow key={d.id} draft={d} onApprove={() => {}} onReject={() => {}} />
+            ))}
           </div>
         )}
       </PaneBody>
@@ -119,7 +139,11 @@ export function IngestionQueueView() {
   )
 }
 
-function DraftRow({ draft, onApprove, onReject }: {
+function DraftRow({
+  draft,
+  onApprove,
+  onReject,
+}: {
   draft: Draft
   onApprove: (id: string) => void
   onReject: (id: string) => void
@@ -136,25 +160,41 @@ function DraftRow({ draft, onApprove, onReject }: {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium">{draft.draft_type}</span>
-          <Badge variant="outline" className={cn('text-[9px]', STATUS_COLORS[draft.validation_status])}>
+          <Badge
+            variant="outline"
+            className={cn('text-[10px]', STATUS_COLORS[draft.validation_status])}
+          >
             {draft.validation_status}
           </Badge>
           {draft.confidence_score !== null && (
-            <span className="text-muted-foreground text-[9px]">
+            <span className="text-muted-foreground text-[10px]">
               {Math.round(draft.confidence_score * 100)}% confidence
             </span>
           )}
         </div>
-        <div className="text-muted-foreground text-[10px] truncate">
-          {Object.entries(draft.extracted_data).slice(0, 3).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}
+        <div className="text-muted-foreground truncate text-[10px]">
+          {Object.entries(draft.extracted_data)
+            .slice(0, 3)
+            .map(([k, v]) => `${k}: ${String(v)}`)
+            .join(' · ')}
         </div>
       </div>
       {draft.validation_status === 'PENDING_VALIDATION' && (
         <div className="flex gap-1">
-          <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-[10px] text-emerald-600" onClick={() => onApprove(draft.id)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 px-2 text-[10px] text-emerald-600"
+            onClick={() => onApprove(draft.id)}
+          >
             <CheckCircle2 className="h-3 w-3" /> Approve
           </Button>
-          <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-[10px] text-red-600" onClick={() => onReject(draft.id)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 px-2 text-[10px] text-red-600"
+            onClick={() => onReject(draft.id)}
+          >
             <X className="h-3 w-3" /> Reject
           </Button>
         </div>

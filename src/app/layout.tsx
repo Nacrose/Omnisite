@@ -92,6 +92,17 @@ const POLYFILL_SCRIPT = `
 // the browser blocks the script and the page never hydrates.
 export const dynamic = 'force-dynamic'
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  // interactive-widget=resizes-content: when the soft keyboard opens,
+  // the browser resizes the visual viewport (not the layout viewport).
+  // This keeps the chat input bar visible above the keyboard on mobile.
+  interactiveWidget: 'resizes-content',
+  viewportFit: 'cover',
+}
+
 export default async function RootLayout({
   children,
 }: Readonly<{

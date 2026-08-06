@@ -136,7 +136,7 @@ export function LocationsView({
                   <div className="w-24 px-2">
                     <Badge
                       variant="outline"
-                      className={cn('text-[9px]', statusBadgeClass(l.status))}
+                      className={cn('text-[10px]', statusBadgeClass(l.status))}
                     >
                       {l.status === 'active' ? 'Active' : 'Closed'}
                     </Badge>

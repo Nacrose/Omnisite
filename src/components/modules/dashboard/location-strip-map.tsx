@@ -312,7 +312,7 @@ export function LocationStripMap() {
                     </div>
                     {/* Group label */}
                     <div
-                      className={cn('mt-0.5 truncate text-[9px] tracking-wider uppercase', c.text)}
+                      className={cn('mt-0.5 truncate text-[10px] tracking-wider uppercase', c.text)}
                       title={loc.group}
                     >
                       {loc.group}
@@ -320,13 +320,15 @@ export function LocationStripMap() {
                     {/* Assigned SC badge */}
                     {loc.assignedScId && (
                       <div className="mt-1.5">
-                        <span className="inline-block rounded bg-slate-500/10 px-1 py-px text-[9px] font-medium text-slate-600 dark:text-slate-300">
+                        <span className="inline-block rounded bg-slate-500/10 px-1 py-px text-[10px] font-medium text-slate-600 dark:text-slate-300">
                           {loc.assignedScId}
                         </span>
                       </div>
                     )}
                     {!loc.assignedScId && (
-                      <div className="text-muted-foreground/60 mt-1.5 text-[9px] italic">no SC</div>
+                      <div className="text-muted-foreground/60 mt-1.5 text-[10px] italic">
+                        no SC
+                      </div>
                     )}
                     {/* Activity rows */}
                     <div className="mt-1.5 space-y-0.5">

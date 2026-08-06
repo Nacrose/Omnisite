@@ -69,7 +69,7 @@ export function WorkerList({
               <Fingerprint className="text-muted-foreground h-3 w-3" />
               {t}
             </span>
-            <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
               {count}
             </Badge>
           </button>

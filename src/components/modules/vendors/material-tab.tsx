@@ -210,7 +210,7 @@ export function MaterialTab({
                   {isVisible('material') && (
                     <div className="w-44 min-w-0 px-2">
                       <div className="truncate font-medium">{m.name}</div>
-                      <div className="text-muted-foreground font-mono text-[9px]">{m.code}</div>
+                      <div className="text-muted-foreground font-mono text-[10px]">{m.code}</div>
                     </div>
                   )}
                   {isVisible('theoretical') && (
@@ -218,7 +218,7 @@ export function MaterialTab({
                       {hasTheoretical ? (
                         `${m.theoretical.toFixed(1)} ${m.uom}`
                       ) : (
-                        <span className="text-[9px] opacity-60">N/A</span>
+                        <span className="text-[10px] opacity-60">N/A</span>
                       )}
                     </div>
                   )}
@@ -311,7 +311,7 @@ export function MaterialTab({
                     <span className="text-[10px]">{mr.materialName}</span>
                   </div>
                   {mr.notes && (
-                    <div className="text-muted-foreground truncate text-[9px]">{mr.notes}</div>
+                    <div className="text-muted-foreground truncate text-[10px]">{mr.notes}</div>
                   )}
                 </div>
                 <span className="font-mono text-[10px]">

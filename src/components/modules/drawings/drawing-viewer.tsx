@@ -364,7 +364,7 @@ export function DrawingViewer({ dwg }: DrawingViewerProps) {
             <div className="text-muted-foreground mb-1 flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase">
               <MessageSquare className="h-3 w-3" />
               Annotations on this page
-              {annotationsLoading && <span className="text-[9px] opacity-60">(loading…)</span>}
+              {annotationsLoading && <span className="text-[10px] opacity-60">(loading…)</span>}
             </div>
             <div className="max-h-20 overflow-y-auto text-[10px] md:max-h-24">
               {pageAnnotations.length === 0 ? (
@@ -381,13 +381,13 @@ export function DrawingViewer({ dwg }: DrawingViewerProps) {
                       className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
                       style={{ backgroundColor: a.color }}
                     />
-                    <Badge variant="outline" className="text-[9px]">
+                    <Badge variant="outline" className="text-[10px]">
                       {a.type}
                     </Badge>
                     {a.textContent && (
                       <span className="truncate text-[10px] font-medium">{a.textContent}</span>
                     )}
-                    <span className="text-muted-foreground ml-auto truncate text-[9px]">
+                    <span className="text-muted-foreground ml-auto truncate text-[10px]">
                       {a.authorName} · {new Date(a.createdAt).toLocaleString()}
                     </span>
                   </div>

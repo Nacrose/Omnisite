@@ -487,3 +487,20 @@
     height: 100dvh;
   }
 }
+
+/* ─── Mobile filter chips scrollbar fix ───────────────────────────────────── */
+/* Hide scrollbar on horizontal filter chip rows while keeping scroll */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Pane collapse transition ────────────────────────────────────────────── */
+.pane-transition {
+  transition:
+    width 200ms ease-in-out,
+    opacity 150ms ease-in-out;
+}

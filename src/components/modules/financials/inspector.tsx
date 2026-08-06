@@ -48,7 +48,7 @@ export function FinancialsInspector({ node }: { node: CbsNode }) {
             {isLeaf ? (
               <Badge
                 variant="secondary"
-                className="bg-emerald-500/10 text-[9px] text-emerald-700 dark:text-emerald-300"
+                className="bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300"
               >
                 <Leaf className="mr-0.5 h-2.5 w-2.5" />
                 Leaf (editable)
@@ -56,7 +56,7 @@ export function FinancialsInspector({ node }: { node: CbsNode }) {
             ) : (
               <Badge
                 variant="secondary"
-                className="bg-sky-500/10 text-[9px] text-sky-700 dark:text-sky-300"
+                className="bg-sky-500/10 text-[10px] text-sky-700 dark:text-sky-300"
               >
                 <Layers className="mr-0.5 h-2.5 w-2.5" />
                 Parent (aggregated)

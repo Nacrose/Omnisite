@@ -46,7 +46,7 @@ export function MaterialRow({
         {over ? (
           <AlertTriangle className="h-3 w-3 text-red-500" />
         ) : issued === null ? (
-          <span className="text-muted-foreground text-[9px]">no MIN data</span>
+          <span className="text-muted-foreground text-[10px]">no MIN data</span>
         ) : (
           <CheckCircle2 className="h-3 w-3 text-emerald-500" />
         )}

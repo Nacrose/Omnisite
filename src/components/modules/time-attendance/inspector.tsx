@@ -302,7 +302,7 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
             <div className="space-y-2 rounded-md border border-[var(--pane-divider)] p-2.5">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-muted-foreground text-[9px] tracking-wider uppercase">
+                  <label className="text-muted-foreground text-[10px] tracking-wider uppercase">
                     Date
                   </label>
                   <Input
@@ -314,7 +314,7 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
                   />
                 </div>
                 <div>
-                  <label className="text-muted-foreground text-[9px] tracking-wider uppercase">
+                  <label className="text-muted-foreground text-[10px] tracking-wider uppercase">
                     Hours
                   </label>
                   <Input
@@ -343,7 +343,7 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
                 <Plus className="h-3 w-3" />
                 Log / Update
               </Button>
-              <div className="text-muted-foreground text-[9px]">
+              <div className="text-muted-foreground text-[10px]">
                 OT hours auto-computed from the worker&apos;s standard-hours threshold. Re-logging
                 the same date updates the existing entry.
               </div>

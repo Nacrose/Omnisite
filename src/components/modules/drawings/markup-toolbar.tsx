@@ -82,7 +82,7 @@ export function MarkupToolbar({
 
       {/* Color picker */}
       <div>
-        <div className="text-muted-foreground mb-1 text-[9px] tracking-wider uppercase">Color</div>
+        <div className="text-muted-foreground mb-1 text-[10px] tracking-wider uppercase">Color</div>
         <div className="flex gap-1.5">
           {COLORS.map((c) => (
             <button
@@ -104,7 +104,7 @@ export function MarkupToolbar({
 
       {/* Stroke width */}
       <div>
-        <div className="text-muted-foreground mb-1 text-[9px] tracking-wider uppercase">
+        <div className="text-muted-foreground mb-1 text-[10px] tracking-wider uppercase">
           Stroke Width
         </div>
         <div className="flex gap-1">
@@ -128,7 +128,7 @@ export function MarkupToolbar({
       {/* Stamp selector (only visible when stamp tool is active) */}
       {activeTool === 'stamp' && (
         <div>
-          <div className="text-muted-foreground mb-1 text-[9px] tracking-wider uppercase">
+          <div className="text-muted-foreground mb-1 text-[10px] tracking-wider uppercase">
             Stamp Type
           </div>
           <div className="grid grid-cols-2 gap-1">
@@ -137,7 +137,7 @@ export function MarkupToolbar({
                 key={s.type}
                 onClick={() => onActiveStampChange(s.type)}
                 className={cn(
-                  'rounded border px-2 py-1 text-[9px] font-bold transition-colors',
+                  'rounded border px-2 py-1 text-[10px] font-bold transition-colors',
                   activeStamp === s.type
                     ? 'border-primary'
                     : 'hover:bg-accent border-[var(--pane-divider)]'

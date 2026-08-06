@@ -333,7 +333,7 @@ export function ComplianceDashboard({ vendors }: ComplianceDashboardProps) {
                       <td className="px-3 py-2">
                         <Badge
                           variant="secondary"
-                          className={cn('text-[9px]', CATEGORY_BADGE_CLASS[vendor.category])}
+                          className={cn('text-[10px]', CATEGORY_BADGE_CLASS[vendor.category])}
                         >
                           {vendor.category === 'supplier' ? (
                             <Package className="mr-0.5 h-2 w-2" />

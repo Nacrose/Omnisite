@@ -104,7 +104,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-lg">
             {forgotMode ? (resetSent ? 'Check your email' : 'Reset password') : 'Sign in'}
@@ -296,7 +296,7 @@ export default function LoginPage() {
         </CardContent>
       </Card>
 
-      <p className="text-muted-foreground mt-6 max-w-sm text-center text-[10px]">
+      <p className="text-muted-foreground mt-6 max-w-md text-center text-[10px]">
         OmniSite · Enterprise Construction Management · FIDIC-compliant audit trail
       </p>
     </div>

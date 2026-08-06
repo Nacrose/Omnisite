@@ -176,7 +176,7 @@ export function BoqModule() {
                           {dnd.draggedItem.code}
                         </span>
                         <span className="truncate font-medium">{dnd.draggedItem.desc}</span>
-                        <Badge variant="secondary" className="ml-2 text-[9px]">
+                        <Badge variant="secondary" className="ml-2 text-[10px]">
                           {dnd.draggedItem.type}
                         </Badge>
                       </div>

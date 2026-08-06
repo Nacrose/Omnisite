@@ -117,7 +117,7 @@ export function BoqToolbar({
           <Redo2 className="h-3.5 w-3.5" />
         </Button>
         {(canUndo || canRedo) && (
-          <span className="text-muted-foreground px-1 font-mono text-[9px]">
+          <span className="text-muted-foreground px-1 font-mono text-[10px]">
             {undoCount}/{undoCount + redoCount}
           </span>
         )}

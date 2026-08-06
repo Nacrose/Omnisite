@@ -91,7 +91,7 @@ export function DailyOpsModule() {
       >
         <ClipboardList className="h-3.5 w-3.5" />
         Daily Site Reports
-        <span className="bg-secondary text-muted-foreground ml-1 rounded-full px-1 py-0.5 text-[9px] font-semibold">
+        <span className="bg-secondary text-muted-foreground ml-1 rounded-full px-1 py-0.5 text-[10px] font-semibold">
           {dsrEntries.length}
         </span>
       </Button>
@@ -104,7 +104,7 @@ export function DailyOpsModule() {
         <HelpCircle className="h-3.5 w-3.5" />
         RFI Register
         {openRfis > 0 && (
-          <span className="ml-1 rounded-full bg-amber-500/20 px-1 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-300">
+          <span className="ml-1 rounded-full bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
             {openRfis} open
           </span>
         )}
@@ -259,7 +259,7 @@ export function DailyOpsModule() {
                     }}
                     className="bg-transparent text-[10px] font-semibold tracking-wider uppercase outline-none"
                   />
-                  <span className="ml-auto text-[9px] font-normal normal-case">
+                  <span className="ml-auto text-[10px] font-normal normal-case">
                     {filteredDayEntries.length}{' '}
                     {filteredDayEntries.length === 1 ? 'entry' : 'entries'}
                   </span>
@@ -282,7 +282,7 @@ export function DailyOpsModule() {
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground font-mono text-[10px]">{d.id}</span>
-                        <Badge variant="outline" className="h-4 px-1 text-[9px]">
+                        <Badge variant="outline" className="h-4 px-1 text-[10px]">
                           {d.source}
                         </Badge>
                         {d.hasRfi && <Mail className="h-3 w-3 text-sky-500" />}

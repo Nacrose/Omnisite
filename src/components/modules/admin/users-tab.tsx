@@ -141,7 +141,7 @@ export function UsersView({
                   <Badge
                     variant="outline"
                     className={cn(
-                      'h-4 px-1 text-[9px]',
+                      'h-4 px-1 text-[10px]',
                       v === 'Edit' &&
                         'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
                       v === 'None' && 'text-muted-foreground border-slate-400/40'
@@ -221,7 +221,7 @@ export function UsersView({
                 </div>
                 <Badge
                   variant="outline"
-                  className={cn('text-[9px]', ROLE_COLORS[u.role] || ROLE_COLORS.FOREMAN)}
+                  className={cn('text-[10px]', ROLE_COLORS[u.role] || ROLE_COLORS.FOREMAN)}
                 >
                   {ROLE_LABELS[u.role] || u.role}
                 </Badge>
@@ -348,7 +348,7 @@ export function UsersInspector({ role }: { role: Role }) {
                 <Badge
                   variant="outline"
                   className={cn(
-                    'text-[9px]',
+                    'text-[10px]',
                     v === 'Edit' && 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
                     v === 'None' && 'text-muted-foreground border-slate-400/40',
                     v === 'Read' && 'border-sky-500/40 text-sky-700 dark:text-sky-300'

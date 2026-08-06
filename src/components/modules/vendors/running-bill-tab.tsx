@@ -518,7 +518,7 @@ function BillRow({
       <Icon className={cn('h-3.5 w-3.5 flex-shrink-0', color)} />
       <div className="min-w-0 flex-1">
         <div className="text-xs">{label}</div>
-        {notes && <div className="text-muted-foreground truncate text-[9px]">{notes}</div>}
+        {notes && <div className="text-muted-foreground truncate text-[10px]">{notes}</div>}
       </div>
       <span className={cn('font-mono font-medium tabular-nums', color)}>
         {amount >= 0 ? '+' : ''}

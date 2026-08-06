@@ -328,7 +328,7 @@ export function TaskInspector({
                 <span className="text-muted-foreground">Suggested SC from location:</span>
                 <Badge
                   variant="secondary"
-                  className="bg-sky-500/15 text-[9px] text-sky-700 dark:text-sky-300"
+                  className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300"
                 >
                   {suggestedSc.id}
                 </Badge>
@@ -509,7 +509,7 @@ export function TaskInspector({
                   >
                     <Link2 className="text-muted-foreground h-3 w-3" />
                     <span className="font-mono text-[10px]">{dep.predecessorId}</span>
-                    <Badge variant="secondary" className="text-[9px]">
+                    <Badge variant="secondary" className="text-[10px]">
                       {dep.linkType}
                       {dep.lagWeeks !== 0 && (dep.lagWeeks > 0 ? `+${dep.lagWeeks}` : dep.lagWeeks)}
                     </Badge>
@@ -799,7 +799,7 @@ export function TaskInspector({
                         <span className="text-xs font-medium">
                           {String(req.item || req.id || '—')}
                         </span>
-                        <Badge variant="outline" className="text-[9px]">
+                        <Badge variant="outline" className="text-[10px]">
                           {String(req.status || 'Draft')}
                         </Badge>
                       </div>
@@ -853,7 +853,7 @@ export function TaskInspector({
                     <div className="grid grid-cols-2 gap-2">
                       {metrics.map((m) => (
                         <div key={m.label} className="bg-secondary/30 rounded p-2">
-                          <div className="text-muted-foreground text-[9px]">{m.label}</div>
+                          <div className="text-muted-foreground text-[10px]">{m.label}</div>
                           <div
                             className={cn('font-mono text-xs font-semibold', statusColor(m.status))}
                           >
@@ -961,7 +961,7 @@ function ProductivityTab({
         <div className="rounded-md border border-[var(--pane-divider)] p-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-secondary/30 rounded p-2">
-              <div className="text-muted-foreground text-[9px]">Variance (hrs)</div>
+              <div className="text-muted-foreground text-[10px]">Variance (hrs)</div>
               <div
                 className={cn(
                   'font-mono text-xs font-semibold',
@@ -973,7 +973,7 @@ function ProductivityTab({
               </div>
             </div>
             <div className="bg-secondary/30 rounded p-2">
-              <div className="text-muted-foreground text-[9px]">Variance %</div>
+              <div className="text-muted-foreground text-[10px]">Variance %</div>
               <div
                 className={cn(
                   'font-mono text-xs font-semibold',
@@ -985,13 +985,13 @@ function ProductivityTab({
               </div>
             </div>
             <div className="bg-secondary/30 rounded p-2">
-              <div className="text-muted-foreground text-[9px]">Productivity ratio</div>
+              <div className="text-muted-foreground text-[10px]">Productivity ratio</div>
               <div className="font-mono text-xs font-semibold">
                 {result.productivityRatio.toFixed(2)}
               </div>
             </div>
             <div className="bg-secondary/30 rounded p-2">
-              <div className="text-muted-foreground text-[9px]">Status</div>
+              <div className="text-muted-foreground text-[10px]">Status</div>
               <div
                 className={cn(
                   'text-xs font-semibold',

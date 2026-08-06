@@ -308,7 +308,7 @@ function ComplianceRow({
       {status === 'warn' && (
         <Badge
           variant="secondary"
-          className="bg-amber-500/15 text-[9px] text-amber-700 dark:text-amber-300"
+          className="bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-300"
         >
           Expiring
         </Badge>

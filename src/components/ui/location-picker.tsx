@@ -210,7 +210,7 @@ export function LocationPicker({
                       <div className="flex items-center gap-1.5">
                         <span className="truncate font-medium">{loc.name}</span>
                         {loc.status === 'closed' && (
-                          <span className="rounded bg-slate-400/15 px-1 py-px text-[9px] text-slate-600 dark:text-slate-300">
+                          <span className="rounded bg-slate-400/15 px-1 py-px text-[10px] text-slate-600 dark:text-slate-300">
                             closed
                           </span>
                         )}

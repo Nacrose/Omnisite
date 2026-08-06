@@ -17,7 +17,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 export function LaborView() {
-  const [rates, setRates] = usePersistentState<LaborRate[]>('omnisite-admin-labor', () => LABOR_RATES)
+  const [rates, setRates] = usePersistentState<LaborRate[]>(
+    'omnisite-admin-labor',
+    () => LABOR_RATES
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -80,15 +83,22 @@ export function LaborView() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium">{r.name || '—'}</span>
-                  <Badge variant="outline" className={cn('h-4 px-1 text-[9px]', CATEGORY_COLORS[r.category])}>
+                  <Badge
+                    variant="outline"
+                    className={cn('h-4 px-1 text-[10px]', CATEGORY_COLORS[r.category])}
+                  >
                     {r.category}
                   </Badge>
                 </div>
-                <div className="text-muted-foreground text-[10px]">{r.code} · {r.uom}</div>
+                <div className="text-muted-foreground text-[10px]">
+                  {r.code} · {r.uom}
+                </div>
               </div>
               <div className="text-right">
                 <div className="font-mono text-xs font-semibold">NPR {r.rate.toLocaleString()}</div>
-                <div className="text-muted-foreground text-[9px]">OT: {r.otRate.toLocaleString()}</div>
+                <div className="text-muted-foreground text-[10px]">
+                  OT: {r.otRate.toLocaleString()}
+                </div>
               </div>
             </div>
           ))}
@@ -99,7 +109,12 @@ export function LaborView() {
           )}
         </div>
         <div className="border-t border-[var(--pane-divider)] p-2">
-          <Button variant="outline" size="sm" className="h-7 w-full gap-1.5 text-xs" onClick={addNew}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 w-full gap-1.5 text-xs"
+            onClick={addNew}
+          >
             <Plus className="h-3 w-3" /> Add Labor Rate
           </Button>
         </div>
@@ -112,11 +127,19 @@ export function LaborView() {
           </div>
           <div>
             <label className="text-[10px] font-medium">Code</label>
-            <Input className="mt-0.5 h-7 font-mono text-xs" value={selected.code} onChange={(e) => updateRate(selected.id, 'code', e.target.value)} />
+            <Input
+              className="mt-0.5 h-7 font-mono text-xs"
+              value={selected.code}
+              onChange={(e) => updateRate(selected.id, 'code', e.target.value)}
+            />
           </div>
           <div>
             <label className="text-[10px] font-medium">Name</label>
-            <Input className="mt-0.5 h-7 text-xs" value={selected.name} onChange={(e) => updateRate(selected.id, 'name', e.target.value)} />
+            <Input
+              className="mt-0.5 h-7 text-xs"
+              value={selected.name}
+              onChange={(e) => updateRate(selected.id, 'name', e.target.value)}
+            />
           </div>
           <div>
             <label className="text-[10px] font-medium">Category</label>
@@ -133,22 +156,45 @@ export function LaborView() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] font-medium">Rate (NPR)</label>
-              <Input className="mt-0.5 h-7 text-xs" type="number" value={selected.rate} onChange={(e) => updateRate(selected.id, 'rate', parseFloat(e.target.value) || 0)} />
+              <Input
+                className="mt-0.5 h-7 text-xs"
+                type="number"
+                value={selected.rate}
+                onChange={(e) => updateRate(selected.id, 'rate', parseFloat(e.target.value) || 0)}
+              />
             </div>
             <div>
               <label className="text-[10px] font-medium">OT Rate</label>
-              <Input className="mt-0.5 h-7 text-xs" type="number" value={selected.otRate} onChange={(e) => updateRate(selected.id, 'otRate', parseFloat(e.target.value) || 0)} />
+              <Input
+                className="mt-0.5 h-7 text-xs"
+                type="number"
+                value={selected.otRate}
+                onChange={(e) => updateRate(selected.id, 'otRate', parseFloat(e.target.value) || 0)}
+              />
             </div>
           </div>
           <div>
             <label className="text-[10px] font-medium">UOM</label>
-            <Input className="mt-0.5 h-7 text-xs" value={selected.uom} onChange={(e) => updateRate(selected.id, 'uom', e.target.value)} />
+            <Input
+              className="mt-0.5 h-7 text-xs"
+              value={selected.uom}
+              onChange={(e) => updateRate(selected.id, 'uom', e.target.value)}
+            />
           </div>
           <div>
             <label className="text-[10px] font-medium">Source</label>
-            <Input className="mt-0.5 h-7 text-xs" value={selected.source} onChange={(e) => updateRate(selected.id, 'source', e.target.value)} />
+            <Input
+              className="mt-0.5 h-7 text-xs"
+              value={selected.source}
+              onChange={(e) => updateRate(selected.id, 'source', e.target.value)}
+            />
           </div>
-          <Button variant="outline" size="sm" className="h-7 w-full gap-1.5 text-xs text-red-600" onClick={() => deleteRate(selected.id)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 w-full gap-1.5 text-xs text-red-600"
+            onClick={() => deleteRate(selected.id)}
+          >
             <Trash2 className="h-3 w-3" /> Delete
           </Button>
         </div>

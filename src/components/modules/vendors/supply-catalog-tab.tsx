@@ -412,7 +412,7 @@ export function SupplyCatalogTab({ vendor, onChange }: SupplyCatalogTabProps) {
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-secondary/40 rounded-md p-2">
-      <div className="text-muted-foreground text-[9px] font-semibold tracking-wider uppercase">
+      <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
         {label}
       </div>
       <div className="mt-0.5 font-mono text-[12px] font-semibold">{value}</div>

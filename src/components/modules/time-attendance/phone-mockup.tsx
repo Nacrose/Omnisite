@@ -49,7 +49,7 @@ export function PhoneMockup() {
 
           {/* App header */}
           <div className="mb-3 text-center">
-            <div className="text-[9px] font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+            <div className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
               OmniSite Mobile
             </div>
             <div className="mt-0.5 text-xs font-bold text-slate-900 dark:text-slate-100">
@@ -72,7 +72,7 @@ export function PhoneMockup() {
                 clockedIn ? 'text-emerald-600' : 'text-amber-600'
               )}
             />
-            <div className="text-[9px] font-medium text-slate-700 dark:text-slate-200">
+            <div className="text-[10px] font-medium text-slate-700 dark:text-slate-200">
               {clockedIn ? 'Within site perimeter' : 'GPS ready · 27.7°N 85.3°E'}
             </div>
             <div className="mt-0.5 text-[8px] text-slate-500">
@@ -90,7 +90,7 @@ export function PhoneMockup() {
                 : 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/30'
             )}
           >
-            <div className="text-[9px] tracking-wider uppercase opacity-80">
+            <div className="text-[10px] tracking-wider uppercase opacity-80">
               {clockedIn ? 'Tap to Clock Out' : 'Tap to Clock In'}
             </div>
             <div className="mt-0.5 font-mono text-lg tabular-nums">

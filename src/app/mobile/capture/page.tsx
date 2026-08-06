@@ -207,6 +207,7 @@ export default function MobileCapturePage() {
       {!photo ? (
         <button
           onClick={() => fileInputRef.current?.click()}
+          aria-label="Take photo"
           disabled={gettingLocation}
           className="border-border active:bg-accent flex min-h-[300px] flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-colors"
         >
@@ -238,6 +239,7 @@ export default function MobileCapturePage() {
             <img src={photo.url} alt="Site photo" className="w-full" />
             <button
               onClick={retake}
+              aria-label="Retake photo"
               className="absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white"
             >
               <X className="h-4 w-4" />
@@ -296,6 +298,7 @@ export default function MobileCapturePage() {
           <button
             onClick={handleSubmit}
             disabled={submitting}
+            aria-label="Send photo report"
             className="bg-primary text-primary-foreground flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium active:opacity-80 disabled:opacity-50"
           >
             {submitting ? (

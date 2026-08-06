@@ -71,7 +71,7 @@ export function DrawingInspector({ dwg }: { dwg: Dwg }) {
                   className="hover:bg-accent/30 flex w-full cursor-pointer items-center gap-2 rounded border border-[var(--pane-divider)] p-1.5 text-left text-xs"
                   title="Open link (coming soon)"
                 >
-                  <Badge variant="outline" className="text-[9px]">
+                  <Badge variant="outline" className="text-[10px]">
                     {l.type}
                   </Badge>
                   <span className="flex-1 truncate">{l.ref}</span>

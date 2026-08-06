@@ -206,7 +206,10 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                   ))}
                 </select>
                 {vendor.rating && vendor.rating !== '—' && (
-                  <Badge variant="outline" className={cn('text-[9px]', ratingClass(vendor.rating))}>
+                  <Badge
+                    variant="outline"
+                    className={cn('text-[10px]', ratingClass(vendor.rating))}
+                  >
                     {vendor.rating}
                   </Badge>
                 )}
@@ -425,13 +428,13 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                     title={STATUS_LABEL_SHORT[status]}
                   />
                   <span className="text-[10px] font-medium">{doc.label || doc.type}</span>
-                  <span className="text-muted-foreground ml-auto text-[9px] uppercase">
+                  <span className="text-muted-foreground ml-auto text-[10px] uppercase">
                     {doc.type.replace(/_/g, ' ')}
                   </span>
                   {status === 'warn' && (
                     <Badge
                       variant="secondary"
-                      className="bg-amber-500/15 text-[9px] text-amber-700 dark:text-amber-300"
+                      className="bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-300"
                     >
                       <AlertTriangle className="mr-0.5 h-2.5 w-2.5" />
                       Expiring
@@ -440,7 +443,7 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                   {status === 'exp' && (
                     <Badge
                       variant="secondary"
-                      className="bg-red-500/15 text-[9px] text-red-700 dark:text-red-300"
+                      className="bg-red-500/15 text-[10px] text-red-700 dark:text-red-300"
                     >
                       <CircleAlert className="mr-0.5 h-2.5 w-2.5" />
                       {doc.expiryDate && Date.parse(doc.expiryDate) < Date.now()
@@ -451,7 +454,7 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                   {status === 'ok' && (
                     <Badge
                       variant="secondary"
-                      className="bg-emerald-500/15 text-[9px] text-emerald-700 dark:text-emerald-300"
+                      className="bg-emerald-500/15 text-[10px] text-emerald-700 dark:text-emerald-300"
                     >
                       <ShieldCheck className="mr-0.5 h-2.5 w-2.5" />
                       Valid
@@ -476,7 +479,7 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
                   </FieldRow>
                 </div>
                 {doc.fileUrl && (
-                  <div className="text-muted-foreground mt-1 flex items-center gap-1 text-[9px]">
+                  <div className="text-muted-foreground mt-1 flex items-center gap-1 text-[10px]">
                     <FileCheck2 className="h-2.5 w-2.5" />
                     <a
                       href={doc.fileUrl}
@@ -537,11 +540,11 @@ export function ProfileTab({ vendor, onChange }: ProfileTabProps) {
               >
                 <div className="min-w-0">
                   <div className="truncate text-[11px] font-medium">{m.name}</div>
-                  <div className="text-muted-foreground font-mono text-[9px]">{m.code}</div>
+                  <div className="text-muted-foreground font-mono text-[10px]">{m.code}</div>
                 </div>
                 <div className="text-right">
                   <div className="font-mono text-[11px]">{m.rate.toLocaleString()}</div>
-                  <div className="text-muted-foreground text-[9px]">
+                  <div className="text-muted-foreground text-[10px]">
                     {m.uom}
                     {m.brand ? ` · ${m.brand}` : ''}
                   </div>
