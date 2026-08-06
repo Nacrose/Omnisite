@@ -100,9 +100,20 @@ export function NotificationsBell() {
   // read_at set, which the createCrudHandler POST path treats as an UPDATE
   // (RLS gates to user_id = auth.uid()). Fire-and-forget — the global
   // error toast (P2-7) handles failures.
+  //
+  // ─── Broadcast guard (pass-2 audit P1-1) ────────────────────────────────
+  // Notifications with user_id = null are broadcasts (visible to all
+  // project members via migration 30 RLS). Upserting the whole row would
+  // set read_at on the single shared row, marking it read for EVERY user.
+  // Skip broadcast notifications — they can't be marked read per-user
+  // without a separate notification_reads table (schema change for a
+  // future iteration). For now, broadcasts stay unread in the DB but are
+  // visually dismissed via local state (the bell's `items` array filters
+  // on read_at, so we'd need a client-side read set to hide them —
+  // deferred until the broadcast feature actually ships).
   const markAllRead = () => {
     const now = new Date().toISOString()
-    for (const n of items.filter((n) => !n.read_at)) {
+    for (const n of items.filter((n) => !n.read_at && n.user_id !== null)) {
       void upsertOne('notifications', { ...n, read_at: now, context: n.context ?? null }).catch(
         () => {
           // Global error toast already fired by api-client.
@@ -115,6 +126,8 @@ export function NotificationsBell() {
   const markRead = (id: string) => {
     const n = items.find((x) => x.id === id)
     if (!n || n.read_at) return
+    // Skip broadcast notifications (user_id = null) — see markAllRead comment.
+    if (n.user_id === null) return
     const now = new Date().toISOString()
     void upsertOne('notifications', { ...n, read_at: now, context: n.context ?? null }).catch(
       () => {}

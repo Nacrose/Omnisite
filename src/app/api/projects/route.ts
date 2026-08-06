@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole } from '@/lib/api-auth'
+import { createUserClient, isServerSupabaseConfigured } from '@/lib/supabase-server'
+import { requireAuth, requireRole, type AuthenticatedUser } from '@/lib/api-auth'
 import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { logDbError } from '@/lib/safe-log'
 import { validateBody } from '@/lib/validation'
+
+// Demo-mode guard — same pattern as crud-handler.ts isDemoUser().
+// In demo mode (no Supabase), requireAuth returns accessToken:'' and
+// createUserClient('') throws 'Supabase not configured' (500). Short-circuit
+// before that happens.
+function isDemoUser(user: AuthenticatedUser | null): boolean {
+  return !isServerSupabaseConfigured() || (user != null && !user.accessToken)
+}
 
 // Projects — this IS the projects table, so no project_id filter is applied.
 // RLS policies on `user_projects` (joined via the projects table policy) ensure
@@ -29,6 +37,12 @@ export async function GET(req: NextRequest) {
 
   const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
+
+  // Demo mode — return [] so the client-side useSyncedState falls back
+  // to localStorage seed data without seeing a 500.
+  if (isDemoUser(user)) {
+    return NextResponse.json([])
+  }
 
   // Use a user-scoped client so RLS policies are enforced.
   // No project_id filter — this route returns all projects the user can see.
@@ -55,6 +69,14 @@ export async function POST(req: NextRequest) {
 
   const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
+
+  // Demo mode — writes are local-only.
+  if (isDemoUser(user)) {
+    return NextResponse.json(
+      { error: 'Demo mode — writes are stored in the browser only.' },
+      { status: 503 }
+    )
+  }
 
   const rawBody = await req.json()
   const { data: body, error: validationError } = validateBody(projectSchema, rawBody)
@@ -126,6 +148,11 @@ export async function DELETE(req: NextRequest) {
 
   const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
+
+  // Demo mode — deletes are local-only.
+  if (isDemoUser(user)) {
+    return NextResponse.json({ error: 'Demo mode — deletes are local-only.' }, { status: 503 })
+  }
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')

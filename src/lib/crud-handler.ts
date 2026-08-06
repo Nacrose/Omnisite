@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { z } from 'zod'
-import { createUserClient, isServerSupabaseConfigured } from '@/lib/supabase-server'
+import {
+  createUserClient,
+  getServiceClient,
+  isServerSupabaseConfigured,
+} from '@/lib/supabase-server'
 import {
   requireAuth,
   requireRole,
@@ -207,6 +211,26 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
     const rateLimitError = await checkRateLimit(req, user.id)
     if (rateLimitError) return rateLimitError
 
+    // ─── Demo mode short-circuit (before validateBody) ────────────────────
+    // Demo writes go through usePersistentState (localStorage), not the API.
+    // Return 503 with a clear message instead of letting createUserClient
+    // throw "Supabase not configured" (which becomes a generic 500 + the
+    // global error toast fires on every keystroke).
+    //
+    // Placed BEFORE validateBody so demo POSTs always get the 503 message
+    // regardless of body shape. Previously a demo POST with a malformed
+    // body would get a 400 Zod error before the 503 fired — inconsistent
+    // (the runtime audit caught this as RT-3).
+    if (isDemoUser(user)) {
+      return NextResponse.json(
+        {
+          error:
+            'Demo mode — writes are stored in the browser only. Configure Supabase to persist server-side.',
+        },
+        { status: 503 }
+      )
+    }
+
     const rawBody = await req.json()
     const { data: validated, error: validationError } = validateBody(schema, rawBody)
     if (validationError) return validationError
@@ -216,21 +240,6 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
     if (transformBody) {
       const transformed = await transformBody(body, user)
       if (transformed !== undefined) body = transformed as T
-    }
-
-    // ─── Demo mode short-circuit ───────────────────────────────────────────
-    // Demo writes go through usePersistentState (localStorage), not the API.
-    // Return 503 with a clear message instead of letting createUserClient
-    // throw "Supabase not configured" (which becomes a generic 500 + the
-    // global error toast fires on every keystroke).
-    if (isDemoUser(user)) {
-      return NextResponse.json(
-        {
-          error:
-            'Demo mode — writes are stored in the browser only. Configure Supabase to persist server-side.',
-        },
-        { status: 503 }
-      )
     }
 
     const userClient = createUserClient(user.accessToken)
@@ -263,6 +272,18 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
     // project_id, silently moving the row into a project they have no
     // assignment to. Reject any project_id change — project transfer is
     // not allowed via this generic CRUD route.
+    //
+    // ─── PK hijack defense (pass-2 audit P0-1) ────────────────────────────
+    // The pre-flight read above is RLS-gated, so oldData=null when the row
+    // exists in a foreign project the user can't read. Without this check,
+    // a user could POST with a foreign PK + their own project_id — the
+    // service-role upsert's ON CONFLICT (pk) DO UPDATE would silently
+    // overwrite the foreign row, moving it into the attacker's project.
+    // Most exploitable on worker_attendance (PK = WA-<worker>-<date>).
+    //
+    // Fix: do a SERVICE-ROLE existence check on the PK. If it exists in
+    // ANY project, reject with 409. The user should use the UPDATE path
+    // (which goes through the oldData branch + is properly gated) instead.
     if (isProjectScopedTable(table)) {
       const bodyProjectId = bodyRecord.project_id as string | undefined
 
@@ -289,6 +310,46 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
             { error: 'Forbidden — no access to this project' },
             { status: 403 }
           )
+        }
+
+        // ─── PK collision check (service-role, bypasses RLS) ─────────────
+        // If the body carries a PK that already exists in ANY project
+        // (even one RLS hid from the user-scoped read above), this is
+        // either a hijack attempt or a legitimate update the user
+        // doesn't have read access to. Either way, reject — the upsert's
+        // ON CONFLICT DO UPDATE would silently overwrite the foreign row.
+        if (pkValue) {
+          try {
+            const serviceClient = getServiceClient()
+            const { data: existingByService } = await serviceClient
+              .from(table)
+              .select('project_id')
+              .eq(pk, pkValue as string)
+              .limit(1)
+            if (existingByService && existingByService.length > 0) {
+              return NextResponse.json(
+                {
+                  error:
+                    'Conflict — a record with this ID already exists. Use the update path (include the existing record ID in your request) instead of insert.',
+                },
+                { status: 409 }
+              )
+            }
+          } catch {
+            // getServiceClient throws if SUPABASE_SERVICE_ROLE_KEY isn't
+            // configured. In that case, RLS is the only gate — which is
+            // correct for deployments without audit logging. The pre-flight
+            // user-scoped read already proved the user can't see a foreign
+            // row, so the ON CONFLICT path would fire on a row they can't
+            // read — but without the service role, the upsert itself would
+            // also fail (upsertWithAudit requires the service role). So
+            // this catch is only reachable in a misconfigured deployment.
+            // Fail-closed: reject the write.
+            return NextResponse.json(
+              { error: 'Internal server error — audit logging not configured' },
+              { status: 500 }
+            )
+          }
         }
       }
     }

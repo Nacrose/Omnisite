@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createUserClient } from '@/lib/supabase-server'
-import { requireAuth, requireRole } from '@/lib/api-auth'
+import { createUserClient, isServerSupabaseConfigured } from '@/lib/supabase-server'
+import { requireAuth, requireRole, type AuthenticatedUser } from '@/lib/api-auth'
 import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { logDbError } from '@/lib/safe-log'
 import { validateBody } from '@/lib/validation'
+
+// Demo-mode guard — same pattern as crud-handler.ts isDemoUser().
+function isDemoUser(user: AuthenticatedUser | null): boolean {
+  return !isServerSupabaseConfigured() || (user != null && !user.accessToken)
+}
 
 // User-project assignments (membership / role linkage)
 const userProjectSchema = z.object({
@@ -23,6 +28,12 @@ export async function GET(req: NextRequest) {
 
   const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
+
+  // Demo mode — return [] so the workspace-shell's onboarding check
+  // doesn't see a 500 and the user isn't redirected to /onboarding.
+  if (isDemoUser(user)) {
+    return NextResponse.json([])
+  }
 
   // Use a user-scoped client so RLS policies are enforced.
   // Return only the current user's assignments.
@@ -56,6 +67,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'Forbidden — PM role required to manage user-project assignments' },
       { status: 403 }
+    )
+  }
+
+  // Demo mode — writes are local-only.
+  if (isDemoUser(user)) {
+    return NextResponse.json(
+      { error: 'Demo mode — writes are stored in the browser only.' },
+      { status: 503 }
     )
   }
 
@@ -109,6 +128,11 @@ export async function DELETE(req: NextRequest) {
       { error: 'Forbidden — PM role required to manage user-project assignments' },
       { status: 403 }
     )
+  }
+
+  // Demo mode — deletes are local-only.
+  if (isDemoUser(user)) {
+    return NextResponse.json({ error: 'Demo mode — deletes are local-only.' }, { status: 503 })
   }
 
   const { searchParams } = new URL(req.url)

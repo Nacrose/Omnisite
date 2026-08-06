@@ -148,6 +148,15 @@ vi.mock('@/lib/supabase-server', () => ({
   isServerSupabaseConfigured: vi.fn(() => true),
   getServiceClient: vi.fn(() => ({
     rpc: vi.fn().mockResolvedValue({ data: { id: '1' }, error: null }),
+    // PK collision check (pass-2 audit P0-1 fix) — returns empty so
+    // the INSERT path doesn't see a conflicting PK.
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        })),
+      })),
+    })),
   })),
   isServiceClientConfigured: vi.fn(() => true),
 }))

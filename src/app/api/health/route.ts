@@ -94,14 +94,25 @@ export async function GET() {
   //   "ok"       — Supabase reachable (Redis is optional)
   //   "degraded" — Supabase reachable but Redis not configured (rate
   //                limiting fails open, so the app still works)
-  //   "down"     — Supabase unreachable (every write will 500)
-  const supabaseOk = supabaseCheck.configured && supabaseCheck.reachable === true
-  const status: 'ok' | 'degraded' | 'down' = !supabaseOk
-    ? 'down'
-    : !redisConfigured
-      ? 'degraded'
-      : 'ok'
+  //   "down"     — Supabase was configured but is unreachable (every write
+  //                will 500). NOTE: demo mode (Supabase NOT configured) is
+  //                NOT "down" — the app is intentionally running without a
+  //                backend. Returns 200 + 'degraded' so uptime monitors
+  //                don't false-alarm on demo deployments.
+  const supabaseConfigured = supabaseCheck.configured
+  const supabaseReachable = supabaseCheck.reachable === true
+  const status: 'ok' | 'degraded' | 'down' =
+    supabaseConfigured && !supabaseReachable
+      ? 'down' // configured but unreachable — real outage
+      : !supabaseConfigured
+        ? 'degraded' // demo mode — app is up, no backend
+        : !redisConfigured
+          ? 'degraded'
+          : 'ok'
 
+  // Only return 503 when Supabase was configured but is unreachable.
+  // Demo mode (not configured) returns 200 — the app IS running, just
+  // without a backend. Uptime monitors should see 200 in demo mode.
   const httpStatus = status === 'down' ? 503 : 200
 
   return NextResponse.json(
