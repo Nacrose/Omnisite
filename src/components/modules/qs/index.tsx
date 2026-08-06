@@ -18,7 +18,14 @@ import { toast } from 'sonner'
 import { confirm } from '@/components/ui/confirm-dialog'
 import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
-import { type QsItem, type QsCap, type QsFilter, INITIAL_ITEMS, NCR_WORKFLOW } from './types'
+import {
+  type QsItem,
+  type QsCap,
+  type QsFilter,
+  type QsItemType,
+  INITIAL_ITEMS,
+  NCR_WORKFLOW,
+} from './types'
 import { QsRegistersPane } from './registers'
 import { QsInspector } from './inspector'
 
@@ -64,11 +71,28 @@ export function QsModule() {
   const advanceNcr = async (id: string) => {
     // Look up the target item to determine the next workflow status before
     // applying any state changes. This lets us gate the financially risky
-    // "Close" transition (which releases the billing hold) behind a confirm.
+    // "Close" transition (which releases the billing hold) behind a confirm,
+    // AND validate that a CAP exists before Open → CAP Submitted.
     const target = items.find((i) => i.id === id)
     if (!target || target.type !== 'NCR') return
     const next = NCR_WORKFLOW[target.status]
     if (!next) return
+
+    // CAP content validation — Open → CAP Submitted requires a non-empty
+    // root cause + action + assignee. Without this, an empty CAP could be
+    // submitted and the consultant sign-off step would have nothing to review.
+    // (P1-7 in gap analysis.)
+    if (next === 'CAP Submitted') {
+      const cap = target.cap
+      if (!cap || !cap.rootCause.trim() || !cap.action.trim() || !cap.assignee.trim()) {
+        toast.error('Cannot advance — CAP incomplete', {
+          description:
+            'Root cause, corrective action, and assignee are required before submitting the CAP to the consultant.',
+        })
+        return
+      }
+    }
+
     if (next === 'Closed') {
       const ok = await confirm(
         `Close ${target.id}?`,
@@ -110,6 +134,57 @@ export function QsModule() {
     })
   }
 
+  // Create a new Q&S item of the given type. Generates an ID like
+  // `NCR-<3-digit>` based on the current count of that type, sets it to
+  // the initial status for the type (Open for NCR, Submitted for Punch /
+  // Incident / Near-Miss / ITR), and selects it so the inspector opens.
+  // (Replaces the "coming soon" toast — P1-7 in gap analysis.)
+  const createItem = (filter: QsFilter) => {
+    if (filter === 'All') return
+    const type = filter as QsItemType
+    const typedItems = items.filter((i) => i.type === type)
+    const nextNum = typedItems.length + 1
+    const newId = `${type}-${String(nextNum).padStart(3, '0')}`
+    // Guard against ID collisions on rapid re-create
+    if (items.some((i) => i.id === newId)) {
+      const fallback = `${type}-${Date.now().toString().slice(-6)}`
+      toast.error('ID collision — using fallback', { description: fallback })
+      // proceed with the fallback
+      const newItem: QsItem = buildNewItem(fallback, type)
+      setItems((prev) => [newItem, ...prev])
+      setFilter(type)
+      setSelectedId(newItem.id)
+      return
+    }
+    const newItem = buildNewItem(newId, type)
+    setItems((prev) => [newItem, ...prev])
+    setFilter(type)
+    setSelectedId(newItem.id)
+    toast.success(`${type} created`, {
+      description: `${newId} · fill in the title, location, and assignee before advancing.`,
+    })
+  }
+
+  function buildNewItem(id: string, type: QsItemType): QsItem {
+    const today = new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    // NCRs start Open (workflow entry point). Punch / Incident / Near-Miss /
+    // ITR start as Submitted.
+    const initialStatus: QsItem['status'] = type === 'NCR' ? 'Open' : 'Submitted'
+    return {
+      id,
+      type,
+      title: `New ${type} — edit title`,
+      status: initialStatus,
+      date: today,
+      severity: 'medium',
+      billingHold: type === 'NCR', // NCRs auto-trigger a billing hold
+    }
+  }
+
   // Save CAP (corrective action plan) on an NCR
   const saveCap = (id: string, cap: QsCap) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, cap } : it)))
@@ -148,6 +223,7 @@ export function QsModule() {
             onFilterChange={setFilter}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            onCreateItem={createItem}
           />
         }
         rightPane={
@@ -170,6 +246,7 @@ export function QsModule() {
           onFilterChange={setFilter}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          onCreateItem={createItem}
         />
       }
       rightPane={

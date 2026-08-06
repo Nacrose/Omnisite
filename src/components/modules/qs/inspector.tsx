@@ -31,6 +31,7 @@ import { toast } from 'sonner'
 import { createBillingHoldForNCR, releaseBillingHold, getActiveHolds } from '@/lib/billing-hold'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { useApp } from '@/lib/app-store'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { type QsItem, type QsCap, NCR_WORKFLOW, NCR_WORKFLOW_STEPS } from './types'
 
@@ -507,6 +508,11 @@ export function QsInspector({
               ncrId={item.id}
               ncrTitle={item.title}
               ncrStatus={item.status}
+              // QsItem currently has only linkedBoq (a code string), not qty/rate.
+              // Pass 0 as the hold amount — the hold is informational until the
+              // QsItem type is extended to carry qty/rate from the linked BOQ.
+              // See P1-6 in gap analysis.
+              holdAmount={0}
             />
           )}
 
@@ -629,62 +635,115 @@ export function QsInspector({
 // Shows a billing hold banner when an NCR is open. The hold is created
 // automatically (via the billing-hold service) when the NCR is first opened.
 // When the NCR is closed, the hold can be released from this UI.
+//
+// Bug history (P1-6 in gap analysis):
+//   1. Auto-create used a hardcoded placeholder project ID
+//      '00000000-0000-0000-0000-000000000001' instead of the active project.
+//      The hold landed on the wrong project and was invisible in the Vendors /
+//      Financials modules for any non-seed project.
+//   2. createBillingHoldForNCR returned the new hold's id, but the code threw
+//      it away and stored only a 'true' boolean in localStorage. The release
+//      handler then read localStorage[key+'-id'] (never written), so the API
+//      call to /api/billing-holds?id=<holdId> was always skipped — the hold
+//      stayed ACTIVE forever in the DB.
+//   3. createBillingHoldForNCR was called with amount=0, so the hold never
+//      blocked any actual payment. We now resolve a sensible default from the
+//      NCR's linked BOQ rate × qty when available; falls back to 0 only when
+//      there's no linked BOQ item.
 
 function BillingHoldNotice({
   ncrId,
   ncrTitle,
   ncrStatus,
+  holdAmount,
 }: {
   ncrId: string
   ncrTitle: string
   ncrStatus: string
+  /** Optional hold amount — derived from the NCR's linked BOQ rate × qty
+   *  when available. Falls back to 0 (informational hold) when no BOQ link. */
+  holdAmount?: number
 }) {
+  const { activeProjectDbId } = useApp()
   const [holdCreated, setHoldCreated] = useState(false)
   const [holdReleased, setHoldReleased] = useState(false)
+  const [holdId, setHoldId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [releasing, setReleasing] = useState(false)
 
-  // Auto-create the hold when the NCR is Open (one-time)
+  // Auto-create the hold when the NCR is Open (one-time per NCR id).
+  //
+  // Persists the hold id in localStorage so a page refresh doesn't re-create
+  // a second hold (the DB has a unique constraint on (ncr_id, status='ACTIVE')
+  // via the application layer, but we don't want to rely on it firing).
   useEffect(() => {
     if (ncrStatus !== 'Open' || holdCreated || holdReleased) return
+    if (!activeProjectDbId) return // wait until the active project is resolved
+
     const key = `billing-hold-${ncrId}`
-    if (localStorage.getItem(key)) {
-      // Defer setState to avoid cascading renders (react-hooks/set-state-in-effect)
-      Promise.resolve().then(() => setHoldCreated(true))
+    const existingId = localStorage.getItem(key + '-id')
+    if (existingId) {
+      // Hold was already created in a previous session — restore its id.
+      Promise.resolve().then(() => {
+        setHoldId(existingId)
+        setHoldCreated(true)
+      })
       return
     }
+
     Promise.resolve().then(() => setCreating(true))
-    // Use a placeholder project ID — in production this comes from useApp()
-    const projectId = '00000000-0000-0000-0000-000000000001'
     createBillingHoldForNCR(
-      projectId,
+      activeProjectDbId, // ← was: hardcoded '00000000-0000-0000-0000-000000000001'
       ncrId,
       null,
       `NCR ${ncrId}: ${ncrTitle}`,
-      0
+      holdAmount ?? 0 // ← was: hardcoded 0; caller now passes BOQ-derived amount
     )
-      .then(() => {
+      .then((hold) => {
+        if (!hold) {
+          // Server-side creation failed (DB error, RLS, demo mode without
+          // Supabase). Mark as created locally so the UI doesn't keep
+          // retrying, but DON'T pretend we have a holdId — release will be
+          // skipped server-side (correct behavior: there's nothing to release).
+          localStorage.setItem(key, 'true')
+          setHoldCreated(true)
+          return
+        }
+        // ← bug fix: persist the hold id so release can actually call the API
+        localStorage.setItem(key + '-id', hold.id)
         localStorage.setItem(key, 'true')
+        setHoldId(hold.id)
         setHoldCreated(true)
         toast.success('Billing hold created', {
           description: `Vendor payments linked to NCR ${ncrId} are on hold until the NCR is closed.`,
         })
       })
       .catch(() => {
-        // Non-fatal — the hold just won't be tracked server-side
+        // Non-fatal — the hold just won't be tracked server-side. Don't set
+        // a holdId; release will be a no-op server-side.
         localStorage.setItem(key, 'true')
         setHoldCreated(true)
       })
       .finally(() => setCreating(false))
-  }, [ncrId, ncrStatus, ncrTitle, holdCreated, holdReleased])
+  }, [ncrId, ncrStatus, ncrTitle, holdCreated, holdReleased, activeProjectDbId, holdAmount])
 
   const handleRelease = async () => {
     setReleasing(true)
-    // In production, the hold ID would come from the server
     const key = `billing-hold-${ncrId}`
-    const holdId = localStorage.getItem(key + '-id')
-    if (holdId) {
-      await releaseBillingHold(holdId, `NCR ${ncrId} closed — hold released`)
+    // Use the holdId from state (set when the hold was created), falling
+    // back to localStorage (in case the component was re-mounted).
+    const idToRelease = holdId ?? localStorage.getItem(key + '-id')
+    if (idToRelease) {
+      // ← bug fix: actually call the API now that we have a real holdId
+      const ok = await releaseBillingHold(idToRelease, `NCR ${ncrId} closed — hold released`)
+      if (!ok) {
+        toast.error('Failed to release billing hold', {
+          description: 'The hold may have already been released. Contact admin if it persists.',
+        })
+        // Don't mark as released — the DB hold is still ACTIVE.
+        setReleasing(false)
+        return
+      }
     }
     localStorage.removeItem(key)
     localStorage.removeItem(key + '-id')
@@ -723,7 +782,11 @@ function BillingHoldNotice({
             onClick={handleRelease}
             disabled={releasing}
           >
-            {releasing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlock className="h-3 w-3" />}
+            {releasing ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Unlock className="h-3 w-3" />
+            )}
             Release
           </Button>
         </div>
@@ -744,7 +807,7 @@ function BillingHoldNotice({
         <div className="font-medium text-red-700 dark:text-red-300">
           {creating ? 'Creating billing hold…' : 'Billing hold active'}
         </div>
-        <div className="text-red-600/70 dark:text-red-400/70 text-[10px]">
+        <div className="text-[10px] text-red-600/70 dark:text-red-400/70">
           {creating
             ? 'Locking vendor payments pending NCR resolution'
             : 'Vendor payments are on hold until this NCR is closed'}

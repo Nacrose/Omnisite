@@ -21,7 +21,6 @@ import {
   Lock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
 import { type QsItem, type QsFilter, QS_FILTERS } from './types'
 
 export function QsRegistersPane({
@@ -30,12 +29,17 @@ export function QsRegistersPane({
   onFilterChange,
   searchQuery,
   onSearchChange,
+  onCreateItem,
 }: {
   items: QsItem[]
   filter: QsFilter
   onFilterChange: (f: QsFilter) => void
   searchQuery: string
   onSearchChange: (q: string) => void
+  /** Fired when the user clicks the "+" button in the header. The parent
+   *  opens the appropriate create modal (or, for now, creates a draft row
+   *  of the currently-selected type and selects it). */
+  onCreateItem?: (type: QsFilter) => void
 }) {
   return (
     <>
@@ -44,12 +48,8 @@ export function QsRegistersPane({
           variant="ghost"
           size="sm"
           className="h-7"
-          onClick={() =>
-            toast.info(`New ${filter} creation coming soon`, {
-              description: 'Use the API or contact admin to create entries.',
-            })
-          }
-          title="New entry (coming soon)"
+          onClick={() => onCreateItem?.(filter === 'All' ? 'NCR' : filter)}
+          title="New entry"
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>
