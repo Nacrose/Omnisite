@@ -439,3 +439,44 @@
     margin: 12mm;
   }
 }
+
+/* ─── Mobile safe areas (notched phones) ──────────────────────────────────── */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ─── Mobile-specific tweaks ──────────────────────────────────────────────── */
+/* Prevent text size adjustment on orientation change */
+@media (max-width: 640px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  /* Disable tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Smaller touch targets on mobile but still accessible (40px min) */
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    min-height: 40px;
+  }
+  /* But not for inline elements */
+  button.inline-flex,
+  .inline-flex {
+    min-height: auto;
+  }
+}
+
+/* ─── Viewport meta for PWA ───────────────────────────────────────────────── */
+/* Already set in the layout metadata, but this ensures proper scaling */
+@supports (height: 100dvh) {
+  .h-screen {
+    height: 100dvh;
+  }
+}
