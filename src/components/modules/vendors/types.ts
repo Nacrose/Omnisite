@@ -97,6 +97,11 @@ export interface Subcontractor {
   ncrCount: number
   incidents: number
   isTunneling: boolean
+  /** True when an open NCR has placed a billing hold on this SC.
+   *  Set by the Q&S module's NCR workflow (createBillingHoldForNCR).
+   *  When true, the Running Bill tab blocks bill generation until the
+   *  hold is released (NCR closed or manually released). */
+  billingHold?: boolean
 }
 
 // ─── Seed data ──────────────────────────────────────────────────────────────

@@ -98,8 +98,41 @@ export function clearAllPersistentState() {
     'omnisite-notifications-dispatched',
     'omnisite-audit-queue',
     'omnisite-app-store', // Zustand persisted store
+    // New keys added in pass-1 + pass-2 (migrations 28-31 + new modules):
+    'omnisite-rfis',
+    'omnisite-procurement-mins',
+    'omnisite-procurement-stock',
+    'omnisite-notifications',
+    'omnisite-worker-attendance',
+    'omnisite-onboarding-checked',
+    'omnisite-reports-layout',
+    'omnisite-vendors',
+    'omnisite-dsr-entries',
+    'omnisite-qs-items',
+    'omnisite-drawings',
+    'omnisite-letters',
+    'omnisite-grns',
+    'omnisite-requisitions',
+    'omnisite-purchase-orders',
+    'omnisite-subcontractors',
+    'omnisite-chat-messages',
+    'omnisite-project-locations',
+    'omnisite-drawing-annotations',
+    'omnisite-user-projects',
     // NOTE: 'omnisite-demo-bypass' was removed — the demo backdoor is gone.
   ]
+  // Also clear any key that starts with 'omnisite-' (catches keys we
+  // might have missed, e.g. per-item RA state like 'omnisite-boq-ra-1.1.1').
+  try {
+    const allKeys = Object.keys(window.localStorage)
+    for (const k of allKeys) {
+      if (k.startsWith('omnisite-') && !keys.includes(k)) {
+        keys.push(k)
+      }
+    }
+  } catch {
+    // localStorage may be unavailable — ignore
+  }
   keys.forEach((k) => {
     try {
       window.localStorage.removeItem(k)

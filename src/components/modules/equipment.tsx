@@ -22,6 +22,7 @@ import {
   Phone,
   MapPin,
   ShieldCheck,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -300,17 +301,29 @@ export function EquipmentModule() {
           </div>
         </>
       }
-      rightPane={<EquipmentInspector equip={selected} />}
+      rightPane={
+        <EquipmentInspector equip={selected} equipList={equipList} setEquipList={setEquipList} />
+      }
       leftPaneWidth="240px"
       rightPaneWidth="380px"
     />
   )
 }
 
-function EquipmentInspector({ equip }: { equip: Equip }) {
+function EquipmentInspector({
+  equip,
+  equipList,
+  setEquipList,
+}: {
+  equip: Equip
+  equipList: Equip[]
+  setEquipList: (value: Equip[] | ((prev: Equip[]) => Equip[])) => void
+}) {
   const { activeProjectDbId } = useApp()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  const [showExpiryInput, setShowExpiryInput] = useState(false)
+  const [expiryDate, setExpiryDate] = useState('')
 
   // Reuse the DSR photos bucket for equipment docs — there's no dedicated
   // equipment-documents bucket yet, and the access semantics (project-scoped,
@@ -348,16 +361,30 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
 
     setUploading(true)
     try {
-      // Namespace by project + equipment id so docs don't collide across
-      // projects or equipment.
       const folder = `${activeProjectDbId ?? 'unscoped'}/${equip.id}`
       const result = await uploadFile(STORAGE_BUCKETS.DSR_PHOTOS, file, folder)
       if (result.error) {
         toast.error('Upload failed', { description: result.error })
       } else {
-        toast.success('Equipment document uploaded', {
-          description: `${file.name} stored under ${equip.id} (dsr-photos bucket).`,
+        // ─── Persist the doc to equip.docs so it survives reload ───────
+        // Previously this just showed a success toast but never updated
+        // the equipment's docs array — the uploaded file vanished on
+        // refresh. Now we append the new doc and call setEquipList so
+        // it persists to Supabase (or localStorage in demo mode).
+        const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE'
+        const newDoc = {
+          name: file.name,
+          type: ext,
+          exp: expiryDate || undefined,
+        }
+        setEquipList((prev) =>
+          prev.map((e) => (e.id === equip.id ? { ...e, docs: [...e.docs, newDoc] } : e))
+        )
+        toast.success('Document uploaded + saved to vault', {
+          description: `${file.name} added to ${equip.id}'s document vault.`,
         })
+        setExpiryDate('')
+        setShowExpiryInput(false)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -561,45 +588,106 @@ function EquipmentInspector({ equip }: { equip: Equip }) {
               <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
                 Document Vault
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1 text-xs"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-                title="Upload a document (PDF, PNG, JPEG, WebP — max 25 MB)"
-              >
-                <Plus className="h-3 w-3" />
-                {uploading ? 'Uploading…' : 'Upload'}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp"
-                className="hidden"
-                onChange={handleUpload}
-              />
-            </div>
-            {equip.docs.map((d, i) => (
-              <div
-                key={i}
-                className="hover:bg-accent/30 flex cursor-pointer items-center gap-2 rounded border border-[var(--pane-divider)] p-2"
-              >
-                <FileText className="text-muted-foreground h-4 w-4" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate">{d.name}</div>
-                  {d.exp && (
-                    <div className="flex items-center gap-1 text-[10px] text-amber-600">
-                      <Calendar className="h-2.5 w-2.5" />
-                      Expires {d.exp}
-                    </div>
-                  )}
-                </div>
-                <Badge variant="outline" className="text-[9px]">
-                  {d.type}
-                </Badge>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1 text-[10px]"
+                  onClick={() => setShowExpiryInput((v) => !v)}
+                  title="Set expiry date for next upload"
+                >
+                  <Calendar className="h-3 w-3" />
+                  {expiryDate || 'Expiry'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 text-xs"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Upload a document (PDF, PNG, JPEG, WebP — max 25 MB)"
+                >
+                  <Plus className="h-3 w-3" />
+                  {uploading ? 'Uploading…' : 'Upload'}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  className="hidden"
+                  onChange={handleUpload}
+                />
               </div>
-            ))}
+            </div>
+            {showExpiryInput && (
+              <div className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2">
+                <label className="text-muted-foreground text-[10px]">
+                  Expiry date for next upload:
+                </label>
+                <Input
+                  type="date"
+                  className="h-7 flex-1 text-[11px]"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-[10px]"
+                  onClick={() => {
+                    setExpiryDate('')
+                    setShowExpiryInput(false)
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+            {equip.docs.length === 0 ? (
+              <div className="text-muted-foreground py-8 text-center text-[10px]">
+                No documents. Click Upload to add one.
+              </div>
+            ) : (
+              equip.docs.map((d, i) => (
+                <div
+                  key={i}
+                  className="hover:bg-accent/30 flex cursor-pointer items-center gap-2 rounded border border-[var(--pane-divider)] p-2"
+                >
+                  <FileText className="text-muted-foreground h-4 w-4" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{d.name}</div>
+                    {d.exp && (
+                      <div className="flex items-center gap-1 text-[10px] text-amber-600">
+                        <Calendar className="h-2.5 w-2.5" />
+                        Expires {d.exp}
+                      </div>
+                    )}
+                  </div>
+                  <Badge variant="outline" className="text-[9px]">
+                    {d.type}
+                  </Badge>
+                  <button
+                    className="text-muted-foreground rounded p-1 hover:text-red-500"
+                    title="Remove from vault"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEquipList((prev) =>
+                        prev.map((eq) =>
+                          eq.id === equip.id
+                            ? { ...eq, docs: eq.docs.filter((_, idx) => idx !== i) }
+                            : eq
+                        )
+                      )
+                      toast.success('Document removed from vault', {
+                        description: d.name,
+                      })
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))
+            )}
           </TabsContent>
         </Tabs>
       </PaneBody>

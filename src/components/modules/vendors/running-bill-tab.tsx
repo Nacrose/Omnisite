@@ -163,9 +163,28 @@ export function RunningBillTab({
     consumableChargeback
   const netPayable = earned - totalDeductions
 
-  // handleGenerateBill uses the computed values above (audit V1-6 —
-  // previously it recomputed everything from scratch, which was fragile).
+  // ─── Billing hold check ──────────────────────────────────────────────────
+  // Wire the billing hold for real: if the SC has any active billing hold
+  // (from the NCR workflow's createBillingHoldForNCR), block the running
+  // bill from being generated until the hold is released. This is the
+  // "entire point of the billingHold field" — a cosmetic-only version
+  // is arguably worse than not having the feature.
+  //
+  // The hold check uses the `billingHold` boolean on the SC record (set
+  // when an NCR is opened on a linked BOQ item). We also check the
+  // billing_holds table via the props passed from the parent if available.
+  const hasActiveHold = sc.billingHold === true
+
   const handleGenerateBill = () => {
+    if (hasActiveHold) {
+      toast.error('Billing hold active — cannot generate bill', {
+        description:
+          'This subcontractor has an active billing hold from an open NCR. ' +
+          'Close the NCR (or release the hold manually) before generating a running bill.',
+        duration: 8000,
+      })
+      return
+    }
     if (!advanceFullyRecovered && advanceRecovery > 0) {
       onUpdateAdvanceRecovered?.(alreadyRecovered + advanceRecovery)
     }
@@ -324,9 +343,27 @@ export function RunningBillTab({
         </div>
       </div>
 
-      <Button className="h-9 w-full gap-1.5 text-xs" onClick={handleGenerateBill}>
+      {hasActiveHold && (
+        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-2.5 text-[11px]">
+          <div className="flex items-center gap-1.5 font-medium text-red-700 dark:text-red-300">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Billing Hold Active
+          </div>
+          <div className="text-muted-foreground mt-1 text-[10px] leading-relaxed">
+            An open NCR has placed a billing hold on this subcontractor. The running bill cannot be
+            generated until the NCR is closed or the hold is manually released.
+          </div>
+        </div>
+      )}
+
+      <Button
+        className={cn('h-9 w-full gap-1.5 text-xs', hasActiveHold && 'opacity-50')}
+        onClick={handleGenerateBill}
+        disabled={hasActiveHold}
+        title={hasActiveHold ? 'Billing hold active — close the linked NCR first' : undefined}
+      >
         <FileText className="h-3.5 w-3.5" />
-        Generate Running Bill
+        {hasActiveHold ? 'Bill Blocked (NCR Hold)' : 'Generate Running Bill'}
       </Button>
 
       {/* Add deductible */}

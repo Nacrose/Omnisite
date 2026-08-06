@@ -28,6 +28,7 @@ export type { RaRow } from './ra-types'
 export function RaInspector({
   item,
   onUpdateLocation,
+  onSaveRaData,
 }: {
   item: BoqItem
   /**
@@ -37,6 +38,14 @@ export function RaInspector({
    * inspector can't do that itself because it only owns a local mirror.
    */
   onUpdateLocation?: (locationId: string | null) => void
+  /**
+   * Fired when the user clicks "Save RA" — passes the full RA data object
+   * back to the parent, which calls setBoqRows to persist it via
+   * useSyncedState (POST to /api/boq with ra_data JSONB column).
+   * Without this, RA data was only in localStorage and never reached
+   * Supabase — other users couldn't see it.
+   */
+  onSaveRaData?: (raData: Record<string, unknown>) => void
 }) {
   // NOTE: RA state (materials/labour/equipment/pctCosts) is local useState
   // seeded from empty arrays. It is NOT persisted to the database — switching
@@ -270,7 +279,8 @@ export function RaInspector({
                 </div>
                 {uomConversionNote.map((m, i) => (
                   <div key={i} className="text-muted-foreground">
-                    {m.name}: {m.qty} {m.fromUom} → {m.toUom} (use convertUnit service for exact factor)
+                    {m.name}: {m.qty} {m.fromUom} → {m.toUom} (use convertUnit service for exact
+                    factor)
                   </div>
                 ))}
               </div>
@@ -380,12 +390,26 @@ export function RaInspector({
             className="h-7 gap-1.5 text-xs"
             onClick={() => {
               const saved = localStorage.getItem('omnisite-ra-presets')
-              const presets: { name: string; materials: RaRow[]; labour: RaRow[]; equipment: RaRow[]; pctCosts: PctCosts; customPctCosts: CustomPctCost[]; opPct: number }[] = saved ? JSON.parse(saved) : []
+              const presets: {
+                name: string
+                materials: RaRow[]
+                labour: RaRow[]
+                equipment: RaRow[]
+                pctCosts: PctCosts
+                customPctCosts: CustomPctCost[]
+                opPct: number
+              }[] = saved ? JSON.parse(saved) : []
               if (presets.length === 0) {
-                toast.info('No presets saved yet', { description: 'Build an RA and click Save Preset to create one.' })
+                toast.info('No presets saved yet', {
+                  description: 'Build an RA and click Save Preset to create one.',
+                })
                 return
               }
-              const input = prompt('Load preset:\n' + presets.map((p, i) => `${i + 1}. ${p.name}`).join('\n') + '\n\nEnter preset number:')
+              const input = prompt(
+                'Load preset:\n' +
+                  presets.map((p, i) => `${i + 1}. ${p.name}`).join('\n') +
+                  '\n\nEnter preset number:'
+              )
               if (!input) return
               const idx = parseInt(input) - 1
               if (isNaN(idx) || idx < 0 || idx >= presets.length) return
@@ -396,7 +420,9 @@ export function RaInspector({
               setPctCosts(p.pctCosts)
               setCustomPctCosts(p.customPctCosts || [])
               setOpPct(p.opPct ?? 15)
-              toast.success(`Loaded preset: ${p.name}`, { description: `${p.materials.length} materials, ${p.labour.length} labour, ${p.equipment.length} equipment.` })
+              toast.success(`Loaded preset: ${p.name}`, {
+                description: `${p.materials.length} materials, ${p.labour.length} labour, ${p.equipment.length} equipment.`,
+              })
             }}
           >
             <FolderOpen className="h-3.5 w-3.5" />
@@ -410,10 +436,28 @@ export function RaInspector({
               const name = prompt('Save current RA as preset.\nEnter preset name:')
               if (!name?.trim()) return
               const saved = localStorage.getItem('omnisite-ra-presets')
-              const presets: { name: string; materials: RaRow[]; labour: RaRow[]; equipment: RaRow[]; pctCosts: PctCosts; customPctCosts: CustomPctCost[]; opPct: number }[] = saved ? JSON.parse(saved) : []
-              presets.push({ name: name.trim(), materials, labour, equipment, pctCosts, customPctCosts, opPct })
+              const presets: {
+                name: string
+                materials: RaRow[]
+                labour: RaRow[]
+                equipment: RaRow[]
+                pctCosts: PctCosts
+                customPctCosts: CustomPctCost[]
+                opPct: number
+              }[] = saved ? JSON.parse(saved) : []
+              presets.push({
+                name: name.trim(),
+                materials,
+                labour,
+                equipment,
+                pctCosts,
+                customPctCosts,
+                opPct,
+              })
               localStorage.setItem('omnisite-ra-presets', JSON.stringify(presets))
-              toast.success('Preset saved', { description: `"${name}" — ${presets.length} preset(s) total. Use Load Preset to apply it to any BOQ item.` })
+              toast.success('Preset saved', {
+                description: `"${name}" — ${presets.length} preset(s) total. Use Load Preset to apply it to any BOQ item.`,
+              })
             }}
           >
             <Save className="h-3.5 w-3.5" />
@@ -424,10 +468,6 @@ export function RaInspector({
             size="sm"
             className="h-7 gap-1.5 text-xs"
             onClick={() => {
-              // Save RA data to the BOQ item's raData field.
-              // This round-trips through Supabase via useSyncedState's
-              // ra_data JSONB column (migration 27). Also saves to
-              // localStorage as a fallback.
               const raData = {
                 materials,
                 labour,
@@ -439,20 +479,14 @@ export function RaInspector({
                 opPct,
                 savedAt: new Date().toISOString(),
               }
-              // Update the BOQ item in localStorage (Supabase mode:
-              // useSyncedState picks this up on next upsert)
-              try {
-                const stored = localStorage.getItem('omnisite-boq-data')
-                if (stored) {
-                  const rows = JSON.parse(stored)
-                  const updated = rows.map((r: Record<string, unknown>) =>
-                    r.id === item.id ? { ...r, ra_data: raData, has_ra: true } : r
-                  )
-                  localStorage.setItem('omnisite-boq-data', JSON.stringify(updated))
-                }
-              } catch { /* localStorage may be unavailable */ }
+              // Persist via the parent's setBoqRows (useSyncedState) so
+              // the ra_data JSONB column is updated via POST /api/boq.
+              // Previously this only wrote to localStorage directly —
+              // other users on Supabase never saw the saved RA.
+              onSaveRaData?.(raData)
               toast.success('RA saved', {
-                description: 'Rate analysis persisted to the BOQ item. Shared across users when Supabase is connected.',
+                description:
+                  'Rate analysis persisted to the BOQ item. Shared across users when Supabase is connected.',
               })
             }}
           >

@@ -206,6 +206,15 @@ export function BoqModule() {
                   )
                 )
               }}
+              onSaveRaData={(raData) => {
+                // Persist the RA data to the BOQ item's ra_data JSONB
+                // column (migration 27) via useSyncedState's setBoqRows.
+                // Previously the inspector only wrote to localStorage —
+                // other users on Supabase never saw the saved RA.
+                setBoqRows((prev) =>
+                  prev.map((r) => (r.id === selectedLeaf.id ? { ...r, raData, hasRa: true } : r))
+                )
+              }}
             />
           ) : (
             <NonPricedInspector key={selectedLeaf.id} item={selectedLeaf} />
