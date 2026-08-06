@@ -5,13 +5,14 @@ import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pa
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Plus, Trash2, Mail, Loader2, RefreshCw, UserCircle } from 'lucide-react'
+import { Plus, Trash2, Mail, Loader2, RefreshCw, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useApp } from '@/lib/app-store'
 import { ROLES, type Role } from './types'
 import { InviteUserModal } from './invite-user-modal'
+import { PermissionEditorModal } from './permission-editor-modal'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ export function UsersView({
   const { activeProjectDbId, activeProject } = useApp()
 
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [permUser, setPermUser] = useState<ProjectUser | null>(null)
   const [users, setUsers] = useState<ProjectUser[]>([])
   const [loading, setLoading] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
@@ -224,6 +226,13 @@ export function UsersView({
                   {ROLE_LABELS[u.role] || u.role}
                 </Badge>
                 <button
+                  onClick={() => setPermUser(u)}
+                  className="text-muted-foreground hover:text-primary rounded p-1 transition-colors"
+                  title="Edit permissions"
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                </button>
+                <button
                   onClick={() => handleRemove(u)}
                   disabled={removingId === u.id}
                   className="text-muted-foreground rounded p-1 transition-colors hover:text-red-500 disabled:opacity-40"
@@ -268,6 +277,15 @@ export function UsersView({
 
       {inviteOpen && (
         <InviteUserModal onClose={() => setInviteOpen(false)} onInvited={fetchUsers} />
+      )}
+
+      {permUser && (
+        <PermissionEditorModal
+          assignmentId={permUser.id}
+          userName={permUser.name || permUser.email || 'User'}
+          userEmail={permUser.email || permUser.user_id}
+          onClose={() => setPermUser(null)}
+        />
       )}
     </PaneBody>
   )
