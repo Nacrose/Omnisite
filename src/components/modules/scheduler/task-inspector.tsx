@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { computeEVM, formatEVM } from '@/lib/evm'
+import { computeProductivity, ROOT_CAUSE_LABELS, type RootCauseCode } from '@/lib/productivity'
 import type { Task } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -335,6 +336,9 @@ export function TaskInspector({
               </TabsTrigger>
               <TabsTrigger value="evm" className="text-[11px]">
                 EVM
+              </TabsTrigger>
+              <TabsTrigger value="productivity" className="text-[11px]">
+                Productivity
               </TabsTrigger>
             </TabsList>
           </div>
@@ -769,8 +773,148 @@ export function TaskInspector({
               )
             })()}
           </TabsContent>
+
+          {/* Productivity tab — planned vs actual manhours */}
+          <TabsContent value="productivity" className="mt-0 space-y-3 px-4 py-3 text-xs">
+            <ProductivityTab taskId={task.id} taskResources={taskResources} taskProgress={task.progress} />
+          </TabsContent>
         </Tabs>
       </PaneBody>
+    </>
+  )
+}
+
+// ─── Productivity Tab ───────────────────────────────────────────────────────
+//
+// Shows planned vs actual manhours, variance %, and root cause logging
+// when variance exceeds 20%. Uses computeProductivity() from
+// src/lib/productivity.ts.
+
+function ProductivityTab({
+  taskId,
+  taskResources,
+  taskProgress,
+}: {
+  taskId: string
+  taskResources: string[]
+  taskProgress: number
+}) {
+  const [plannedHours, setPlannedHours] = useState('')
+  const [actualHours, setActualHours] = useState('')
+  const [rootCause, setRootCause] = useState<RootCauseCode | ''>('')
+
+  const hasInput = plannedHours && actualHours
+  const result = hasInput
+    ? computeProductivity(
+        {
+          taskId,
+          calculationDate: new Date().toISOString().split('T')[0],
+          plannedManhours: parseFloat(plannedHours),
+          actualManhours: parseFloat(actualHours),
+        },
+        rootCause || null
+      )
+    : null
+
+  return (
+    <>
+      <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+        Productivity Variance
+      </div>
+
+      {/* Input fields */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] font-medium">Planned manhours</label>
+          <Input
+            className="mt-0.5 h-7 text-xs"
+            type="number"
+            placeholder="e.g. 100"
+            value={plannedHours}
+            onChange={(e) => setPlannedHours(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-medium">Actual manhours</label>
+          <Input
+            className="mt-0.5 h-7 text-xs"
+            type="number"
+            placeholder="e.g. 130"
+            value={actualHours}
+            onChange={(e) => setActualHours(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Assigned resources reminder */}
+      {taskResources.length > 0 && (
+        <div className="text-muted-foreground text-[10px]">
+          Assigned: {taskResources.join(', ')}
+        </div>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div className="rounded-md border border-[var(--pane-divider)] p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded bg-secondary/30 p-2">
+              <div className="text-muted-foreground text-[9px]">Variance (hrs)</div>
+              <div className={cn('font-mono text-xs font-semibold', result.varianceManhours > 0 ? 'text-red-500' : 'text-emerald-500')}>
+                {result.varianceManhours >= 0 ? '+' : ''}{result.varianceManhours}
+              </div>
+            </div>
+            <div className="rounded bg-secondary/30 p-2">
+              <div className="text-muted-foreground text-[9px]">Variance %</div>
+              <div className={cn('font-mono text-xs font-semibold', Math.abs(result.variancePercent) > 20 ? 'text-red-500' : 'text-emerald-500')}>
+                {result.variancePercent >= 0 ? '+' : ''}{result.variancePercent}%
+              </div>
+            </div>
+            <div className="rounded bg-secondary/30 p-2">
+              <div className="text-muted-foreground text-[9px]">Productivity ratio</div>
+              <div className="font-mono text-xs font-semibold">{result.productivityRatio.toFixed(2)}</div>
+            </div>
+            <div className="rounded bg-secondary/30 p-2">
+              <div className="text-muted-foreground text-[9px]">Status</div>
+              <div className={cn('text-xs font-semibold',
+                result.status === 'OK' ? 'text-emerald-500' :
+                result.status === 'ROOT_CAUSE_REQUIRED' ? 'text-red-500' :
+                'text-amber-500'
+              )}>
+                {result.status === 'OK' ? 'OK' :
+                 result.status === 'ROOT_CAUSE_REQUIRED' ? 'Root cause required' :
+                 'Root cause logged'}
+              </div>
+            </div>
+          </div>
+
+          {/* Root cause selector — shown when variance > 20% */}
+          {result.status !== 'OK' && (
+            <div className="mt-2">
+              <label className="text-[10px] font-medium">Root cause {result.status === 'ROOT_CAUSE_REQUIRED' && <span className="text-red-500">*</span>}</label>
+              <select
+                className="mt-0.5 h-7 w-full rounded border border-[var(--pane-divider)] bg-transparent px-2 text-xs"
+                value={rootCause}
+                onChange={(e) => setRootCause(e.target.value as RootCauseCode)}
+              >
+                <option value="">— Select root cause —</option>
+                {(Object.entries(ROOT_CAUSE_LABELS) as [RootCauseCode, string][]).map(([code, label]) => (
+                  <option key={code} value={code}>{label}</option>
+                ))}
+              </select>
+              {result.status === 'ROOT_CAUSE_LOGGED' && (
+                <div className="mt-1 text-[10px] text-emerald-600">
+                  Root cause logged — productivity record saved for future rate analysis.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="text-muted-foreground text-[10px] leading-relaxed">
+        Variance threshold: ±20%. Tasks exceeding this require root cause logging.
+        Productivity ratio = planned ÷ actual (1.0 = on target, &lt;1 = over budget).
+      </p>
     </>
   )
 }
