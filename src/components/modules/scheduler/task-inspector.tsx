@@ -10,6 +10,7 @@ import { Link2, Calendar, Gauge, Package, MapPin, Plus, X, Search } from 'lucide
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { computeEVM, formatEVM } from '@/lib/evm'
 import type { Task } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { useSyncedState } from '@/lib/use-synced-state'
@@ -716,14 +717,12 @@ export function TaskInspector({
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
               Earned Value Metrics
             </div>
-            {/* Compute EVM from the linked BOQ item (if any) + task progress.
-                BCWS = BOQ rate × qty × (planned % based on schedule)
-                BCWP = BCWS × task progress %
-                ACWP = actual cost from CBS (if linked)
+            {/* EVM computed via src/lib/evm.ts — computeEVM() service.
+                BCWS = BOQ rate × qty, BCWP = BCWS × progress %,
+                ACWP = actual cost from CBS (if available).
                 When no BOQ item is linked, show honest "not linked" state. */}
             {(() => {
-              const boqItem = linkedBoqItem
-              if (!boqItem) {
+              if (!linkedBoqItem) {
                 return (
                   <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
                     <Gauge className="text-muted-foreground h-6 w-6 opacity-50" />
@@ -735,53 +734,30 @@ export function TaskInspector({
                   </div>
                 )
               }
-              const rate = Number(boqItem.rate || 0)
-              const qty = Number(boqItem.qty || 0)
-              const bcws = rate * qty // Planned Value (full task budget)
-              const bcwp = bcws * (task.progress / 100) // Earned Value
-              const spi = bcws > 0 ? bcwp / bcws : 0
-              const cpi = bcwp > 0 ? bcwp / bcws : 1 // simplified — no ACWP without CBS link
-              const eac = spi > 0 ? bcws / spi : bcws
-              const sv = bcwp - bcws
-              const isBehind = sv < 0
+              const evmResult = computeEVM({
+                boqRate: Number(linkedBoqItem.rate || 0),
+                boqQty: Number(linkedBoqItem.qty || 0),
+                taskProgress: task.progress,
+              })
+              const metrics = formatEVM(evmResult)
+              const statusColor = (s: string) =>
+                s === 'good' ? 'text-emerald-500' : s === 'bad' ? 'text-red-500' : 'text-foreground'
 
               return (
                 <div className="space-y-2">
                   <div className="rounded-md border border-[var(--pane-divider)] p-3">
                     <div className="text-muted-foreground mb-2 text-[10px]">
-                      Computed from linked BOQ item: {String(boqItem.code)} · {String(boqItem.desc || boqItem.description || '')}
+                      Computed from linked BOQ item: {String(linkedBoqItem.code)} · {String(linkedBoqItem.desc || linkedBoqItem.description || '')}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded bg-secondary/30 p-2">
-                        <div className="text-muted-foreground text-[9px]">BCWS (Planned Value)</div>
-                        <div className="font-mono text-xs font-semibold">NPR {bcws.toLocaleString()}</div>
-                      </div>
-                      <div className="rounded bg-secondary/30 p-2">
-                        <div className="text-muted-foreground text-[9px]">BCWP (Earned Value)</div>
-                        <div className="font-mono text-xs font-semibold">NPR {bcwp.toLocaleString()}</div>
-                      </div>
-                      <div className="rounded bg-secondary/30 p-2">
-                        <div className="text-muted-foreground text-[9px]">SV (Schedule Variance)</div>
-                        <div className={cn('font-mono text-xs font-semibold', isBehind ? 'text-red-500' : 'text-emerald-500')}>
-                          {sv >= 0 ? '+' : ''}NPR {sv.toLocaleString()}
+                      {metrics.map((m) => (
+                        <div key={m.label} className="rounded bg-secondary/30 p-2">
+                          <div className="text-muted-foreground text-[9px]">{m.label}</div>
+                          <div className={cn('font-mono text-xs font-semibold', statusColor(m.status))}>
+                            {m.value}
+                          </div>
                         </div>
-                      </div>
-                      <div className="rounded bg-secondary/30 p-2">
-                        <div className="text-muted-foreground text-[9px]">EAC (Estimate at Completion)</div>
-                        <div className="font-mono text-xs font-semibold">NPR {eac.toLocaleString()}</div>
-                      </div>
-                      <div className="rounded bg-secondary/30 p-2">
-                        <div className="text-muted-foreground text-[9px]">SPI (Schedule Perf. Index)</div>
-                        <div className={cn('font-mono text-xs font-semibold', spi < 1 ? 'text-red-500' : 'text-emerald-500')}>
-                          {spi.toFixed(2)}
-                        </div>
-                      </div>
-                      <div className="rounded bg-secondary/30 p-2">
-                        <div className="text-muted-foreground text-[9px]">CPI (Cost Perf. Index)</div>
-                        <div className={cn('font-mono text-xs font-semibold', cpi < 1 ? 'text-red-500' : 'text-emerald-500')}>
-                          {cpi.toFixed(2)}
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
                   <p className="text-muted-foreground text-[10px] leading-relaxed">
