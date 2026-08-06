@@ -34,6 +34,12 @@ END $$;
 
 -- ─── 3. Approval engine ────────────────────────────────────────────────────
 -- Tracks approval requests for POs, GRNs, NCRs, RA Bills, etc.
+--
+-- SECURITY: both the USING and WITH CHECK clauses require role = 'PM'.
+-- The previous WITH CHECK omitted the role predicate, which would have let
+-- any project member (incl. FOREMAN) self-approve a change once the
+-- approvals UI is wired up. Both clauses must agree — USING gates
+-- existing rows, WITH CHECK gates new/updated rows.
 CREATE TABLE IF NOT EXISTS approval_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id),
@@ -60,7 +66,7 @@ CREATE POLICY "approval_requests_read" ON approval_requests FOR SELECT TO authen
   USING (EXISTS (SELECT 1 FROM user_projects WHERE user_id = auth.uid() AND project_id = approval_requests.project_id));
 CREATE POLICY "approval_requests_write_pm" ON approval_requests FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM user_projects WHERE user_id = auth.uid() AND project_id = approval_requests.project_id AND role = 'PM'))
-  WITH CHECK (EXISTS (SELECT 1 FROM user_projects WHERE user_id = auth.uid() AND project_id = approval_requests.project_id));
+  WITH CHECK (EXISTS (SELECT 1 FROM user_projects WHERE user_id = auth.uid() AND project_id = approval_requests.project_id AND role = 'PM'));
 
 -- ─── 4. Snapshot mechanism ─────────────────────────────────────────────────
 -- Captures point-in-time state of a record for audit/rollback.
