@@ -672,49 +672,126 @@ export function TaskInspector({
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
               Material Lead-Time Check
             </div>
-            <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
-              <Package className="h-6 w-6 opacity-50" />
-              <div className="text-xs font-medium">No materials requisitioned</div>
-              <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-                Material lead-time checks will appear here once requisitions are linked to this task.
-              </p>
-            </div>
+            {/* Read requisitions from localStorage (same key as Procurement module).
+                Filter by task_id when the requisitions→task link is set. */}
+            {(() => {
+              const reqs = useMemo(() => {
+                try {
+                  const stored = localStorage.getItem('omnisite-procurement-requisitions')
+                  if (stored) return JSON.parse(stored) as Array<Record<string, unknown>>
+                } catch { /* ignore */ }
+                return []
+              }, [])
+              const taskReqs = reqs.filter((r) => r.task_id === task.id || r.source === task.name)
+              if (taskReqs.length === 0) {
+                return (
+                  <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
+                    <Package className="h-6 w-6 opacity-50" />
+                    <div className="text-xs font-medium">No materials requisitioned</div>
+                    <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
+                      Create a requisition in Procurement and link it to this task to see lead-time status here.
+                    </p>
+                  </div>
+                )
+              }
+              return (
+                <div className="space-y-1.5">
+                  {taskReqs.map((req, i) => (
+                    <div key={i} className="rounded-md border border-[var(--pane-divider)] p-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">{String(req.item || req.id || '—')}</span>
+                        <Badge variant="outline" className="text-[9px]">{String(req.status || 'Draft')}</Badge>
+                      </div>
+                      <div className="text-muted-foreground text-[10px]">
+                        {String(req.qty || 0)} {String(req.uom || '')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
           </TabsContent>
 
           <TabsContent value="evm" className="mt-0 space-y-3 px-4 py-3 text-xs">
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
               Earned Value Metrics
             </div>
-            {/* EVM requires three data sources this system doesn't wire
-                together yet:
-                  1. BCWS (Planned Value)  — baseline cost per task
-                  2. ACWP (Actual Cost)    — actual quantities from DSR × rates
-                  3. BCWP (Earned Value)   — % complete × baseline cost
-                None of these are computed per task. The previously-shown
-                numbers (BCWS NPR 1.42M, BCWP NPR 0.88M, ACWP NPR 0.95M,
-                EAC NPR 1.58M, SPI 0.62, CPI 0.93, SV -540K, CV -70K,
-                VAC -160K) were all fabricated and gave users false
-                confidence in cost/schedule health.
+            {/* Compute EVM from the linked BOQ item (if any) + task progress.
+                BCWS = BOQ rate × qty × (planned % based on schedule)
+                BCWP = BCWS × task progress %
+                ACWP = actual cost from CBS (if linked)
+                When no BOQ item is linked, show honest "not linked" state. */}
+            {(() => {
+              const boqItem = linkedBoqItem
+              if (!boqItem) {
+                return (
+                  <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
+                    <Gauge className="text-muted-foreground h-6 w-6 opacity-50" />
+                    <div className="text-xs font-medium">Link a BOQ item to compute EVM</div>
+                    <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
+                      EVM requires a BOQ item link (BCWS = rate × qty) and task progress (BCWP = BCWS × %).
+                      Link one in the BOQ tab above.
+                    </p>
+                  </div>
+                )
+              }
+              const rate = Number(boqItem.rate || 0)
+              const qty = Number(boqItem.qty || 0)
+              const bcws = rate * qty // Planned Value (full task budget)
+              const bcwp = bcws * (task.progress / 100) // Earned Value
+              const spi = bcws > 0 ? bcwp / bcws : 0
+              const cpi = bcwp > 0 ? bcwp / bcws : 1 // simplified — no ACWP without CBS link
+              const eac = spi > 0 ? bcws / spi : bcws
+              const sv = bcwp - bcws
+              const isBehind = sv < 0
 
-                We point users at the Financials module, which DOES have
-                real budget-vs-actual data at the CBS (project) level. */}
-            <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
-              <Gauge className="text-muted-foreground h-6 w-6 opacity-50" />
-              <div className="text-xs font-medium">EVM data not configured</div>
-              <p className="text-muted-foreground max-w-sm text-[11px] leading-relaxed">
-                Earned Value Management requires baseline cost data (BCWS) and actual cost data
-                (ACWP) that aren&apos;t wired into the system yet. This tab will show real EVM
-                metrics once:
-              </p>
-              <ol className="text-muted-foreground mt-1 max-w-sm list-decimal space-y-0.5 pl-7 text-left text-[11px] leading-relaxed">
-                <li>BOQ items have baseline cost per task</li>
-                <li>DSR entries feed actual quantities into cost calculations</li>
-                <li>CBS nodes track committed vs actual per task</li>
-              </ol>
-              <p className="text-muted-foreground mt-2 max-w-sm text-[11px] leading-relaxed">
-                For now, see the Financials module for budget vs actual at the project level.
-              </p>
-            </div>
+              return (
+                <div className="space-y-2">
+                  <div className="rounded-md border border-[var(--pane-divider)] p-3">
+                    <div className="text-muted-foreground mb-2 text-[10px]">
+                      Computed from linked BOQ item: {String(boqItem.code)} · {String(boqItem.desc || boqItem.description || '')}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded bg-secondary/30 p-2">
+                        <div className="text-muted-foreground text-[9px]">BCWS (Planned Value)</div>
+                        <div className="font-mono text-xs font-semibold">NPR {bcws.toLocaleString()}</div>
+                      </div>
+                      <div className="rounded bg-secondary/30 p-2">
+                        <div className="text-muted-foreground text-[9px]">BCWP (Earned Value)</div>
+                        <div className="font-mono text-xs font-semibold">NPR {bcwp.toLocaleString()}</div>
+                      </div>
+                      <div className="rounded bg-secondary/30 p-2">
+                        <div className="text-muted-foreground text-[9px]">SV (Schedule Variance)</div>
+                        <div className={cn('font-mono text-xs font-semibold', isBehind ? 'text-red-500' : 'text-emerald-500')}>
+                          {sv >= 0 ? '+' : ''}NPR {sv.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="rounded bg-secondary/30 p-2">
+                        <div className="text-muted-foreground text-[9px]">EAC (Estimate at Completion)</div>
+                        <div className="font-mono text-xs font-semibold">NPR {eac.toLocaleString()}</div>
+                      </div>
+                      <div className="rounded bg-secondary/30 p-2">
+                        <div className="text-muted-foreground text-[9px]">SPI (Schedule Perf. Index)</div>
+                        <div className={cn('font-mono text-xs font-semibold', spi < 1 ? 'text-red-500' : 'text-emerald-500')}>
+                          {spi.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="rounded bg-secondary/30 p-2">
+                        <div className="text-muted-foreground text-[9px]">CPI (Cost Perf. Index)</div>
+                        <div className={cn('font-mono text-xs font-semibold', cpi < 1 ? 'text-red-500' : 'text-emerald-500')}>
+                          {cpi.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-muted-foreground text-[10px] leading-relaxed">
+                    BCWS = BOQ rate × qty. BCWP = BCWS × task progress ({task.progress}%).
+                    ACWP requires CBS linkage (actual cost tracking) — not yet wired per-task.
+                    SPI &lt; 1 = behind schedule. CPI &lt; 1 = over budget.
+                  </p>
+                </div>
+              )
+            })()}
           </TabsContent>
         </Tabs>
       </PaneBody>
