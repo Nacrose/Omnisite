@@ -15,6 +15,7 @@ import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storag
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { MaterialRow } from './dsr-material-row'
+import { computeReconciliation, type ReconciliationRow } from '@/lib/material-reconciliation'
 import { DsrPhotoGallery } from './dsr-photo-gallery'
 import { DsrRfiModal } from './dsr-rfi-modal'
 
@@ -48,10 +49,21 @@ export function DsrInspector({
   const CONCRETE_PATTERNS = ['pcc', 'rcc', 'concrete', 'cement']
   const isConcreteActivity = CONCRETE_PATTERNS.some((p) => entry.task.toLowerCase().includes(p))
 
-  const theoretical = isConcreteActivity ? entry.actual * 4.5 : 0
-  // Issued cement quantity is NOT available on the DsrEntry type — honestly
-  // pass `null` and let MaterialRow show "—".
-  const issued: number | null = null
+  // Compute material reconciliation via the service from
+  // src/lib/material-reconciliation.ts. Uses standard DoR M15 coefficients
+  // (4.5 bags cement, 0.45 cum sand, 0.9 cum aggregate per cum of concrete).
+  const reconciliationRows: ReconciliationRow[] = isConcreteActivity && entry.actual > 0
+    ? computeReconciliation({
+        taskActualQty: entry.actual,
+        boqItemUom: entry.uom,
+        coefficients: {
+          'M-CEM-OPC': { coefficient: 4.5, uom: 'bag', name: 'Cement OPC 53 (Bag)' },
+          'M-SAND-R': { coefficient: 0.45, uom: 'cum', name: 'River Sand (cum)' },
+          'M-AGG-20': { coefficient: 0.9, uom: 'cum', name: 'Coarse Agg. 20mm (cum)' },
+        },
+        actualIssued: {},
+      })
+    : []
 
   // RFI draft modal state
   const [rfiModalOpen, setRfiModalOpen] = useState(false)
@@ -332,32 +344,21 @@ export function DsrInspector({
                   Theoretical vs Issued
                 </div>
                 <div className="space-y-2">
-                  <MaterialRow
-                    mat="Cement OPC 53 (Bag)"
-                    theoretical={theoretical}
-                    issued={issued}
-                    uom="bag"
-                  />
-                  <MaterialRow
-                    mat="River Sand (cum)"
-                    theoretical={entry.actual * 0.45}
-                    issued={null}
-                    uom="cum"
-                  />
-                  <MaterialRow
-                    mat="Coarse Agg. 20mm (cum)"
-                    theoretical={entry.actual * 0.9}
-                    issued={null}
-                    uom="cum"
-                  />
+                  {reconciliationRows.map((row) => (
+                    <MaterialRow
+                      key={row.materialCode}
+                      mat={row.materialName}
+                      theoretical={row.theoreticalQty}
+                      issued={row.actualIssuedQty}
+                      uom={row.materialCode === 'M-CEM-OPC' ? 'bag' : 'cum'}
+                    />
+                  ))}
                 </div>
-                {issued === null && (
-                  <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-2.5 text-[11px]">
-                    Material consumption data not available for this entry. Issue materials via the
-                    Procurement → Material Issues (MIN) tab and link them to this DSR entry to
-                    populate the reconciliation.
-                  </div>
-                )}
+                <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-2.5 text-[11px]">
+                  Material consumption data not available for this entry. Issue materials via the
+                  Procurement → Material Issues (MIN) tab and link them to this DSR entry to
+                  populate the reconciliation. Tolerance: ±5% variance before flagging.
+                </div>
               </>
             ) : (
               <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-4 text-center text-[11px]">
