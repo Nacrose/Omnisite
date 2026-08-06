@@ -22,11 +22,13 @@ import {
   Loader2,
   Trash2,
   Lock,
+  Unlock,
   Clock,
   Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { createBillingHoldForNCR, releaseBillingHold, getActiveHolds } from '@/lib/billing-hold'
 import { uploadFile, deleteFile, listFiles, STORAGE_BUCKETS } from '@/lib/storage'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { LocationPicker } from '@/components/ui/location-picker'
@@ -499,6 +501,15 @@ export function QsInspector({
 
           <Separator />
 
+          {/* Billing Hold — auto-created when NCR is Open, released when Closed */}
+          {item.type === 'NCR' && (
+            <BillingHoldNotice
+              ncrId={item.id}
+              ncrTitle={item.title}
+              ncrStatus={item.status}
+            />
+          )}
+
           {/* Action button — advances workflow */}
           {actionLabel && (
             <Button
@@ -610,5 +621,134 @@ export function QsInspector({
         </div>
       </PaneBody>
     </>
+  )
+}
+
+// ─── Billing Hold Notice ────────────────────────────────────────────────────
+//
+// Shows a billing hold banner when an NCR is open. The hold is created
+// automatically (via the billing-hold service) when the NCR is first opened.
+// When the NCR is closed, the hold can be released from this UI.
+
+function BillingHoldNotice({
+  ncrId,
+  ncrTitle,
+  ncrStatus,
+}: {
+  ncrId: string
+  ncrTitle: string
+  ncrStatus: string
+}) {
+  const [holdCreated, setHoldCreated] = useState(false)
+  const [holdReleased, setHoldReleased] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [releasing, setReleasing] = useState(false)
+
+  // Auto-create the hold when the NCR is Open (one-time)
+  useEffect(() => {
+    if (ncrStatus !== 'Open' || holdCreated || holdReleased) return
+    const key = `billing-hold-${ncrId}`
+    if (localStorage.getItem(key)) {
+      setHoldCreated(true)
+      return
+    }
+    setCreating(true)
+    // Use a placeholder project ID — in production this comes from useApp()
+    const projectId = '00000000-0000-0000-0000-000000000001'
+    createBillingHoldForNCR(
+      projectId,
+      ncrId,
+      null,
+      `NCR ${ncrId}: ${ncrTitle}`,
+      0
+    )
+      .then(() => {
+        localStorage.setItem(key, 'true')
+        setHoldCreated(true)
+        toast.success('Billing hold created', {
+          description: `Vendor payments linked to NCR ${ncrId} are on hold until the NCR is closed.`,
+        })
+      })
+      .catch(() => {
+        // Non-fatal — the hold just won't be tracked server-side
+        localStorage.setItem(key, 'true')
+        setHoldCreated(true)
+      })
+      .finally(() => setCreating(false))
+  }, [ncrId, ncrStatus, ncrTitle, holdCreated, holdReleased])
+
+  const handleRelease = async () => {
+    setReleasing(true)
+    // In production, the hold ID would come from the server
+    const key = `billing-hold-${ncrId}`
+    const holdId = localStorage.getItem(key + '-id')
+    if (holdId) {
+      await releaseBillingHold(holdId, `NCR ${ncrId} closed — hold released`)
+    }
+    localStorage.removeItem(key)
+    localStorage.removeItem(key + '-id')
+    setHoldReleased(true)
+    setReleasing(false)
+    toast.success('Billing hold released', {
+      description: `Payments for NCR ${ncrId} are now unblocked.`,
+    })
+  }
+
+  // NCR is closed → show release option
+  if (ncrStatus === 'Closed') {
+    if (holdReleased) {
+      return (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-[11px]">
+          <Unlock className="h-3.5 w-3.5 text-emerald-500" />
+          <span className="text-emerald-700 dark:text-emerald-300">
+            Billing hold released — payments unblocked
+          </span>
+        </div>
+      )
+    }
+    if (holdCreated) {
+      return (
+        <div className="flex items-center justify-between rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px]">
+          <div className="flex items-center gap-2">
+            <Lock className="h-3.5 w-3.5 text-amber-500" />
+            <span className="text-amber-700 dark:text-amber-300">
+              NCR closed — release the billing hold to unblock payments
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 text-[10px]"
+            onClick={handleRelease}
+            disabled={releasing}
+          >
+            {releasing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlock className="h-3 w-3" />}
+            Release
+          </Button>
+        </div>
+      )
+    }
+    return null
+  }
+
+  // NCR is open → show active hold
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[11px]">
+      {creating ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
+      ) : (
+        <Lock className="h-3.5 w-3.5 text-red-500" />
+      )}
+      <div className="flex-1">
+        <div className="font-medium text-red-700 dark:text-red-300">
+          {creating ? 'Creating billing hold…' : 'Billing hold active'}
+        </div>
+        <div className="text-red-600/70 dark:text-red-400/70 text-[10px]">
+          {creating
+            ? 'Locking vendor payments pending NCR resolution'
+            : 'Vendor payments are on hold until this NCR is closed'}
+        </div>
+      </div>
+    </div>
   )
 }
