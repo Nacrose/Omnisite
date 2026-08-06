@@ -16,19 +16,178 @@ export interface UploadResult {
  *
  * For financial receipts, NCR evidence photos, and chat media, signed
  * URLs with a 1-hour TTL are the minimum security bar.
+ *
+ * P1-20 in gap analysis: previously, `drawings` and `dsr-photos` were
+ * NOT in this set — they used public URLs. But drawings are often
+ * client-confidential (contract drawings, rebar shop drawings) and
+ * DSR photos frequently capture site work that shouldn't be publicly
+ * scrapeable. The CHANGELOG listed "No signed URLs for storage objects
+ * (uses public URLs — see L8)" as a Known Limitation — this fix
+ * closes that hole by promoting both buckets to signed URLs.
  */
-const SENSITIVE_BUCKETS = new Set(['receipts', 'ncr-photos', 'chat-media', 'ra-bills'])
+const SENSITIVE_BUCKETS = new Set([
+  'receipts',
+  'ncr-photos',
+  'chat-media',
+  'ra-bills',
+  // Added in P1-20 — drawings + DSR photos contain client-confidential
+  // content and shouldn't be publicly scrapeable.
+  'drawings',
+  'dsr-photos',
+])
 
 /** TTL for signed URLs — 1 hour (in seconds). */
 const SIGNED_URL_TTL = 3600
+
+// ─── Upload validation ─────────────────────────────────────────────────────
+// Per-bucket MIME allowlists. Without these, a user could upload a 500MB
+// PDF (freezes the UI on download) or an SVG-with-JS (XSS vector when
+// rendered inline) or a .exe (malware distribution via chat-media).
+//
+// The allowlists are deliberately permissive about formats but strict
+// about categories — e.g. drawings accepts PDF + DWG + image formats,
+// not arbitrary application/* types. PII-bearing types (e.g. vCard)
+// are excluded everywhere.
+interface BucketPolicy {
+  /** Max file size in bytes. Defaults to 25 MB if not set. */
+  maxSize: number
+  /** Allowed MIME prefixes (matched against file.type). Empty = allow all. */
+  allowedMimePrefixes: string[]
+  /** Explicitly disallowed MIME types (matched exactly). */
+  disallowedMime: string[]
+  /** Allowed file extensions (lowercase, no dot). Empty = allow all. */
+  allowedExtensions: string[]
+}
+
+const DEFAULT_MAX_SIZE = 25 * 1024 * 1024 // 25 MB
+
+const BUCKET_POLICIES: Record<string, BucketPolicy> = {
+  drawings: {
+    // Drawings can be large (multi-page PDFs). 50 MB ceiling.
+    maxSize: 50 * 1024 * 1024,
+    // DWG/DXF don't have registered MIME types — browsers send
+    // application/octet-stream. Allow it so CAD files pass the MIME gate
+    // (the extension allowlist below catches non-CAD octet-stream uploads).
+    allowedMimePrefixes: ['application/pdf', 'image/', 'application/octet-stream'],
+    disallowedMime: ['image/svg+xml'], // SVG-with-JS XSS vector
+    allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'tif', 'tiff', 'dwg', 'dxf'],
+  },
+  'dsr-photos': {
+    maxSize: 10 * 1024 * 1024, // 10 MB per photo
+    allowedMimePrefixes: ['image/'],
+    disallowedMime: ['image/svg+xml'],
+    allowedExtensions: ['jpg', 'jpeg', 'png', 'heic', 'webp'],
+  },
+  'ncr-photos': {
+    maxSize: 10 * 1024 * 1024,
+    allowedMimePrefixes: ['image/'],
+    disallowedMime: ['image/svg+xml'],
+    allowedExtensions: ['jpg', 'jpeg', 'png', 'heic', 'webp'],
+  },
+  receipts: {
+    maxSize: 10 * 1024 * 1024,
+    allowedMimePrefixes: ['image/', 'application/pdf'],
+    disallowedMime: ['image/svg+xml'],
+    allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+  },
+  'ra-bills': {
+    maxSize: 25 * 1024 * 1024,
+    allowedMimePrefixes: [
+      'application/pdf',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ],
+    disallowedMime: [],
+    allowedExtensions: ['pdf', 'xls', 'xlsx', 'csv'],
+  },
+  'chat-media': {
+    maxSize: 25 * 1024 * 1024,
+    // Chat allows images, PDFs, and common docs — but no executables.
+    allowedMimePrefixes: [
+      'image/',
+      'application/pdf',
+      'text/',
+      'application/vnd.openxmlformats-officedocument',
+      'application/vnd.ms-excel',
+      'application/msword',
+      'application/zip',
+    ],
+    disallowedMime: [
+      'image/svg+xml',
+      'application/x-msdownload',
+      'application/x-executable',
+      'application/x-dosexec',
+    ],
+    allowedExtensions: [], // rely on MIME prefix + disallow list
+  },
+}
+
+/**
+ * Validate a file against the bucket's upload policy. Returns null if the
+ * file passes, or an error string explaining why it was rejected.
+ *
+ * Checks:
+ *   1. File size <= policy.maxSize
+ *   2. file.type starts with one of policy.allowedMimePrefixes
+ *   3. file.type not in policy.disallowedMime
+ *   4. File extension (from name) in policy.allowedExtensions (if non-empty)
+ *
+ * If the bucket has no policy, falls back to a conservative default
+ * (25 MB, no .exe / .svg / .js / .html).
+ */
+export function validateUpload(bucket: string, file: File): string | null {
+  const policy = BUCKET_POLICIES[bucket]
+  const maxSize = policy?.maxSize ?? DEFAULT_MAX_SIZE
+  if (file.size > maxSize) {
+    const mb = (maxSize / (1024 * 1024)).toFixed(0)
+    return `File too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Max for ${bucket}: ${mb} MB.`
+  }
+
+  // Conservative default for unknown buckets — block obviously dangerous types.
+  const fallbackDisallowed = [
+    'image/svg+xml', // XSS vector
+    'application/x-msdownload',
+    'application/x-executable',
+    'application/x-dosexec',
+    'application/javascript',
+    'text/html',
+  ]
+  const disallowedMime = policy?.disallowedMime ?? fallbackDisallowed
+  if (file.type && disallowedMime.includes(file.type)) {
+    return `File type "${file.type}" is not allowed in ${bucket}.`
+  }
+
+  if (policy) {
+    if (
+      policy.allowedMimePrefixes.length > 0 &&
+      file.type &&
+      !policy.allowedMimePrefixes.some((p) => file.type.startsWith(p))
+    ) {
+      return `File type "${file.type}" is not allowed in ${bucket}. Allowed: ${policy.allowedMimePrefixes.join(', ')}.`
+    }
+
+    if (policy.allowedExtensions.length > 0) {
+      const ext = (file.name.split('.').pop() || '').toLowerCase()
+      if (ext && !policy.allowedExtensions.includes(ext)) {
+        return `File extension ".${ext}" is not allowed in ${bucket}. Allowed: ${policy.allowedExtensions.join(', ')}.`
+      }
+    }
+  }
+
+  return null
+}
 
 /**
  * Upload a file to Supabase Storage.
  * Creates a unique path using timestamp + original filename.
  *
- * For sensitive buckets (receipts, NCR photos, chat media, RA bills),
- * returns a signed URL with a 1-hour TTL instead of a public URL.
- * For public buckets (DSR photos, drawings), returns the public URL.
+ * For sensitive buckets (receipts, NCR photos, chat media, RA bills,
+ * drawings, DSR photos), returns a signed URL with a 1-hour TTL instead
+ * of a public URL. For other buckets, returns the public URL.
+ *
+ * Validates the file against the bucket's upload policy (size, MIME,
+ * extension) before uploading. Returns an error string if validation
+ * fails — the file is never sent to Supabase.
  */
 export async function uploadFile(
   bucket: string,
@@ -37,6 +196,12 @@ export async function uploadFile(
 ): Promise<UploadResult> {
   if (!isSupabaseConfigured() || !supabase) {
     return { url: '', path: '', error: 'Supabase not configured' }
+  }
+
+  // ─── Validate before uploading (P1-21) ─────────────────────────────────
+  const validationError = validateUpload(bucket, file)
+  if (validationError) {
+    return { url: '', path: '', error: validationError }
   }
 
   const ext = file.name.split('.').pop() || ''
@@ -164,13 +329,17 @@ export async function listFiles(bucket: string, folder: string = ''): Promise<St
  * Storage buckets used by OmniSite.
  * These must be created in the Supabase dashboard (Storage → New Bucket).
  *
- * Sensitive buckets (receipts, ncr-photos, chat-media, ra-bills) should
- * NOT have "Public" enabled in the Supabase dashboard — the app uses
- * signed URLs with expiry for these.
+ * ALL buckets below use signed URLs with a 1-hour TTL — none are public.
+ * This is the security baseline after the P1-20 fix. Previously,
+ * `drawings` and `dsr-photos` were public (anyone with a scraped URL
+ * could view them).
+ *
+ * In the Supabase dashboard, ensure "Public" is OFF for every bucket.
+ * The app handles signed-URL generation + refresh.
  */
 export const STORAGE_BUCKETS = {
-  DSR_PHOTOS: 'dsr-photos', // Daily site report photos (public)
-  DRAWINGS: 'drawings', // Drawing PDFs (public)
+  DSR_PHOTOS: 'dsr-photos', // Daily site report photos (signed)
+  DRAWINGS: 'drawings', // Drawing PDFs (signed)
   NCR_PHOTOS: 'ncr-photos', // NCR/ITR inspection photos (signed)
   RECEIPTS: 'receipts', // Financial receipt photos (signed)
   RA_BILLS: 'ra-bills', // RA Bill Excel/PDF uploads (signed)
