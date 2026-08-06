@@ -144,8 +144,14 @@ async function fetchUserRole(
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured()
-  const [user, setUser] = useState<OmniUser | null>(null)
-  const [loading, setLoading] = useState(true)
+  // In demo mode (no Supabase), loading starts as FALSE — there's nothing
+  // to load, the demo user is set synchronously below. Starting as `true`
+  // caused "stuck on loading workspace" if the useEffect's 150ms timeout
+  // was delayed by slow hydration or JS chunk loading.
+  // In Supabase mode, loading starts as true and resolves after
+  // getSession() completes (or the 5s safety timeout fires).
+  const [user, setUser] = useState<OmniUser | null>(configured ? null : DEMO_USER)
+  const [loading, setLoading] = useState(configured)
   // roleLoading is true between session bootstrap and the async role fetch
   // resolving. During this window, the UI shows FOREMAN permissions (the
   // least-privilege default) — callers should gate write buttons on this
@@ -156,16 +162,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true
 
     if (!configured || !supabase) {
-      // Demo mode — no Supabase configured. Auto-login as Demo User
-      // after a tiny delay so the loading state is visible.
-      const t = setTimeout(() => {
-        if (!active) return
-        setUser(DEMO_USER)
-        setLoading(false)
-      }, 150)
+      // Demo mode — user is already set (DEMO_USER from initial state).
+      // loading is already false. Nothing to do here.
       return () => {
         active = false
-        clearTimeout(t)
       }
     }
 
