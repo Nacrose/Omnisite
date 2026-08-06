@@ -1,3 +1,10 @@
+// Import polyfills FIRST — before any other module. Safari < 15.4 doesn't
+// support structuredClone() or crypto.randomUUID(), which are used in
+// the initial render path (seed data + ID generation). Without these
+// polyfills, Safari crashes during hydration and the user is stuck on
+// a loading spinner forever.
+import '@/lib/polyfills'
+
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
