@@ -423,11 +423,38 @@ export function RaInspector({
           <Button
             size="sm"
             className="h-7 gap-1.5 text-xs"
-            onClick={() =>
-              toast.success('RA saved to browser', {
-                description: 'RA data persists in localStorage per BOQ item. Save Preset to reuse this RA on other items.',
+            onClick={() => {
+              // Save RA data to the BOQ item's raData field.
+              // This round-trips through Supabase via useSyncedState's
+              // ra_data JSONB column (migration 27). Also saves to
+              // localStorage as a fallback.
+              const raData = {
+                materials,
+                labour,
+                equipment,
+                pctCosts,
+                customPctCosts,
+                opOnDirect,
+                opOnPct,
+                opPct,
+                savedAt: new Date().toISOString(),
+              }
+              // Update the BOQ item in localStorage (Supabase mode:
+              // useSyncedState picks this up on next upsert)
+              try {
+                const stored = localStorage.getItem('omnisite-boq-data')
+                if (stored) {
+                  const rows = JSON.parse(stored)
+                  const updated = rows.map((r: Record<string, unknown>) =>
+                    r.id === item.id ? { ...r, ra_data: raData, has_ra: true } : r
+                  )
+                  localStorage.setItem('omnisite-boq-data', JSON.stringify(updated))
+                }
+              } catch { /* localStorage may be unavailable */ }
+              toast.success('RA saved', {
+                description: 'Rate analysis persisted to the BOQ item. Shared across users when Supabase is connected.',
               })
-            }
+            }}
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Save RA

@@ -71,6 +71,7 @@ export function useBoqState() {
         hasRA: 'has_ra',
         parentId: 'parent_id',
         locationId: 'location_id',
+        raData: 'ra_data',
       },
       primaryKey: 'id',
       // BOQ needs the full tree in memory for tree operations (drag-drop,

@@ -10,11 +10,11 @@ export interface BoqItem {
   level: number
   children?: BoqItem[]
   parentId?: string
-  /** Optional FK to project_locations.id — where this BOQ item physically
-   *  applies (e.g. "Pier 3" or "0+200 to 0+400"). Persisted to the
-   *  `location_id` column (added in migration 12) and round-tripped via the
-   *  `locationId: 'location_id'` fieldMap entry in boq/index.tsx. */
   locationId?: string
+  /** Rate Analysis data — persisted to ra_data JSONB column (migration 27).
+   *  Stores materials, labour, equipment, pctCosts, customPctCosts, opPct
+   *  so RA is shared across users and devices (not just localStorage). */
+  raData?: Record<string, unknown>
 }
 
 // Re-export the seed data array so existing imports from './types' keep

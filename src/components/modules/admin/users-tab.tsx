@@ -225,6 +225,42 @@ export function UsersView({
                 >
                   {ROLE_LABELS[u.role] || u.role}
                 </Badge>
+                {/* Role change dropdown — calls the invite API's update path */}
+                <select
+                  value={u.role}
+                  onChange={async (e) => {
+                    const newRole = e.target.value
+                    try {
+                      const res = await fetch('/api/invites', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          email: u.email,
+                          role: newRole,
+                          projectId: activeProjectDbId,
+                        }),
+                      })
+                      if (res.ok) {
+                        toast.success('Role updated', {
+                          description: `${u.email} → ${ROLE_LABELS[newRole] || newRole}`,
+                        })
+                        fetchUsers()
+                      } else {
+                        const data = await res.json()
+                        toast.error(data.error || 'Failed to update role')
+                      }
+                    } catch {
+                      toast.error('Network error')
+                    }
+                  }}
+                  className="h-6 rounded border border-[var(--pane-divider)] bg-transparent px-1 text-[10px]"
+                  title="Change role"
+                >
+                  <option value="PM">PM</option>
+                  <option value="SITE_ENGINEER">Engineer</option>
+                  <option value="STOREKEEPER">Storekeeper</option>
+                  <option value="FOREMAN">Foreman</option>
+                </select>
                 <button
                   onClick={() => setPermUser(u)}
                   className="text-muted-foreground hover:text-primary rounded p-1 transition-colors"
