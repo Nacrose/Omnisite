@@ -4,9 +4,15 @@ import { isServerSupabaseConfigured, supabase } from '@/lib/supabase-server'
 /**
  * Health check endpoint — `/api/health`.
  *
- * Public (no auth) so uptime monitors (UptimeRobot, Better Stack, Vercel's
- * built-in healthCheckPath) can probe it without a session. Returns 503 if
- * any critical dependency is unreachable, 200 otherwise.
+ * Public (no auth) so uptime monitors (UptimeRobot, Better Stack) can
+ * probe it without a session. Returns 503 if any critical dependency is
+ * unreachable, 200 otherwise.
+ *
+ * To wire this into Vercel's deployment health check, configure the path
+ * in the Vercel Dashboard: Project Settings → Build & Development Settings
+ * → Health Check Path = `/api/health`. (Not set via vercel.json — Vercel's
+ * JSON schema doesn't accept `healthCheckPath` as a top-level property for
+ * Next.js framework projects.)
  *
  * Reports the reachability of:
  *   - Supabase (DB + Auth) — a tiny SELECT against the projects table

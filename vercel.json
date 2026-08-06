@@ -2,7 +2,6 @@
   "framework": "nextjs",
   "buildCommand": "bun run build",
   "installCommand": "bun install",
-  "healthCheckPath": "/api/health",
   "crons": [
     {
       "path": "/api/cron/notifications-scan",
