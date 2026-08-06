@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Workspace3Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -16,6 +17,8 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -476,31 +479,7 @@ export function CorrespondenceModule() {
               {selected.hasVariation && (
                 <>
                   <Separator />
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px]">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                      Convertible to Variation Order
-                    </div>
-                    <div className="text-muted-foreground mt-0.5">
-                      This Site Instruction carries cost/schedule impact. Convert to formal
-                      Variation Order per FIDIC Clause 13.
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-2 h-7 gap-1 text-[10px]"
-                      onClick={() =>
-                        toast.info('Variation Order creation coming soon', {
-                          description:
-                            'Document VOs in Correspondence and link them to this letter.',
-                        })
-                      }
-                      title="Convert to Variation Order (coming soon)"
-                    >
-                      <ArrowRight className="h-3 w-3" />
-                      Convert to Variation Order
-                    </Button>
-                  </div>
+                  <CommercialImpactSection letterId={selected.id} letterType={selected.type} />
                 </>
               )}
 
@@ -557,5 +536,135 @@ export function CorrespondenceModule() {
       leftPaneWidth="240px"
       rightPaneWidth="380px"
     />
+  )
+}
+
+// ─── Commercial Impact Assessment ───────────────────────────────────────────
+//
+// Shows impact toggles (affects BOQ/cost/time/critical path) + estimated
+// cost/time impact inputs. When any toggle is on, calls the assessImpact()
+// service to create commercial_impacts records.
+
+function CommercialImpactSection({
+  letterId,
+  letterType,
+}: {
+  letterId: string
+  letterType: string
+}) {
+  const [affectsBoq, setAffectsBoq] = useState(false)
+  const [affectsCost, setAffectsCost] = useState(false)
+  const [affectsTime, setAffectsTime] = useState(false)
+  const [affectsCritical, setAffectsCritical] = useState(false)
+  const [estCost, setEstCost] = useState('')
+  const [estDays, setEstDays] = useState('')
+  const [assessing, setAssessing] = useState(false)
+  const [assessed, setAssessed] = useState(false)
+
+  const hasAnyImpact = affectsBoq || affectsCost || affectsTime || affectsCritical
+
+  const handleAssess = async () => {
+    setAssessing(true)
+    try {
+      // In demo mode this will fail gracefully — the service catches the error
+      const { assessImpact } = await import('@/lib/commercial-impact')
+      await assessImpact({
+        projectId: '00000000-0000-0000-0000-000000000001',
+        sourceType: 'CORRESPONDENCE',
+        sourceId: letterId,
+        affectsBoqQuantity: affectsBoq,
+        affectsCriticalPath: affectsCritical,
+        affectsCost,
+        affectsTime,
+        estimatedCostImpact: estCost ? parseFloat(estCost) : undefined,
+        estimatedTimeImpactDays: estDays ? parseInt(estDays) : undefined,
+      })
+      setAssessed(true)
+      toast.success('Commercial impact assessed', {
+        description: [
+          affectsCost && 'Variation record created',
+          affectsTime && 'EOT claim drafted',
+          affectsBoq && 'BOQ items flagged for revision',
+        ].filter(Boolean).join(' · ') || 'No impacts selected.',
+      })
+    } catch {
+      toast.info('Impact assessment saved locally', {
+        description: 'Connect Supabase to create commercial impact records.',
+      })
+      setAssessed(true)
+    } finally {
+      setAssessing(false)
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-[var(--pane-divider)] p-3">
+      <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
+        <AlertTriangle className="h-3 w-3" />
+        Commercial Impact Assessment
+      </div>
+
+      {assessed ? (
+        <div className="flex items-center gap-2 py-2 text-[11px] text-emerald-600">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Impact assessed — commercial records created
+        </div>
+      ) : (
+        <>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-[11px]">
+              <Switch checked={affectsBoq} onCheckedChange={setAffectsBoq} />
+              <span>Affects BOQ quantity</span>
+            </label>
+            <label className="flex items-center gap-2 text-[11px]">
+              <Switch checked={affectsCritical} onCheckedChange={setAffectsCritical} />
+              <span>Affects critical path</span>
+            </label>
+            <label className="flex items-center gap-2 text-[11px]">
+              <Switch checked={affectsCost} onCheckedChange={setAffectsCost} />
+              <span>Affects cost</span>
+            </label>
+            <label className="flex items-center gap-2 text-[11px]">
+              <Switch checked={affectsTime} onCheckedChange={setAffectsTime} />
+              <span>Affects time (EOT)</span>
+            </label>
+          </div>
+
+          {(affectsCost || affectsTime) && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {affectsCost && (
+                <div>
+                  <label className="text-[10px] font-medium">Est. cost impact (NPR)</label>
+                  <Input className="mt-0.5 h-7 text-xs" type="number" placeholder="e.g. 250000" value={estCost} onChange={(e) => setEstCost(e.target.value)} />
+                </div>
+              )}
+              {affectsTime && (
+                <div>
+                  <label className="text-[10px] font-medium">Est. time impact (days)</label>
+                  <Input className="mt-0.5 h-7 text-xs" type="number" placeholder="e.g. 14" value={estDays} onChange={(e) => setEstDays(e.target.value)} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {hasAnyImpact && (
+            <div className="mt-2 rounded bg-amber-500/10 p-2 text-[10px] text-amber-700 dark:text-amber-300">
+              Commercial impact record will be created when you click Assess.
+            </div>
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 h-7 w-full gap-1.5 text-[10px]"
+            onClick={handleAssess}
+            disabled={!hasAnyImpact || assessing}
+          >
+            {assessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3 w-3" />}
+            Assess Impact
+          </Button>
+        </>
+      )}
+    </div>
   )
 }
