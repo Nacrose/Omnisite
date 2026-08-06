@@ -5,6 +5,7 @@ import { PaneBody } from '@/components/workspace-3pane'
 import { CheckCircle2, AlertTriangle, Boxes, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { performThreeWayMatch } from '@/lib/three-way-match'
 import { Po, Grn, StockItem, MinNote } from './types'
 import {
   useColumnVisibility,
@@ -99,15 +100,24 @@ export function GrnCenterView({
   grns: Grn[]
   onToggleApproval: (grnId: string) => void
 }) {
-  // 3-way match: PO qty === GRN qty === Invoice qty AND PO rate === Invoice rate
-  // Checks BOTH quantity and rate — a wrong unit rate on the invoice is the
-  // exact thing 3-way match exists to catch (overcharging via rate inflation
-  // at correct quantity). If poRate is undefined (old GRN without the field),
-  // skip the rate check — only enforce qty match (audit P7-2).
+  // 3-way match using the tolerance-based service from src/lib/three-way-match.ts
+  // Replaces the old exact-equality check with configurable % tolerances
+  // (default: 5% qty, 2% rate, 3% amount).
+  const matchResults = grns.map((g) => ({
+    grn: g,
+    match: performThreeWayMatch({
+      poQty: g.poQty,
+      poRate: g.poRate ?? g.rate,
+      grnQty: g.grnQty,
+      grnRate: g.rate,
+      invoiceQty: g.invoiceQty,
+      invoiceRate: g.rate,
+    }),
+  }))
+
   const isMatched = (g: Grn) => {
-    const qtyMatched = g.poQty === g.grnQty && g.grnQty === g.invoiceQty
-    const rateMatched = g.poRate === undefined || g.poRate === g.rate
-    return qtyMatched && rateMatched
+    const result = matchResults.find((m) => m.grn.id === g.id)
+    return (result?.match.status ?? 'EXCEPTION') === 'MATCHED'
   }
   const lockedAmount = grns
     .filter((g) => !isMatched(g) && g.grnQty > 0)
@@ -155,6 +165,7 @@ export function GrnCenterView({
           <StickyTableBody>
             {grns.map((g) => {
               const matched = isMatched(g)
+              const matchData = matchResults.find((m) => m.grn.id === g.id)
               return (
                 <div
                   key={g.id}
@@ -172,7 +183,10 @@ export function GrnCenterView({
                     <div className="w-20 px-2 text-right font-mono">{g.invoiceQty}</div>
                   )}
                   {isVisible('match') && (
-                    <div className="w-20 px-2 text-center">
+                    <div
+                      className="w-20 px-2 text-center"
+                      title={matchData?.match.details.join('\n')}
+                    >
                       {matched ? (
                         <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-500" />
                       ) : (
@@ -206,13 +220,7 @@ export function GrnCenterView({
                         title={
                           matched
                             ? 'Toggle payment approval'
-                            : g.poRate !== undefined &&
-                                g.poRate !== g.rate &&
-                                (g.poQty !== g.grnQty || g.grnQty !== g.invoiceQty)
-                              ? 'Locked — qty + rate mismatch'
-                              : g.poRate !== undefined && g.poRate !== g.rate
-                                ? `Locked — rate mismatch: PO rate ${g.poRate} vs invoice rate ${g.rate}`
-                                : 'Locked — quantity mismatch: PO qty ≠ GRN qty ≠ Invoice qty'
+                            : matchData?.match.details.join('\n') || 'Locked — variance exceeds tolerance'
                         }
                       >
                         {matched ? (g.payStatus === 'Cleared' ? 'Hold' : 'Approve') : '🔒 Locked'}
@@ -248,8 +256,8 @@ export function GrnCenterView({
         </div>
         <div className="text-muted-foreground mt-0.5">
           {lockedAmount > 0
-            ? `${grns.filter((g) => !isMatched(g) && g.grnQty > 0).length} invoices on hold pending 3-way match reconciliation. NPR ${lockedAmount.toLocaleString()} locked.`
-            : 'All 3-way matches verified. All payments approved.'}
+            ? `${grns.filter((g) => !isMatched(g) && g.grnQty > 0).length} invoices on hold pending 3-way match reconciliation. NPR ${lockedAmount.toLocaleString()} locked. Tolerance: ±5% qty, ±2% rate, ±3% amount.`
+            : 'All 3-way matches verified within tolerance (±5% qty, ±2% rate, ±3% amount). All payments approved.'}
         </div>
       </div>
     </PaneBody>
