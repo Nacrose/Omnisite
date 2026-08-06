@@ -81,6 +81,11 @@ export async function POST(req: NextRequest) {
   // ─── 1. Create or find the auth user ───────────────────────────────────
   let authUserId: string
   let isNewUser = false
+  // Surfaces email-delivery failures from the magic-link step. Hoisted
+  // out of the else-block below so the response builder at the end of
+  // the function can read it. Null when no email was sent (existing-user
+  // re-invite) or when the email was sent successfully.
+  let emailWarning: string | null = null
 
   const { data: createdUser, error: createError } = await serviceClient.auth.admin.createUser({
     email: body.email,
@@ -112,15 +117,37 @@ export async function POST(req: NextRequest) {
     authUserId = createdUser.user.id
     isNewUser = true
 
-    // Send invite email (magic link) for newly created users
-    await serviceClient.auth.admin
+    // Send invite email (magic link) for newly created users.
+    //
+    // Previously this was `.catch(() => {})` which silently swallowed
+    // delivery failures — the inviter saw a "user invited" toast but the
+    // invitee never received the email, and the inviter had no way to know
+    // they needed to resend. Now we capture the error and surface it in
+    // the response so the UI can tell the inviter "user created, but
+    // the invite email failed — ask them to use 'Forgot password?'".
+    //
+    // The user IS already created (step 1 succeeded), so we don't fail
+    // the whole request — we just warn. The invitee can self-serve via
+    // the new "Forgot your password?" flow on /login.
+    const linkResult = await serviceClient.auth.admin
       .generateLink({
         type: 'magiclink',
         email: body.email,
       })
-      .catch(() => {
-        // Non-fatal — the user is created, they just won't get the email.
+      .catch((e: unknown) => {
+        emailWarning =
+          e instanceof Error
+            ? `Invite email failed: ${e.message}`
+            : 'Invite email failed (unknown error)'
       })
+    if (linkResult?.error && !emailWarning) {
+      emailWarning = `Invite email failed: ${linkResult.error.message}`
+    }
+    if (emailWarning) {
+      console.warn(
+        `[invites] ${emailWarning} for ${body.email} — user was created (id=${authUserId}).`
+      )
+    }
   }
 
   // ─── 2. Check if already assigned to this project ──────────────────────
@@ -185,6 +212,10 @@ export async function POST(req: NextRequest) {
     projectId: body.projectId,
     assignmentId: assignment?.id,
     isNewUser,
+    // Surfaces email-delivery failures so the UI can warn the inviter.
+    // Null when the email was sent successfully (or when this is an
+    // existing-user re-invite, which doesn't send an email).
+    emailWarning,
   })
 }
 

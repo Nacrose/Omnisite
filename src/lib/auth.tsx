@@ -38,6 +38,16 @@ interface AuthContextValue {
   isDemo: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  /**
+   * Send a password-reset email. Supabase sends an email with a link
+   * to a hosted page where the user picks a new password. Requires
+   * Supabase to be configured (no demo-mode fallback).
+   *
+   * Pass the absolute redirect URL the user should land on after
+   * resetting — typically \`window.location.origin + '/login'\`.
+   * Supabase appends the recovery token as a hash fragment.
+   */
+  resetPassword: (email: string, redirectTo?: string) => Promise<{ error: string | null }>
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -47,6 +57,7 @@ const AuthContext = createContext<AuthContextValue>({
   isDemo: false,
   signIn: async () => ({ error: 'AuthProvider not mounted' }),
   signOut: async () => {},
+  resetPassword: async () => ({ error: 'AuthProvider not mounted' }),
 })
 
 // ─── Demo user (no Supabase configured) ─────────────────────────────────────
@@ -235,8 +246,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  /**
+   * Send a password-reset email. Supabase's resetPasswordForEmail() sends
+   * a recovery link to the user's inbox. The link points to Supabase's
+   * hosted recovery page, which redirects to `redirectTo` (with a recovery
+   * token in the hash fragment) after the user picks a new password.
+   *
+   * The redirect URL must be in Supabase's allowed redirect URLs list
+   * (Dashboard → Authentication → URL Configuration). For local dev, add
+   * http://localhost:3000/login; for production, add https://your-domain/login.
+   *
+   * Returns { error: null } on success (the email is queued by Supabase).
+   * Returns { error: string } if Supabase is not configured, if the rate
+   * limit is hit, or if the email doesn't exist (Supabase returns success
+   * for unknown emails to prevent user enumeration, so callers can't tell
+   * the difference — the toast always says "if the email exists, you'll
+   * get a reset link").
+   */
+  const resetPassword = async (
+    email: string,
+    redirectTo?: string
+  ): Promise<{ error: string | null }> => {
+    if (!configured || !supabase) {
+      return { error: 'Password reset is not available in demo mode.' }
+    }
+    const redirectUrl = redirectTo || `${window.location.origin}/login`
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    })
+    if (error) return { error: error.message }
+    return { error: null }
+  }
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, roleLoading, isDemo: configured ? false : true, signIn, signOut }),
+    () => ({
+      user,
+      loading,
+      roleLoading,
+      isDemo: configured ? false : true,
+      signIn,
+      signOut,
+      resetPassword,
+    }),
     [user, loading, roleLoading, configured]
   )
 
