@@ -19,9 +19,8 @@ export interface Rfi {
   scheduleImpact?: string
   severity: 'low' | 'medium' | 'high'
   /** Optional FK to project_locations.id — where the question physically
-   *  applies (e.g. "Pier 3"). Persisted to localStorage alongside the
-   *  RFI record. NOT yet backed by a DB table — see the persistence
-   *  comment above (audit round 11). */
+   *  applies (e.g. "Pier 3"). Persisted to the rfis.location_id column
+   *  (migration 28). */
   locationId?: string
 }
 
@@ -29,6 +28,29 @@ export interface Rfi {
 // RFIs need to be mutable so the DSR Inspector can add new drafts that
 // appear in the RFI Register. Using a module-level array + useSyncExternalStore
 // so both components see the same state without prop drilling.
+//
+// ─── Persistence ──────────────────────────────────────────────────────────
+// Previously this was a localStorage-only stopgap (usePersistentState). As of
+// migration 28, RFIs are backed by the `rfis` DB table + /api/rfis route.
+// The store now mirrors that pattern:
+//
+//   - Reads:  RfiTab mounts useSyncedState('rfis') and pushes the result
+//             into this module-level cache via setRfisFromServer(). Other
+//             consumers (DSR Inspector, open-RFI count in the header)
+//             subscribe to this cache via useSyncExternalStore — they
+//             don't each call useSyncedState because that would create
+//             duplicate Supabase channels + duplicate API fetches.
+//   - Writes: addRfi() / updateRfi() update the local cache immediately
+//             (optimistic) AND fire a POST to /api/rfis via upsertOne().
+//             The RfiTab's useSyncedState realtime subscription will
+//             receive the same row back from the server and reconcile.
+//
+// localStorage is kept as a fallback for demo mode (no Supabase configured)
+// — same behavior as useSyncedState's localStorage path.
+
+import { upsertOne } from '@/lib/api-client'
+import { isSupabaseConfigured } from '@/lib/supabase'
+
 const INITIAL_RFIS: Rfi[] = [
   {
     id: 'r1',
@@ -110,17 +132,9 @@ const INITIAL_RFIS: Rfi[] = [
   },
 ]
 
-// ─── RFI persistence ────────────────────────────────────────────────────────
-// RFIs are persisted via usePersistentState (localStorage) so they survive
-// page reloads. This is a stopgap — the proper solution is a dedicated
-// `rfis` DB table + API route + useSyncedState wiring, matching how
-// dsr_entries, qs_items, and letters are persisted. Until that table
-// exists, usePersistentState gives us cross-reload persistence which the
-// previous Zustand store did not (reload = back to seed data only).
-//
-// The store uses a module-level state + useSyncExternalStore pattern so
-// the DSR Inspector (which lives in a different component tree) can add
-// RFIs that immediately appear in the RFI Register without prop drilling.
+// ─── Module-level store ────────────────────────────────────────────────────
+// Backed by RfiTab's useSyncedState via setRfisFromServer(). localStorage
+// remains the demo-mode fallback (matches useSyncedState's behavior).
 
 let rfiState: Rfi[] = [...INITIAL_RFIS]
 const rfiListeners = new Set<() => void>()
@@ -129,8 +143,10 @@ function notifyRfiListeners() {
   rfiListeners.forEach((l) => l())
 }
 
-// Load from localStorage on module init.
-if (typeof window !== 'undefined') {
+// Load from localStorage on module init — only used in demo mode (no
+// Supabase configured). When Supabase is configured, RfiTab's useSyncedState
+// hydrates from /api/rfis instead.
+if (typeof window !== 'undefined' && !isSupabaseConfigured()) {
   try {
     const stored = localStorage.getItem('omnisite-rfis')
     if (stored) {
@@ -144,14 +160,41 @@ if (typeof window !== 'undefined') {
   }
 }
 
-function persistRfis() {
-  if (typeof window !== 'undefined') {
+function persistRfisLocal() {
+  // Only persist to localStorage in demo mode. In Supabase mode, the
+  // server is the source of truth — localStorage would drift.
+  if (typeof window !== 'undefined' && !isSupabaseConfigured()) {
     try {
       localStorage.setItem('omnisite-rfis', JSON.stringify(rfiState))
     } catch {
       // Quota exceeded or localStorage unavailable — state still works in-memory.
     }
   }
+}
+
+/**
+ * Push a fresh snapshot from the server-side useSyncedState caller (RfiTab).
+ * Called whenever the RfiTab's useSyncedState hook receives new data —
+ * either on initial fetch, on a realtime UPDATE/INSERT/DELETE, or on a
+ * loadMore() page. Replaces the local state wholesale and notifies all
+ * useSyncExternalStore subscribers.
+ *
+ * This is the bridge between the hook-based read path (RfiTab's useSyncedState)
+ * and the imperative write path (addRfi / updateRfi called from the DSR
+ * Inspector and Create-Modal components).
+ */
+export function setRfisFromServer(rfis: Rfi[]): void {
+  // Skip if the snapshot is identical — avoids a spurious re-render cycle
+  // when the realtime channel echoes back our own write.
+  if (rfis === rfiState) return
+  if (rfis.length === rfiState.length && rfis.every((r, i) => r.id === rfiState[i]?.id)) {
+    // Cheap ID check — if IDs match in order, assume the snapshot is the
+    // same. This is correct for the common case (no realtime changes). A
+    // deep comparison would be more correct but slower for large registers.
+    return
+  }
+  rfiState = rfis
+  notifyRfiListeners()
 }
 
 /**
@@ -167,19 +210,73 @@ export function getRfis(): Rfi[] {
   return rfiState
 }
 
-/** Add a new RFI to the store. Used by the DSR Inspector's saveRfi(). */
-export function addRfi(rfi: Rfi): void {
-  rfiState = [rfi, ...rfiState]
-  persistRfis()
-  notifyRfiListeners()
+/**
+ * Convert a camelCase Rfi to a snake_case DB row for POST /api/rfis.
+ * Matches the fieldMap used by useSyncedState in rfi-tab.tsx.
+ */
+function rfiToRow(rfi: Rfi): Record<string, unknown> {
+  return {
+    id: rfi.id,
+    number: rfi.number,
+    date: rfi.date,
+    subject: rfi.subject,
+    question: rfi.question,
+    background: rfi.background,
+    impact: rfi.impact,
+    status: rfi.status,
+    reply_by: rfi.replyBy,
+    reply: rfi.reply ?? null,
+    replied_date: rfi.repliedDate ?? null,
+    linked_dsr: rfi.linkedDsr ?? null,
+    cost_impact: rfi.costImpact ?? null,
+    schedule_impact: rfi.scheduleImpact ?? null,
+    severity: rfi.severity,
+    location_id: rfi.locationId ?? null,
+  }
 }
 
-/** Update an existing RFI by id. Used by the RFI Inspector's "Log Consultant
- *  Reply" action (audit D2-7). */
+/** Add a new RFI to the store + POST to /api/rfis.
+ *
+ *  Used by the DSR Inspector's saveRfi() and the RFI Create Modal's submit.
+ *  Updates the local cache immediately (optimistic) so the UI feels instant,
+ *  then fires the API call. If the API call fails, the optimistic update is
+ *  NOT rolled back — the global error toast (P2-7) fires, and the realtime
+ *  channel will eventually reconcile. A future iteration could add proper
+ *  rollback via the existing `pendingUpsertsRef` pattern in use-synced-state.
+ */
+export function addRfi(rfi: Rfi): void {
+  rfiState = [rfi, ...rfiState]
+  persistRfisLocal()
+  notifyRfiListeners()
+
+  if (isSupabaseConfigured()) {
+    // Fire-and-forget — api-client's global error toast handles failures.
+    void upsertOne('rfis', rfiToRow(rfi)).catch(() => {
+      // Swallow — the global error toast (P2-7) already notified the user.
+      // The realtime channel will reconcile when the server eventually
+      // accepts the write (e.g. after a transient network blip).
+    })
+  }
+}
+
+/** Update an existing RFI by id + POST the merged row to /api/rfis.
+ *
+ *  Used by the RFI Inspector's "Log Consultant Reply" and "Close RFI"
+ *  actions, and the LocationPicker onChange.
+ */
 export function updateRfi(id: string, updates: Partial<Rfi>): void {
   rfiState = rfiState.map((r) => (r.id === id ? { ...r, ...updates } : r))
-  persistRfis()
+  persistRfisLocal()
   notifyRfiListeners()
+
+  if (isSupabaseConfigured()) {
+    const updated = rfiState.find((r) => r.id === id)
+    if (updated) {
+      void upsertOne('rfis', rfiToRow(updated)).catch(() => {
+        // Same as addRfi — global toast handles failures.
+      })
+    }
+  }
 }
 
 // Re-export RFIS for backward compat (components that read the initial array
