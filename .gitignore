@@ -44,6 +44,9 @@ next-env.d.ts
 db/*.db
 db/*.db-journal
 
+# backups (output of `bun run backup` — never commit, may contain PII)
+/backups
+
 # IDE
 .idea
 .vscode

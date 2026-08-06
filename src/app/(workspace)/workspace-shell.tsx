@@ -99,6 +99,44 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
     }
   }, [loading, user, router])
 
+  // ─── Onboarding detection (P1-28) ────────────────────────────────────────
+  // After auth resolves, check whether the user has any project assignments.
+  // If not (and Supabase is configured — demo mode skips this since the
+  // demo user is pre-assigned to the seed project), redirect to /onboarding
+  // where they can create their first project + auto-assign themselves as PM.
+  //
+  // This replaces the README's manual SQL INSERT instruction:
+  //   INSERT INTO user_projects (user_id, project_id, role)
+  //   VALUES ('<auth.users.id>', '00000000-0000-0000-0000-000000000001', 'PM');
+  //
+  // The check runs ONCE per session (guarded by sessionStorage so navigation
+  // between modules doesn't re-trigger it).
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !user || loading || roleLoading) return
+    const SESSION_KEY = 'omnisite-onboarding-checked'
+    if (typeof window === 'undefined') return
+    if (window.sessionStorage.getItem(SESSION_KEY)) return
+    // Mark as checked immediately so a slow fetch doesn't trigger a second
+    // request when the user navigates.
+    window.sessionStorage.setItem(SESSION_KEY, '1')
+
+    fetch('/api/user-projects', { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) return []
+        return (await res.json()) as Array<{ project_id: string; role: string }>
+      })
+      .then((rows) => {
+        if (Array.isArray(rows) && rows.length === 0) {
+          // No project assignments — redirect to onboarding.
+          router.replace('/onboarding')
+        }
+      })
+      .catch(() => {
+        // Network error — don't block the workspace. The onboarding page
+        // is still reachable manually via /onboarding.
+      })
+  }, [user, loading, roleLoading, router])
+
   const displayName = user?.name || (loading ? 'Loading…' : 'Guest')
   const roleLabel = user ? (ROLE_TEMPLATES[user.role]?.label ?? user.role) : ''
   const initials = (() => {

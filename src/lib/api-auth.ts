@@ -48,6 +48,24 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   // can author redlines; field teams (foremen, storekeepers) can read but not
   // annotate. Matches the RLS policy in migration 00000000000013 §3.
   drawing_annotations: ['PM', 'SITE_ENGINEER'],
+  // RFIs (Requests For Information). Site engineers raise them, PMs
+  // answer/close them. Storekeeper and Foreman are read-only (they need
+  // visibility but don't author RFIs). Matches migration 28 RLS.
+  rfis: ['PM', 'SITE_ENGINEER'],
+  // Material Issue Notes (MINs). Storekeepers author them (they issue
+  // material from the store); site engineers also author (sometimes
+  // material is issued directly to a task without going through the store).
+  // PMs can do everything; Foremen are read-only. Matches migration 29 RLS.
+  material_issue_notes: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  // Notifications. Users can UPDATE their own read_at (RLS gates to
+  // user_id = auth.uid()). PMs can DELETE for admin cleanup. INSERTs only
+  // happen via the service-role cron route. All authenticated roles need
+  // write so the bell's mark-as-read works for everyone.
+  notifications: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
+  // Per-day attendance records. Foremen log hours per worker per day;
+  // site engineers can also author; PM can delete for cleanup.
+  // Storekeeper is read-only. Matches migration 31 RLS.
+  worker_attendance: ['PM', 'SITE_ENGINEER', 'FOREMAN'],
 }
 
 /**
@@ -81,6 +99,10 @@ export const TABLE_PRIMARY_KEYS: Record<string, string> = {
   vendors: 'id',
   project_locations: 'id',
   drawing_annotations: 'id',
+  rfis: 'id',
+  material_issue_notes: 'id',
+  notifications: 'id',
+  worker_attendance: 'id',
 }
 
 /** Get the PK column for a table (defaults to 'id'). */
@@ -114,6 +136,10 @@ const PROJECT_SCOPED_TABLES = new Set([
   'vendors',
   'project_locations',
   'drawing_annotations',
+  'rfis',
+  'material_issue_notes',
+  'notifications',
+  'worker_attendance',
 ])
 
 /**

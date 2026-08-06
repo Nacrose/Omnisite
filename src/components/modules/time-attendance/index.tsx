@@ -13,7 +13,7 @@ import { toast } from 'sonner'
 import { WorkerList } from './worker-list'
 import { WorkerInspector } from './inspector'
 import { PhoneMockup } from './phone-mockup'
-import { computeDailyPayroll, formatPayPeriodLabel } from './payroll-calc'
+import { computeDailyPayroll, formatPayPeriodLabel, enumeratePayPeriodDays } from './payroll-calc'
 
 export interface Worker {
   id: string
@@ -159,6 +159,25 @@ export function TimeAttendanceModule() {
       primaryKey: 'id',
     }
   )
+
+  // Per-day attendance (migration 31). Loaded once here so the payroll
+  // CSV export can walk the pay-period range without re-fetching per
+  // worker. The inspector also reads from this store via its own
+  // useSyncedState call (the shared channel cache dedupes the
+  // Supabase realtime subscription).
+  interface AttendanceRow {
+    id: string
+    worker_id: string
+    date: string
+    hours: number
+    ot_hours: number
+  }
+  const [attendanceRows] = useSyncedState<AttendanceRow[]>(
+    'omnisite-worker-attendance',
+    'worker_attendance',
+    () => [] as AttendanceRow[],
+    { primaryKey: 'id' }
+  )
   const filteredByTrade =
     selectedTrade === 'All Trades'
       ? workerList
@@ -276,32 +295,67 @@ export function TimeAttendanceModule() {
               size="sm"
               className="mt-2 h-7 w-full gap-1.5 text-xs"
               onClick={() => {
-                // Payroll CSV export — until per-day attendance tracking
-                // exists, we export ONLY today's snapshot (one row per
-                // worker). The previous version fanned `todayHours` out
-                // across every day in the pay-period range, fabricating
-                // hours that weren't actually worked. When a daily
-                // attendance table is added, swap this for a per-day
-                // lookup keyed by (workerId, date).
-                const today = new Date().toISOString().slice(0, 10)
+                // Multi-day payroll CSV export — walks the pay-period
+                // range and reads each worker's per-day attendance from
+                // the worker_attendance table (migration 31).
+                //
+                // Before P1-13, this exported ONLY today's snapshot
+                // (one row per worker) and the comment admitted
+                // "multi-day payroll requires per-day attendance
+                // tracking (not yet implemented)". Now we have the
+                // table — emit one row per (worker, day) where hours
+                // were logged.
+                //
+                // Workers with no attendance in the range get a single
+                // zero-hours row so they're not silently dropped from
+                // the export (a foreman can spot the gap and backfill).
+                const days = enumeratePayPeriodDays(payPeriodStart, payPeriodEnd)
+                if (days.length === 0) {
+                  toast.error('Invalid pay period', {
+                    description: 'Start date must be on or before end date.',
+                  })
+                  return
+                }
                 const rows: (string | number)[][] = []
                 for (const w of workerList) {
-                  const hours = w.todayHours ?? 0
-                  const p = computeDailyPayroll(w, hours)
-                  rows.push([
-                    w.name,
-                    w.trade,
-                    today,
-                    p.regularHours.toFixed(2),
-                    p.otHours.toFixed(2),
-                    p.wageRate.toFixed(2),
-                    p.regularPay.toFixed(2),
-                    p.otPay.toFixed(2),
-                    p.totalPay.toFixed(2),
-                  ])
+                  const workerRows = attendanceRows.filter(
+                    (a) =>
+                      a.worker_id === w.id && a.date >= payPeriodStart && a.date <= payPeriodEnd
+                  )
+                  if (workerRows.length === 0) {
+                    // No attendance logged in the period — emit a
+                    // single zero-hours row so the gap is visible.
+                    const p = computeDailyPayroll(w, 0)
+                    rows.push([
+                      w.name,
+                      w.trade,
+                      `${payPeriodStart}→${payPeriodEnd}`,
+                      '0.00',
+                      '0.00',
+                      p.wageRate.toFixed(2),
+                      '0.00',
+                      '0.00',
+                      '0.00',
+                    ])
+                    continue
+                  }
+                  for (const a of workerRows) {
+                    const p = computeDailyPayroll(w, a.hours)
+                    rows.push([
+                      w.name,
+                      w.trade,
+                      a.date,
+                      p.regularHours.toFixed(2),
+                      p.otHours.toFixed(2),
+                      p.wageRate.toFixed(2),
+                      p.regularPay.toFixed(2),
+                      p.otPay.toFixed(2),
+                      p.totalPay.toFixed(2),
+                    ])
+                  }
                 }
                 exportToCsv(
-                  'omnisite-payroll-today.csv',
+                  `omnisite-payroll-${payPeriodStart}-to-${payPeriodEnd}.csv`,
                   [
                     'Worker',
                     'Trade',
@@ -315,13 +369,14 @@ export function TimeAttendanceModule() {
                   ],
                   rows,
                   [
-                    "# NOTE: This export contains today's attendance snapshot only.",
-                    '# Multi-day payroll requires per-day attendance tracking (not yet implemented).',
+                    `# Pay period: ${formatPayPeriodLabel(payPeriodStart, payPeriodEnd)} (${days.length} days)`,
+                    `# Workers: ${workerList.length}`,
+                    `# Rows: ${rows.length} (one per worker-day with logged hours)`,
+                    '# Workers with no logged attendance appear as a single 0-hours row.',
                   ]
                 )
-                toast.success("Exported today's attendance snapshot", {
-                  description:
-                    'Multi-day payroll requires per-day attendance tracking (not yet implemented).',
+                toast.success('Payroll exported', {
+                  description: `${rows.length} rows across ${workerList.length} workers for ${days.length} days.`,
                 })
               }}
             >

@@ -77,11 +77,21 @@ export function InviteUserModal({ onClose, onInvited }: InviteUserModalProps) {
       }
 
       setSuccess(true)
-      toast.success('User invited', {
-        description: data.isNewUser
-          ? `${email} created and assigned to ${projectName} as ${role}. They'll get a login link by email.`
-          : `${email} already had an account — role updated to ${role} on ${projectName}.`,
-      })
+      if (data.emailWarning) {
+        // Email delivery failed — the user IS created, but the magic link
+        // never landed. Tell the inviter so they can ask the invitee to use
+        // the "Forgot your password?" flow on /login (which now exists
+        // thanks to the P1-24 fix in auth.tsx + login/page.tsx).
+        toast.warning('User created — but invite email failed', {
+          description: `${email} was added to ${projectName} as ${role}, but the invite email couldn't be delivered. Ask them to use "Forgot your password?" on the login page to set a password. (${data.emailWarning})`,
+        })
+      } else {
+        toast.success('User invited', {
+          description: data.isNewUser
+            ? `${email} created and assigned to ${projectName} as ${role}. They'll get a login link by email.`
+            : `${email} already had an account — role updated to ${role} on ${projectName}.`,
+        })
+      }
       setTimeout(() => {
         onInvited()
         onClose()

@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore, useEffect } from 'react'
 import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Search, Plus, AlertTriangle, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { subscribeRfis, getRfis } from './rfi-store'
+import { subscribeRfis, getRfis, setRfisFromServer, type Rfi } from './rfi-store'
+import { useSyncedState } from '@/lib/use-synced-state'
 import { RfiInspector } from './rfi-inspector'
 import { RfiCreateModal } from './rfi-create-modal'
 
@@ -24,8 +25,47 @@ export function RfiTab({
    *  (audit D2-3). */
   onOpenDsr?: (dsrId: string) => void
 }) {
-  // Subscribe to the module-level RFI store via useSyncExternalStore
-  // so the list re-renders when addRfi() or updateRfi() is called.
+  // ─── Server-side RFI store ──────────────────────────────────────────────
+  // RfiTab is the only component that calls useSyncedState for RFIs. It
+  // pushes the server snapshot into the module-level cache via
+  // setRfisFromServer() so other consumers (rfi-inspector, dsr-rfi-modal,
+  // the open-RFI count in the Daily Ops header) see the same data via
+  // useSyncExternalStore. Without this single-owner pattern, each consumer
+  // would create its own Supabase realtime channel + duplicate API fetch.
+  //
+  // This replaces the previous localStorage-only usePersistentState
+  // approach (P1-14 in gap analysis — RFIs now persist to the `rfis`
+  // DB table via /api/rfis, with localStorage as the demo-mode fallback).
+  const [serverRfis, _setServerRfis, rfisLoading] = useSyncedState<Rfi[]>(
+    'omnisite-rfis',
+    'rfis',
+    () => [] as Rfi[],
+    {
+      fieldMap: {
+        replyBy: 'reply_by',
+        repliedDate: 'replied_date',
+        linkedDsr: 'linked_dsr',
+        costImpact: 'cost_impact',
+        scheduleImpact: 'schedule_impact',
+        locationId: 'location_id',
+      },
+      primaryKey: 'id',
+    }
+  )
+
+  // Push server snapshots into the module-level cache so non-hook consumers
+  // (addRfi / updateRfi / getRfis / subscribeRfis) see the latest data.
+  // Skipped while loading — the initial seed falls through from
+  // INITIAL_RFIS until the first server page arrives.
+  useEffect(() => {
+    if (!rfisLoading && serverRfis.length > 0) {
+      setRfisFromServer(serverRfis)
+    }
+  }, [serverRfis, rfisLoading])
+
+  // Subscribe to the module-level store — sees both server snapshots
+  // (pushed by the effect above) and optimistic writes from addRfi /
+  // updateRfi (called by the inspector + create modal).
   const rfis = useSyncExternalStore(subscribeRfis, getRfis, getRfis)
   const [selectedId, setSelectedId] = useState('r1')
   const [filter, setFilter] = useState<'All' | 'Open' | 'Replied' | 'Closed'>('All')

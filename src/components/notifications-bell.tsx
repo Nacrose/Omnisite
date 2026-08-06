@@ -6,46 +6,35 @@ import { Bell, CheckCircle2, AlertTriangle, Clock, FileText, ShieldAlert, X } fr
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { type ModuleId } from '@/lib/app-store'
-import { sendNotification, type NotificationType } from '@/lib/notifications'
+import { useSyncedState } from '@/lib/use-synced-state'
+import { upsertOne } from '@/lib/api-client'
 
-interface Notification {
+// Notification shape mirrors the `notifications` DB table (migration 30).
+// Stored as snake_case from the DB; converted to camelCase by useSyncedState's
+// generic field-name passthrough (the table has no fieldMap — names match
+// 1:1, with snake_case coming through as-is since there's no fieldMap
+// mapping them).
+interface DbNotification {
   id: string
-  type: 'approval' | 'alert' | 'reminder' | 'document' | 'safety'
+  user_id: string | null
+  project_id: string
+  type: 'rfi_overdue' | 'ncr_hold' | 'po_approval' | 'dsr_review' | 'variation_threshold'
   title: string
-  desc: string
-  time: string
-  unread: boolean
+  message: string
   severity: 'info' | 'warning' | 'critical'
-  /** Maps the seeded notification to a sendNotification() type. */
-  notifyType?: NotificationType
-  /** A stable recipient identifier (user id, role, or email). */
-  recipient?: string
-  /** Module to deep-link to when the notification is clicked. */
-  module?: ModuleId
+  module?: string | null
+  context?: Record<string, unknown> | null
+  read_at: string | null
+  created_at: string
+  dispatch_status?: string | null
 }
 
-// ─── Notifications seed ─────────────────────────────────────────────────────
-//
-// Notifications should be computed from live data (pending POs, overdue
-// RFIs, billing-hold NCRs, etc.) — not yet wired. The hardcoded demo
-// array below was emitting real emails/SMS via the sendNotification()
-// dispatch in the mount effect, which meant every demo session was
-// firing off fake "PO awaiting approval" / "RFI overdue" alerts to
-// pm@omnisite. Until the live-data pipeline lands, we ship an EMPTY
-// array AND gate the dispatch behind a separate flag so fake entries
-// (added later for staging/demo) can't trigger emails.
-const NOTIFICATIONS: Notification[] = []
-// Flip to `true` ONLY when entries above are backed by real data.
-// When false, the sendNotification() dispatch in the mount effect is
-// a no-op — fake notifications never trigger emails/SMS.
-const NOTIFICATIONS_DISPATCH_ENABLED = false
-
 const ICONS = {
-  approval: FileText,
-  alert: AlertTriangle,
-  reminder: Clock,
-  document: FileText,
-  safety: ShieldAlert,
+  rfi_overdue: Clock,
+  ncr_hold: AlertTriangle,
+  po_approval: FileText,
+  dsr_review: FileText,
+  variation_threshold: ShieldAlert,
 }
 
 const SEVERITY_COLORS = {
@@ -54,15 +43,47 @@ const SEVERITY_COLORS = {
   critical: 'text-red-500',
 }
 
+// Map the notification's `module` field (a string slug) to a route path
+// so the bell can deep-link on click.
+const MODULE_ROUTES: Record<string, string> = {
+  'daily-ops': '/daily-ops',
+  procurement: '/procurement',
+  qs: '/qs',
+  boq: '/boq',
+  vendors: '/vendors',
+  financials: '/financials',
+  scheduler: '/scheduler',
+  equipment: '/equipment',
+  drawings: '/drawings',
+  correspondence: '/correspondence',
+  reports: '/reports',
+  'time-attendance': '/time-attendance',
+  admin: '/admin',
+  chat: '/chat',
+}
+
 export function NotificationsBell() {
   const [open, setOpen] = useState(false)
-  const [items, setItems] = useState<Notification[]>(NOTIFICATIONS)
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all')
   const ref = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const unreadCount = items.filter((n) => n.unread).length
+
+  // ─── Live notifications from the DB ──────────────────────────────────────
+  // useSyncedState reads through /api/notifications (RLS-gated, only shows
+  // notifications for the current user or broadcasts to projects they're
+  // a member of). Realtime updates push new notifications into the bell
+  // without a refresh.
+  const [notifications, _setNotifications, loading] = useSyncedState<DbNotification[]>(
+    'omnisite-notifications',
+    'notifications',
+    () => [] as DbNotification[],
+    { primaryKey: 'id', maxPages: 2 } // 400 rows is plenty for a bell
+  )
+
+  const items = notifications || []
+  const unreadCount = items.filter((n) => !n.read_at).length
   const visibleItems = items.filter((n) =>
-    filter === 'all' ? true : filter === 'unread' ? n.unread : n.severity === 'critical'
+    filter === 'all' ? true : filter === 'unread' ? !n.read_at : n.severity === 'critical'
   )
 
   useEffect(() => {
@@ -73,63 +94,31 @@ export function NotificationsBell() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // ─── Fire server-side notifications for overdue / critical items ──────────
-  // Runs once per session (guarded by sessionStorage) to avoid spamming the
-  // console / email / SMS channels on every re-render.
-  //
-  // Gated behind NOTIFICATIONS_DISPATCH_ENABLED: when the seed array is
-  // empty (the current state) or holds demo-only entries, this is a no-op
-  // so fake notifications never trigger real emails/SMS. Flip the flag
-  // only when the array is populated from live data (pending POs,
-  // overdue RFIs, billing-hold NCRs, etc.).
-  useEffect(() => {
-    if (!NOTIFICATIONS_DISPATCH_ENABLED) return
-    const SESSION_KEY = 'omnisite-notifications-dispatched'
-    if (typeof window === 'undefined') return
-    if (window.sessionStorage.getItem(SESSION_KEY)) return
-
-    const overdue = items.filter(
-      (n) =>
-        n.unread &&
-        (n.severity === 'critical' ||
-          n.notifyType === 'rfi_overdue' ||
-          n.notifyType === 'dsr_review')
-    )
-    if (overdue.length === 0) {
-      window.sessionStorage.setItem(SESSION_KEY, '1')
-      return
-    }
-
-    // Fire-and-forget — server side will log + dispatch via configured channels.
-    Promise.all(
-      overdue.map((n) =>
-        n.notifyType
-          ? sendNotification(n.notifyType, n.desc, n.recipient || 'pm@omnisite', n.title, {
-              id: n.id,
-            })
-          : Promise.resolve({ console: false, email: false, sms: false })
-      )
-    )
-      .then((results) => {
-        const dispatched = results.filter((r) => r.console).length
-        if (dispatched > 0) {
-          console.log(`[NotificationsBell] dispatched ${dispatched} overdue notification(s)`)
-        }
-      })
-      .catch(() => {
-        // Swallow — notification dispatch failure should never break the UI.
-      })
-
-    window.sessionStorage.setItem(SESSION_KEY, '1')
-  }, [items])
-
+  // ─── Mark-all-read: persist read_at = now() to the DB ────────────────────
+  // The previous implementation only updated local state — refresh erased
+  // the read status. Now we POST each unread notification back with
+  // read_at set, which the createCrudHandler POST path treats as an UPDATE
+  // (RLS gates to user_id = auth.uid()). Fire-and-forget — the global
+  // error toast (P2-7) handles failures.
   const markAllRead = () => {
-    setItems((prev) => prev.map((n) => ({ ...n, unread: false })))
+    const now = new Date().toISOString()
+    for (const n of items.filter((n) => !n.read_at)) {
+      void upsertOne('notifications', { ...n, read_at: now, context: n.context ?? null }).catch(
+        () => {
+          // Global error toast already fired by api-client.
+        }
+      )
+    }
     toast.success('All notifications marked as read')
   }
 
   const markRead = (id: string) => {
-    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, unread: false } : n)))
+    const n = items.find((x) => x.id === id)
+    if (!n || n.read_at) return
+    const now = new Date().toISOString()
+    void upsertOne('notifications', { ...n, read_at: now, context: n.context ?? null }).catch(
+      () => {}
+    )
   }
 
   return (
@@ -142,7 +131,7 @@ export function NotificationsBell() {
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
           <span className="absolute top-1 right-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[var(--critical)] px-1 text-[9px] font-bold text-white">
-            {unreadCount}
+            {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
@@ -156,6 +145,7 @@ export function NotificationsBell() {
               <button
                 onClick={markAllRead}
                 className="text-primary rounded px-1.5 py-0.5 text-[10px] hover:underline"
+                disabled={unreadCount === 0}
               >
                 Mark all read
               </button>
@@ -176,7 +166,7 @@ export function NotificationsBell() {
                 f === 'all'
                   ? items.length
                   : f === 'unread'
-                    ? items.filter((n) => n.unread).length
+                    ? unreadCount
                     : items.filter((n) => n.severity === 'critical').length
               return (
                 <button
@@ -198,32 +188,38 @@ export function NotificationsBell() {
 
           {/* Items */}
           <div className="max-h-[400px] overflow-y-auto">
-            {visibleItems.length === 0 ? (
+            {loading ? (
               <div className="text-muted-foreground flex items-center justify-center py-8 text-[11px]">
+                Loading…
+              </div>
+            ) : visibleItems.length === 0 ? (
+              <div className="text-muted-foreground flex items-center justify-center gap-2 py-8 text-[11px]">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                 {filter === 'all' ? 'No notifications' : `No ${filter} notifications`}
               </div>
             ) : (
               visibleItems.map((n) => {
-                const Icon = ICONS[n.type]
+                const Icon = ICONS[n.type] || Bell
+                const route = n.module ? MODULE_ROUTES[n.module] : undefined
                 return (
                   <button
                     key={n.id}
                     onClick={() => {
                       markRead(n.id)
-                      if (n.module) {
-                        router.push(`/${n.module}`)
+                      if (route) {
+                        router.push(route)
                         setOpen(false)
                       }
                     }}
                     className={cn(
                       'hover:bg-accent/50 flex w-full items-start gap-3 border-b border-[var(--pane-divider)] px-4 py-2.5 text-left transition-colors last:border-b-0',
-                      n.unread && 'bg-primary/5'
+                      !n.read_at && 'bg-primary/5'
                     )}
                   >
                     {/* Icon + unread dot */}
                     <div className="relative mt-0.5 flex-shrink-0">
                       <Icon className={cn('h-4 w-4', SEVERITY_COLORS[n.severity])} />
-                      {n.unread && (
+                      {!n.read_at && (
                         <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--primary)]" />
                       )}
                     </div>
@@ -238,9 +234,11 @@ export function NotificationsBell() {
                         )}
                       </div>
                       <div className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px]">
-                        {n.desc}
+                        {n.message}
                       </div>
-                      <div className="text-muted-foreground/70 mt-1 text-[10px]">{n.time}</div>
+                      <div className="text-muted-foreground/70 mt-1 text-[10px]">
+                        {new Date(n.created_at).toLocaleString()}
+                      </div>
                     </div>
                   </button>
                 )
@@ -250,13 +248,10 @@ export function NotificationsBell() {
 
           {/* Footer */}
           <div className="bg-secondary/20 border-t border-[var(--pane-divider)] px-4 py-2">
-            <button
-              className="text-muted-foreground w-full cursor-not-allowed text-center text-[11px]"
-              disabled
-              title="Coming soon"
-            >
-              View all notifications →
-            </button>
+            <div className="text-muted-foreground text-center text-[10px]">
+              Notifications are scanned daily by cron.{' '}
+              <span className="text-muted-foreground/70">Critical alerts email the PM.</span>
+            </div>
           </div>
         </div>
       )}

@@ -66,6 +66,21 @@ jobs:
         # files — catches documentation drift when a migration modifies a
         # security-critical function but the doc isn't updated.
         run: bun run schema-check
+      - name: Live DB migration check
+        # Verifies every migration file in supabase/migrations/ has been
+        # applied to the live Supabase DB. Catches the "migration 23 typo"
+        # class of bug where the file is committed but the DB hasn't seen
+        # it yet — without this check, the deployment boots, then 500s on
+        # first write with cryptic "function upsert_with_audit does not exist".
+        # Skipped (exit 0) when NEXT_PUBLIC_SUPABASE_URL /
+        # SUPABASE_SERVICE_ROLE_KEY aren't set, so demo-mode PRs still pass.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: bun run migrations-check
+        # Non-blocking until secrets are added to the repo settings.
+        # Promote to blocking once a Supabase project is wired up.
+        continue-on-error: true
 
   build:
     name: Production Build + Size Check
