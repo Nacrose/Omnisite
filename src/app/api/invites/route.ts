@@ -95,13 +95,28 @@ export async function POST(req: NextRequest) {
 
   if (createError) {
     if (createError.message.includes('already') || createError.message.includes('exists')) {
-      // User already registered — look them up
-      const { data: existingUsers, error: listError } = await serviceClient.auth.admin.listUsers()
-      if (listError || !existingUsers) {
-        logDbError('user_projects', 'INVITE_LIST_USERS', listError, { userId: user.id })
+      // User already registered — look them up by email.
+      //
+      // Pass-2 audit P1-SEC fix: previously this called
+      // serviceClient.auth.admin.listUsers() which returns EVERY user
+      // in the auth.users table — a massive PII leak (all emails across
+      // all projects). For a personal-use app this is still wrong — the
+      // inviter only needs to find the ONE user they're inviting.
+      //
+      // The service-role client can query auth.users directly via the
+      // REST API. We select only id + email (no metadata, no
+      // created_at, no last_sign_in_at) so the inviter sees the
+      // minimum needed to confirm the account exists.
+      const { data: existingUsers, error: lookupError } = await serviceClient
+        .from('auth.users')
+        .select('id, email')
+        .eq('email', body.email)
+        .limit(1)
+      if (lookupError || !existingUsers) {
+        logDbError('user_projects', 'INVITE_LOOKUP_USER', lookupError, { userId: user.id })
         return NextResponse.json({ error: 'Failed to look up existing user' }, { status: 500 })
       }
-      const existing = existingUsers.users.find((u) => u.email === body.email)
+      const existing = existingUsers[0]
       if (!existing) {
         return NextResponse.json({ error: 'User exists but could not be found' }, { status: 500 })
       }

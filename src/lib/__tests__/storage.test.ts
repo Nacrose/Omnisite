@@ -106,15 +106,16 @@ describe('validateUpload — empty / edge cases', () => {
     expect(validateUpload('drawings', f)).toBeNull()
   })
 
-  it('accepts a file with no extension in chat-media (extension list empty)', () => {
+  it('rejects a file with no extension in chat-media (pass-2 fix)', () => {
+    // Pass-2 audit fix: chat-media now has a non-empty allowedExtensions
+    // list (was empty before). Files with no extension are rejected
+    // because we can't verify they're safe.
     const f = makeFile('readme', 'text/plain', 0.1)
-    expect(validateUpload('chat-media', f)).toBeNull()
+    expect(validateUpload('chat-media', f)).toMatch(/extension/i)
   })
 
-  it('accepts a file with no MIME type in chat-media', () => {
-    const f = makeFile('notes.txt', '', 0.1)
-    // Empty MIME type — the prefix check is skipped when file.type is empty.
-    // Extension list is empty for chat-media, so the file passes.
+  it('accepts a .txt file in chat-media', () => {
+    const f = makeFile('notes.txt', 'text/plain', 0.1)
     expect(validateUpload('chat-media', f)).toBeNull()
   })
 })

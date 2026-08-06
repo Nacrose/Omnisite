@@ -139,9 +139,9 @@ supabase db push
 # Supabase Dashboard → SQL Editor → Run
 
 # Create your first user in Supabase Dashboard → Authentication → Users
-# Then assign them to a project as PM:
-# INSERT INTO user_projects (user_id, project_id, role)
-# VALUES ('<auth.users.id>', '00000000-0000-0000-0000-000000000001', 'PM');
+# Then sign in — you'll be automatically redirected to /onboarding where
+# you can create your first project + auto-assign yourself as PM via
+# a 3-step wizard. No SQL needed.
 
 bun run dev
 ```
@@ -256,7 +256,7 @@ file (it may contain PII like vendor PAN/GST).
 src/
 ├── app/                         # Next.js App Router
 │   ├── (workspace)/             # 15 module routes (each lazy-loaded)
-│   ├── api/                     # 17 REST API routes (via createCrudHandler factory)
+│   ├── api/                     # 36 REST API routes (via createCrudHandler factory + hand-written routes for projects, user-projects, invites, onboarding, cron, health)
 │   └── login/                   # Auth page
 ├── components/
 │   ├── modules/                 # 15 feature modules (each in its own folder)

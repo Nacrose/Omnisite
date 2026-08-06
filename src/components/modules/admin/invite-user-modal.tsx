@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Mail, X, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useApp } from '@/lib/app-store'
+import { useFocusTrap } from '@/lib/use-focus-trap'
 
 interface InviteUserModalProps {
   onClose: () => void
@@ -40,6 +41,8 @@ export function InviteUserModal({ onClose, onInvited }: InviteUserModalProps) {
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(modalRef, true)
 
   const projectId = activeProjectDbId
   const projectName = activeProject ?? 'this project'
@@ -109,6 +112,10 @@ export function InviteUserModal({ onClose, onInvited }: InviteUserModalProps) {
       onClick={onClose}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invite-user-title"
         className="pane w-full max-w-md overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -116,7 +123,7 @@ export function InviteUserModal({ onClose, onInvited }: InviteUserModalProps) {
         <div className="bg-primary/5 flex h-12 items-center justify-between border-b border-[var(--pane-divider)] px-4">
           <div className="flex items-center gap-2">
             <Mail className="text-primary h-4 w-4" />
-            <span className="text-sm font-semibold">
+            <span id="invite-user-title" className="text-sm font-semibold">
               {success ? 'User Invited' : 'Invite User'}
             </span>
           </div>

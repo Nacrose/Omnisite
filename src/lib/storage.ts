@@ -102,7 +102,8 @@ const BUCKET_POLICIES: Record<string, BucketPolicy> = {
   },
   'chat-media': {
     maxSize: 25 * 1024 * 1024,
-    // Chat allows images, PDFs, and common docs — but no executables.
+    // Chat allows images, PDFs, and common docs — but no executables or
+    // archives (decompression-bomb risk).
     allowedMimePrefixes: [
       'image/',
       'application/pdf',
@@ -110,15 +111,41 @@ const BUCKET_POLICIES: Record<string, BucketPolicy> = {
       'application/vnd.openxmlformats-officedocument',
       'application/vnd.ms-excel',
       'application/msword',
-      'application/zip',
     ],
     disallowedMime: [
-      'image/svg+xml',
+      'image/svg+xml', // XSS vector
       'application/x-msdownload',
       'application/x-executable',
       'application/x-dosexec',
+      'application/zip', // decompression-bomb risk; drop entirely
+      'application/x-zip-compressed',
+      'application/x-rar-compressed',
+      'application/x-7z-compressed',
     ],
-    allowedExtensions: [], // rely on MIME prefix + disallow list
+    // Pass-2 audit P1-SEC fix: previously allowedExtensions was empty, so
+    // an attacker could upload malware.exe with Content-Type: application/zip
+    // (which was in allowedMimePrefixes) and bypass the executable block.
+    // Now we require a known-safe extension — the extension gate catches
+    // .exe/.bat/.sh/etc. even when the MIME type is spoofed.
+    allowedExtensions: [
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'heic',
+      'pdf',
+      'txt',
+      'md',
+      'csv',
+      'json',
+      'doc',
+      'docx',
+      'xls',
+      'xlsx',
+      'ppt',
+      'pptx',
+    ],
   },
 }
 

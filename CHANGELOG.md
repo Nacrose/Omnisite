@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known Limitations
 
 - MAX_PAGES cap of 2000 rows per table (surfaced via toast when hit)
-- Search index reads from localStorage (bridge — ideally subscribes to React state)
 - `unsafe-inline` remains in `style-src` (Next.js CSS injection requires it)
-- No signed URLs for storage objects (uses public URLs — see L8)
+
+### Limitations resolved since v1.0.0
+
+The following were listed as Known Limitations in v1.0.0 but have since been fixed:
+
+- ~~Search index reads from localStorage (bridge — ideally subscribes to React state)~~ — Fixed: command palette now reads live React state via `useSyncedState` (commit `75314f5`)
+- ~~No signed URLs for storage objects (uses public URLs — see L8)~~ — Fixed: all 6 storage buckets now use signed URLs with 1-hour TTL (commit `b117475`)

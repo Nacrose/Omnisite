@@ -4,20 +4,40 @@ import { z } from 'zod'
 // These schemas validate the request body BEFORE it reaches Supabase.
 // If validation fails, the API returns 400 with a clear error message.
 
+// ─── Reusable helpers (pass-2 audit: input validation hardening) ────────────
+// These address systemic gaps found in the pass-2 audit:
+//   - FK UUID fields weren't validated as UUIDs (could accept any string)
+//   - Text fields had no length cap (a 10MB string could DoS the DB)
+//   - Numeric fields had no upper bound (negative qty, rate, hours)
+
+/** Nullable UUID for FK columns (e.g. location_id, parent_id, linked_dsr).
+ *  Accepts undefined (field omitted) or null (explicitly cleared) or a
+ *  valid UUID string. Rejects non-UUID strings with a clear error. */
+const nullableUuid = z.union([z.string().uuid(), z.null()]).optional()
+
+/** Capped text — prevents a 10MB string from reaching the DB. Default
+ *  cap is 10,000 chars (~2KB UTF-8); override per-field if a column
+ *  needs more (e.g. question/background in RFIs). */
+const cappedText = (max = 10_000) => z.string().max(max)
+
+/** Non-negative number with optional upper bound. Catches negative qty,
+ *  rate, hours, etc. before they reach the DB. */
+const nonNeg = (max?: number) => (max != null ? z.number().min(0).max(max) : z.number().min(0))
+
 // BOQ Items
 export const boqItemSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(200),
   project_id: z.string().uuid().optional(),
-  code: z.string().min(1),
-  description: z.string().min(1),
+  code: cappedText(100).min(1),
+  description: cappedText(2000).min(1),
   type: z.enum(['Priced', 'Provisional Sum', 'Daywork', 'Heading']).default('Priced'),
-  qty: z.number().min(0).default(0),
-  uom: z.string().optional(),
-  rate: z.number().min(0).default(0),
+  qty: nonNeg(1_000_000).default(0),
+  uom: cappedText(50).optional(),
+  rate: nonNeg(1_000_000_000).default(0),
   has_ra: z.boolean().default(false),
-  level: z.number().int().min(0).default(0),
-  parent_id: z.string().nullable().optional(),
-  sort_order: z.number().int().default(0),
+  level: z.number().int().min(0).max(20).default(0),
+  parent_id: nullableUuid,
+  sort_order: z.number().int().min(-1_000_000).max(1_000_000).default(0),
   // No DB column — sent by client but silently dropped by PostgREST. Kept for forward compat.
   children: z.string().optional(), // serialized JSON
   // No DB column — sent by client but silently dropped by PostgREST. Kept for forward compat.
@@ -25,7 +45,7 @@ export const boqItemSchema = z.object({
   // location_id column added in migration 12 — nullable FK to
   // project_locations(id). Without this entry Zod would strip the field on
   // POST and the BOQ item's work-face link would silently disappear.
-  location_id: z.string().nullable().optional(),
+  location_id: nullableUuid,
 })
 
 // Tasks
@@ -441,23 +461,23 @@ export const projectLocationSchema = z.object({
 // `location_id` fields are nullable so an Open RFI doesn't need to
 // fabricate values for fields it doesn't have yet.
 export const rfiSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(200),
   project_id: z.string().uuid().optional(),
-  number: z.string().min(1),
-  date: z.string().min(1),
-  subject: z.string().min(1),
-  question: z.string().min(1),
-  background: z.string().default(''),
-  impact: z.string().default(''),
+  number: cappedText(50).min(1),
+  date: cappedText(50).min(1),
+  subject: cappedText(500).min(1),
+  question: cappedText(10_000).min(1),
+  background: cappedText(10_000).default(''),
+  impact: cappedText(10_000).default(''),
   status: z.enum(['Open', 'Replied', 'Closed']).default('Open'),
-  reply_by: z.string().default(''),
+  reply_by: cappedText(50).default(''),
   reply: z.string().nullable().optional(),
   replied_date: z.string().nullable().optional(),
   linked_dsr: z.string().nullable().optional(),
   cost_impact: z.string().nullable().optional(),
   schedule_impact: z.string().nullable().optional(),
   severity: z.enum(['low', 'medium', 'high']).default('medium'),
-  location_id: z.string().nullable().optional(),
+  location_id: nullableUuid,
 })
 
 // Material Issue Notes (MINs) — moved from localStorage to DB in migration 29.
@@ -466,12 +486,12 @@ export const rfiSchema = z.object({
 // app-level concern (material-reconciliation.ts); this table is the source of
 // truth for the MIN register only.
 export const materialIssueNoteSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(200),
   project_id: z.string().uuid().optional(),
-  date: z.string().min(1),
-  task: z.string().min(1),
-  items: z.string().min(1),
-  issued: z.string().min(1),
+  date: cappedText(50).min(1),
+  task: cappedText(200).min(1),
+  items: cappedText(2000).min(1),
+  issued: cappedText(200).min(1),
   status: z.enum(['Issued', 'N/A']).default('Issued'),
 })
 
@@ -497,14 +517,14 @@ export const notificationSchema = z.object({
 // The id is generated by the app as `WA-<workerId>-<YYYY-MM-DD>` so
 // re-inserts are idempotent.
 export const workerAttendanceSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(200),
   project_id: z.string().uuid().optional(),
-  worker_id: z.string().min(1),
-  date: z.string().min(1), // YYYY-MM-DD
-  hours: z.number().min(0).max(24).default(0),
-  ot_hours: z.number().min(0).default(0),
+  worker_id: z.string().min(1).max(200),
+  date: cappedText(20).min(1), // YYYY-MM-DD
+  hours: nonNeg(24).default(0),
+  ot_hours: nonNeg(24).default(0),
   wage_override: z.number().nullable().optional(),
-  note: z.string().nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
   logged_by: z.string().uuid().nullable().optional(),
 })
 
