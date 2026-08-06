@@ -14,7 +14,7 @@ export { INITIAL_LOCATIONS, INITIAL_VENDORS } from '@/data/seed/vendors'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type Cat = 'users' | 'materials' | 'rates' | 'presets' | 'locations' | 'labor'
+export type Cat = 'users' | 'materials' | 'labor' | 'rates' | 'presets' | 'locations' | 'units' | 'tolerance'
 
 export type { Material, Vendor, Role, RatePreset } from '@/data/seed/admin'
 export type { ProjectLocation } from '@/lib/types/vendor'

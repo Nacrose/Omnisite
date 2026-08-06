@@ -27,6 +27,8 @@ import { RatesView, RateInspector } from './admin/rates-tab'
 import { PresetsView, PresetInspector } from './admin/presets-tab'
 import { LocationsView, LocationInspector } from './admin/locations-tab'
 import { LaborView } from './admin/labor-tab'
+import { UnitsView } from './admin/units-tab'
+import { ToleranceView } from './admin/tolerance-tab'
 import { PRESETS } from '@/data/seed/admin'
 
 /**
@@ -120,6 +122,8 @@ export function AdminModule() {
     { id: 'users', name: 'User Management', icon: Users, count: totalUsers },
     { id: 'materials', name: 'Material Master', icon: Package, count: MATERIALS.length },
     { id: 'labor', name: 'Labor Rate Library', icon: Users, count: '10 trades' },
+    { id: 'units', name: 'Units & Conversions', icon: Package, count: '13 units' },
+    { id: 'tolerance', name: 'Tolerance Rules', icon: Zap, count: '3 rules' },
     { id: 'rates', name: '3-Tier Rate Library', icon: Zap, count: '3 tiers' },
     { id: 'presets', name: 'RA Preset Library', icon: SettingsIcon, count: PRESETS.length },
     { id: 'locations', name: 'Work Locations', icon: MapPin, count: locations.length },
@@ -233,6 +237,8 @@ export function AdminModule() {
           {cat === 'rates' && <RatesView />}
           {cat === 'presets' && <PresetsView />}
           {cat === 'labor' && <LaborView />}
+          {cat === 'units' && <UnitsView />}
+          {cat === 'tolerance' && <ToleranceView />}
           {cat === 'locations' &&
             (locationsLoading ? (
               <div className="flex h-full items-center justify-center">
