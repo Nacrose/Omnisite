@@ -434,6 +434,32 @@ export const projectLocationSchema = z.object({
   sort_order: z.number().int().default(0),
 })
 
+// RFIs (Requests For Information) — moved from localStorage to DB in
+// migration 28. Mirrors the Rfi TypeScript interface in
+// src/components/modules/daily-ops/rfi-store.ts. The `reply`, `reply_by`,
+// `replied_date`, `linked_dsr`, `cost_impact`, `schedule_impact`, and
+// `location_id` fields are nullable so an Open RFI doesn't need to
+// fabricate values for fields it doesn't have yet.
+export const rfiSchema = z.object({
+  id: z.string().min(1),
+  project_id: z.string().uuid().optional(),
+  number: z.string().min(1),
+  date: z.string().min(1),
+  subject: z.string().min(1),
+  question: z.string().min(1),
+  background: z.string().default(''),
+  impact: z.string().default(''),
+  status: z.enum(['Open', 'Replied', 'Closed']).default('Open'),
+  reply_by: z.string().default(''),
+  reply: z.string().nullable().optional(),
+  replied_date: z.string().nullable().optional(),
+  linked_dsr: z.string().nullable().optional(),
+  cost_impact: z.string().nullable().optional(),
+  schedule_impact: z.string().nullable().optional(),
+  severity: z.enum(['low', 'medium', 'high']).default('medium'),
+  location_id: z.string().nullable().optional(),
+})
+
 // ─── Helper: validate and return error response ─────────────────────────────
 
 import { NextResponse } from 'next/server'

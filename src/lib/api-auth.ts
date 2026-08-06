@@ -48,6 +48,10 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   // can author redlines; field teams (foremen, storekeepers) can read but not
   // annotate. Matches the RLS policy in migration 00000000000013 §3.
   drawing_annotations: ['PM', 'SITE_ENGINEER'],
+  // RFIs (Requests For Information). Site engineers raise them, PMs
+  // answer/close them. Storekeeper and Foreman are read-only (they need
+  // visibility but don't author RFIs). Matches migration 28 RLS.
+  rfis: ['PM', 'SITE_ENGINEER'],
 }
 
 /**
@@ -81,6 +85,7 @@ export const TABLE_PRIMARY_KEYS: Record<string, string> = {
   vendors: 'id',
   project_locations: 'id',
   drawing_annotations: 'id',
+  rfis: 'id',
 }
 
 /** Get the PK column for a table (defaults to 'id'). */
@@ -114,6 +119,7 @@ const PROJECT_SCOPED_TABLES = new Set([
   'vendors',
   'project_locations',
   'drawing_annotations',
+  'rfis',
 ])
 
 /**
