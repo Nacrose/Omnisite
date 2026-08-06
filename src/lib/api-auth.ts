@@ -62,6 +62,10 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   // happen via the service-role cron route. All authenticated roles need
   // write so the bell's mark-as-read works for everyone.
   notifications: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
+  // Per-day attendance records. Foremen log hours per worker per day;
+  // site engineers can also author; PM can delete for cleanup.
+  // Storekeeper is read-only. Matches migration 31 RLS.
+  worker_attendance: ['PM', 'SITE_ENGINEER', 'FOREMAN'],
 }
 
 /**
@@ -98,6 +102,7 @@ export const TABLE_PRIMARY_KEYS: Record<string, string> = {
   rfis: 'id',
   material_issue_notes: 'id',
   notifications: 'id',
+  worker_attendance: 'id',
 }
 
 /** Get the PK column for a table (defaults to 'id'). */
@@ -134,6 +139,7 @@ const PROJECT_SCOPED_TABLES = new Set([
   'rfis',
   'material_issue_notes',
   'notifications',
+  'worker_attendance',
 ])
 
 /**

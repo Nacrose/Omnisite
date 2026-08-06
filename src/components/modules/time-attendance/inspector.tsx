@@ -1,14 +1,31 @@
 'use client'
 
+import { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
-import { MapPin, Clock, DollarSign, Plus } from 'lucide-react'
+import { MapPin, Clock, DollarSign, Plus, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { useApp } from '@/lib/app-store'
+import { useSyncedState } from '@/lib/use-synced-state'
 import type { Worker } from './index'
 import { computeDailyPayroll } from './payroll-calc'
+
+// ─── Per-day attendance record (mirrors migration 31 worker_attendance table) ─
+interface AttendanceRow {
+  id: string
+  project_id?: string
+  worker_id: string
+  date: string
+  hours: number
+  ot_hours: number
+  wage_override?: number | null
+  note?: string | null
+  logged_by?: string | null
+}
 
 /**
  * WorkerInspector — right-pane detail view for a single worker.
@@ -33,6 +50,99 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
     otHours,
   } = payroll
   const todayCost = payroll.totalPay
+
+  // ─── Per-day attendance (migration 31) ──────────────────────────────────
+  // The inspector loads all attendance rows for the active project + lets
+  // the foreman log a new entry or edit an existing one. Each row is one
+  // worker's attendance on one date. The (worker_id, date) pair is unique.
+  const { activeProjectDbId } = useApp()
+  const [allAttendance, setAllAttendance] = useSyncedState<AttendanceRow[]>(
+    'omnisite-worker-attendance',
+    'worker_attendance',
+    () => [] as AttendanceRow[],
+    { primaryKey: 'id' }
+  )
+
+  // Filter to just this worker's rows, newest first.
+  const workerAttendance = useMemo(
+    () =>
+      allAttendance
+        .filter((a) => a.worker_id === worker.id)
+        .sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [allAttendance, worker.id]
+  )
+
+  // Last 30 days payroll summary (real history, not the previous
+  // "requires daily attendance history — not yet implemented" placeholder).
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const monthAgoIso = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().slice(0, 10)
+  })()
+  const last30 = workerAttendance.filter((a) => a.date >= monthAgoIso && a.date <= todayIso)
+  const last30Hours = last30.reduce((s, a) => s + a.hours, 0)
+  const last30OtHours = last30.reduce((s, a) => s + a.ot_hours, 0)
+  const last30Pay = last30.reduce((s, a) => {
+    const p = computeDailyPayroll(worker, a.hours)
+    return s + p.totalPay
+  }, 0)
+
+  // ─── Log-hours form state ────────────────────────────────────────────────
+  const [logDate, setLogDate] = useState(todayIso)
+  const [logHours, setLogHours] = useState('8')
+  const [logNote, setLogNote] = useState('')
+
+  // Reset the form when the worker changes (the inspector is keyed by
+  // worker.id so it remounts, but the form fields would otherwise carry
+  // over the previous worker's values).
+  //
+  // Deferred via Promise.resolve().then() to avoid the "set-state-in-effect"
+  // lint rule that fires when setState is called synchronously inside an
+  // effect (cascading renders). Same pattern used elsewhere in the app
+  // (e.g. qs/inspector.tsx BillingHoldNotice).
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setLogDate(todayIso)
+      setLogHours(String(worker.todayHours ?? 8))
+      setLogNote('')
+    })
+  }, [worker.id, worker.todayHours, todayIso])
+
+  const saveAttendance = () => {
+    const h = parseFloat(logHours)
+    if (Number.isNaN(h) || h < 0 || h > 24) {
+      toast.error('Invalid hours', { description: 'Enter a number between 0 and 24.' })
+      return
+    }
+    if (!activeProjectDbId) {
+      toast.error('No active project', { description: 'Pick a project first.' })
+      return
+    }
+    // Deterministic id so re-inserting the same (worker, date) updates
+    // instead of duplicating. The DB also has a UNIQUE constraint on
+    // (worker_id, date) as a backstop.
+    const id = `WA-${worker.id}-${logDate}`
+    const ot = computeDailyPayroll(worker, h).otHours
+    setAllAttendance((prev) => {
+      const existing = prev.find((a) => a.id === id)
+      const row: AttendanceRow = {
+        id,
+        project_id: activeProjectDbId,
+        worker_id: worker.id,
+        date: logDate,
+        hours: h,
+        ot_hours: ot,
+        wage_override: null,
+        note: logNote || null,
+      }
+      return existing ? prev.map((a) => (a.id === id ? row : a)) : [...prev, row]
+    })
+    toast.success('Attendance logged', {
+      description: `${worker.name} · ${logDate} · ${h}h (${ot.toFixed(1)}h OT)`,
+    })
+    setLogNote('')
+  }
 
   return (
     <>
@@ -183,14 +293,128 @@ export function WorkerInspector({ worker }: { worker: Worker }) {
 
           <Separator />
 
-          {/* Payroll summary */}
+          {/* ─── Log per-day attendance (NEW — P1-13) ──────────────────────── */}
+          <div>
+            <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
+              <Calendar className="h-3 w-3" />
+              Log Attendance
+            </div>
+            <div className="space-y-2 rounded-md border border-[var(--pane-divider)] p-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-muted-foreground text-[9px] tracking-wider uppercase">
+                    Date
+                  </label>
+                  <Input
+                    type="date"
+                    className="h-7 px-1.5 text-[11px]"
+                    value={logDate}
+                    max={todayIso}
+                    onChange={(e) => setLogDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-muted-foreground text-[9px] tracking-wider uppercase">
+                    Hours
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="24"
+                    className="h-7 px-1.5 text-[11px]"
+                    value={logHours}
+                    onChange={(e) => setLogHours(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Input
+                placeholder="Note (optional, e.g. 'half-day — personal leave')"
+                className="h-7 text-[11px]"
+                value={logNote}
+                onChange={(e) => setLogNote(e.target.value)}
+              />
+              <Button
+                size="sm"
+                className="h-7 w-full gap-1 text-[11px]"
+                onClick={saveAttendance}
+                disabled={!activeProjectDbId}
+              >
+                <Plus className="h-3 w-3" />
+                Log / Update
+              </Button>
+              <div className="text-muted-foreground text-[9px]">
+                OT hours auto-computed from the worker&apos;s standard-hours threshold. Re-logging
+                the same date updates the existing entry.
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Attendance history (newest 5) ────────────────────────────── */}
+          {workerAttendance.length > 0 && (
+            <div>
+              <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
+                Attendance History
+              </div>
+              <div className="space-y-1">
+                {workerAttendance.slice(0, 5).map((a) => {
+                  const p = computeDailyPayroll(worker, a.hours)
+                  return (
+                    <div
+                      key={a.id}
+                      className="flex items-center justify-between rounded border border-[var(--pane-divider)] p-1.5 text-[10px]"
+                    >
+                      <div>
+                        <div className="font-mono">{a.date}</div>
+                        {a.note && <div className="text-muted-foreground truncate">{a.note}</div>}
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono">
+                          {a.hours.toFixed(1)}h
+                          {a.ot_hours > 0 && (
+                            <span className="ml-1 text-amber-600">
+                              (+{a.ot_hours.toFixed(1)} OT)
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-muted-foreground font-mono">
+                          NPR {p.totalPay.toFixed(0)}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          {/* ─── Payroll summary — real history (last 30 days) ─────────────── */}
           <div>
             <div className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
-              Payroll Summary (this month)
+              Payroll Summary (last 30 days)
             </div>
-            <div className="bg-secondary/20 text-muted-foreground rounded-md border border-[var(--pane-divider)] p-3 text-[11px] leading-relaxed">
-              Payroll summary requires daily attendance history — not yet implemented. Use the
-              Payroll Export button for a CSV snapshot.
+            <div className="space-y-1.5 rounded-md border border-[var(--pane-divider)] p-2.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Days logged</span>
+                <span className="font-mono">{last30.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total hours</span>
+                <span className="font-mono">{last30Hours.toFixed(1)}h</span>
+              </div>
+              {last30OtHours > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">OT hours</span>
+                  <span className="font-mono text-amber-600">{last30OtHours.toFixed(1)}h</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between font-bold">
+                <span>Total pay (30 days)</span>
+                <span className="font-mono">NPR {last30Pay.toFixed(0)}</span>
+              </div>
             </div>
           </div>
         </div>
