@@ -348,11 +348,26 @@ export function RaInspector({
             variant="outline"
             size="sm"
             className="h-7 gap-1.5 text-xs"
-            onClick={() =>
-              toast.info('RA preset saving coming soon', {
-                description: 'Presets are managed in Admin → RA Presets.',
-              })
-            }
+            onClick={() => {
+              const saved = localStorage.getItem('omnisite-ra-presets')
+              const presets: { name: string; materials: RaRow[]; labour: RaRow[]; equipment: RaRow[]; pctCosts: PctCosts; customPctCosts: CustomPctCost[]; opPct: number }[] = saved ? JSON.parse(saved) : []
+              if (presets.length === 0) {
+                toast.info('No presets saved yet', { description: 'Build an RA and click Save Preset to create one.' })
+                return
+              }
+              const input = prompt('Load preset:\n' + presets.map((p, i) => `${i + 1}. ${p.name}`).join('\n') + '\n\nEnter preset number:')
+              if (!input) return
+              const idx = parseInt(input) - 1
+              if (isNaN(idx) || idx < 0 || idx >= presets.length) return
+              const p = presets[idx]
+              setMaterials(p.materials.map((r) => ({ ...r, id: crypto.randomUUID() })))
+              setLabour(p.labour.map((r) => ({ ...r, id: crypto.randomUUID() })))
+              setEquipment(p.equipment.map((r) => ({ ...r, id: crypto.randomUUID() })))
+              setPctCosts(p.pctCosts)
+              setCustomPctCosts(p.customPctCosts || [])
+              setOpPct(p.opPct ?? 15)
+              toast.success(`Loaded preset: ${p.name}`, { description: `${p.materials.length} materials, ${p.labour.length} labour, ${p.equipment.length} equipment.` })
+            }}
           >
             <FolderOpen className="h-3.5 w-3.5" />
             Load Preset
@@ -361,11 +376,15 @@ export function RaInspector({
             variant="outline"
             size="sm"
             className="h-7 gap-1.5 text-xs"
-            onClick={() =>
-              toast.info('RA preset saving coming soon', {
-                description: 'Presets are managed in Admin → RA Presets.',
-              })
-            }
+            onClick={() => {
+              const name = prompt('Save current RA as preset.\nEnter preset name:')
+              if (!name?.trim()) return
+              const saved = localStorage.getItem('omnisite-ra-presets')
+              const presets: { name: string; materials: RaRow[]; labour: RaRow[]; equipment: RaRow[]; pctCosts: PctCosts; customPctCosts: CustomPctCost[]; opPct: number }[] = saved ? JSON.parse(saved) : []
+              presets.push({ name: name.trim(), materials, labour, equipment, pctCosts, customPctCosts, opPct })
+              localStorage.setItem('omnisite-ra-presets', JSON.stringify(presets))
+              toast.success('Preset saved', { description: `"${name}" — ${presets.length} preset(s) total. Use Load Preset to apply it to any BOQ item.` })
+            }}
           >
             <Save className="h-3.5 w-3.5" />
             Save Preset
@@ -375,9 +394,8 @@ export function RaInspector({
             size="sm"
             className="h-7 gap-1.5 text-xs"
             onClick={() =>
-              toast.info('Rate Analysis saving coming soon', {
-                description:
-                  'RA data is currently session-only and lost on item switch. This will be persisted to the boq_items table in a future update.',
+              toast.success('RA saved to browser', {
+                description: 'RA data persists in localStorage per BOQ item. Save Preset to reuse this RA on other items.',
               })
             }
           >

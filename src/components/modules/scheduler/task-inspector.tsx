@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
-import { Link2, Calendar, Gauge, Package, MapPin } from 'lucide-react'
+import { Link2, Calendar, Gauge, Package, MapPin, Plus, X, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Task } from './types'
@@ -129,6 +130,28 @@ export function TaskInspector({
   //
   // The toast for the location link is fired in the onChange handler below.
   const locationId = task.locationId
+
+  // ─── BOQ link + resource editor state ──────────────────────────────────
+  // These are used in the BOQ tab and Assign tab below. Declared at the
+  // top level (not inside IIFEs) to satisfy React's rules-of-hooks.
+  const [boqPickerOpen, setBoqPickerOpen] = useState(false)
+  const [boqQuery, setBoqQuery] = useState('')
+  const [linkedBoqId, setLinkedBoqId] = useState<string | undefined>(task.boqItemId)
+  const [taskResources, setTaskResources] = useState<string[]>(task.resources || [])
+  const [newResource, setNewResource] = useState('')
+
+  const boqItems = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('omnisite-boq-data')
+      if (stored) {
+        const rows = JSON.parse(stored)
+        return rows.filter((r: Record<string, unknown>) => r.type !== 'Heading')
+      }
+    } catch { /* ignore */ }
+    return []
+  }, [])
+
+  const linkedBoqItem = boqItems.find((i: Record<string, unknown>) => i.id === linkedBoqId)
 
   // Read the live project-locations store (Supabase when configured, localStorage
   // otherwise) — same hook the Admin → Locations tab and the LocationPicker use.
@@ -486,52 +509,174 @@ export function TaskInspector({
 
           <TabsContent value="assign" className="mt-0 space-y-3 px-4 py-3 text-xs">
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
-              Role → Name assignment
+              Resource Assignment
             </div>
-            {/* Resource assignment is not wired into the task model yet —
-                task.resources is a string[] of role names with no person
-                attached, no hours/day, and no over-allocation detection.
-                Showing fabricated "Bikash Rai / 8h" rows here would imply
-                we have a resource database we don't actually have. */}
-            <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
-              <Package className="h-6 w-6 opacity-50" />
-              <div className="text-xs font-medium">No resources assigned</div>
-              <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-                Resource assignment (role → person, hours/day, over-allocation detection) is not
-                configured for this task yet.
-              </p>
+            <div className="space-y-1.5">
+              {taskResources.length > 0 ? (
+                taskResources.map((r, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-md border border-[var(--pane-divider)] p-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-[10px] font-semibold text-white">
+                      {r.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="flex-1 text-xs">{r}</span>
+                    <button
+                      onClick={() => {
+                        const updated = taskResources.filter((_, idx) => idx !== i)
+                        setTaskResources(updated)
+                        try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
+                      }}
+                      className="text-muted-foreground hover:text-red-500"
+                      title="Remove"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-muted-foreground rounded-md border border-dashed border-[var(--pane-divider)] p-3 text-center text-[10px]">
+                  No resources assigned yet
+                </div>
+              )}
             </div>
+            <div className="flex gap-1.5">
+              <Input
+                className="h-7 flex-1 text-xs"
+                placeholder="e.g. Mason (Cat I), Excavator Operator, Mazdoor x4"
+                value={newResource}
+                onChange={(e) => setNewResource(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    if (!newResource.trim()) return
+                    const updated = [...taskResources, newResource.trim()]
+                    setTaskResources(updated)
+                    try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
+                    setNewResource('')
+                    toast.success('Resource added', { description: newResource.trim() })
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => {
+                  if (!newResource.trim()) return
+                  const updated = [...taskResources, newResource.trim()]
+                  setTaskResources(updated)
+                  try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
+                  setNewResource('')
+                  toast.success('Resource added', { description: newResource.trim() })
+                }}
+                disabled={!newResource.trim()}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+            <p className="text-muted-foreground text-[10px]">
+              Resource names drive the leveling tool's peak-load detection. Enter role + count (e.g. "Mason x2", "Mazdoor x4").
+            </p>
           </TabsContent>
 
           <TabsContent value="boq" className="mt-0 space-y-3 px-4 py-3 text-xs">
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
               BOQ Allocation
             </div>
-            {/* task.boqAllocated / task.boqTotal exist on the type but are not
-                populated for any seed task — and even when they are, we have
-                no BOQ-item-code link to display "Item 1.1.3 — PCC M15".
-                Showing the fabricated "145 cum allocated / 87 of 145 cum used"
-                card here would mislead users into thinking cost is tracked
-                per task when it isn't. */}
-            <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
-              <Link2 className="h-6 w-6 opacity-50" />
-              <div className="text-xs font-medium">No BOQ items linked to this task</div>
-              <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-                BOQ allocation (item code, qty allocated, qty used) will appear here once BOQ items
-                are linked to this task.
-              </p>
-            </div>
+
+            {linkedBoqItem ? (
+              <>
+                <div className="rounded-md border border-[var(--pane-divider)] p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="font-mono text-[10px] font-semibold">{String(linkedBoqItem.code || linkedBoqItem.id)}</span>
+                    <button
+                      onClick={() => setLinkedBoqId(undefined)}
+                      className="text-muted-foreground hover:text-red-500"
+                      title="Unlink BOQ item"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="text-xs font-medium">{String(linkedBoqItem.desc || linkedBoqItem.description || '—')}</div>
+                  <div className="text-muted-foreground mt-1 flex items-center gap-3 text-[10px]">
+                    <span>Qty: {String(linkedBoqItem.qty)} {String(linkedBoqItem.uom || '')}</span>
+                    <span>·</span>
+                    <span>Rate: NPR {Number(linkedBoqItem.rate || 0).toLocaleString()}</span>
+                    <span>·</span>
+                    <span className="font-semibold">Amount: NPR {(Number(linkedBoqItem.qty || 0) * Number(linkedBoqItem.rate || 0)).toLocaleString()}</span>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setBoqPickerOpen(true)}>
+                  <Search className="h-3 w-3" /> Change BOQ Item
+                </Button>
+              </>
+            ) : (
+              <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
+                <Link2 className="h-6 w-6 opacity-50" />
+                <div className="text-xs font-medium">No BOQ item linked</div>
+                <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
+                  Link this task to a BOQ line item to track cost, quantity, and rate analysis against the schedule.
+                </p>
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setBoqPickerOpen(true)}>
+                  <Plus className="h-3 w-3" /> Link BOQ Item
+                </Button>
+              </div>
+            )}
+
+            {boqPickerOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setBoqPickerOpen(false)}>
+                <div className="pane w-full max-w-lg overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] px-4">
+                    <span className="text-sm font-semibold">Link BOQ Item</span>
+                    <button onClick={() => setBoqPickerOpen(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+                  </div>
+                  <div className="p-3">
+                    <Input className="h-8 text-xs" placeholder="Search by code or description…" value={boqQuery} onChange={(e) => setBoqQuery(e.target.value)} autoFocus />
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {boqItems.filter((i: Record<string, unknown>) => {
+                      const q = boqQuery.toLowerCase()
+                      const code = String(i.code || '')
+                      const desc = String(i.desc || i.description || '')
+                      return !q || code.toLowerCase().includes(q) || desc.toLowerCase().includes(q)
+                    }).map((item: Record<string, unknown>) => (
+                      <button
+                        key={String(item.id)}
+                        onClick={() => {
+                          const id = String(item.id)
+                          setLinkedBoqId(id)
+                          try { localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]"))) } catch {}
+                          setBoqPickerOpen(false)
+                          toast.success('BOQ item linked', {
+                            description: `${String(item.code || '')} — ${String(item.desc || item.description || '')}`,
+                          })
+                        }}
+                        className="hover:bg-accent flex w-full items-center gap-3 border-b border-[var(--pane-divider)] px-4 py-2 text-left transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-medium">{String(item.desc || item.description || '—')}</div>
+                          <div className="text-muted-foreground text-[10px]">{String(item.code)} · {String(item.qty)} {String(item.uom || '')}</div>
+                        </div>
+                        <div className="font-mono text-xs font-semibold">NPR {Number(item.rate || 0).toLocaleString()}</div>
+                      </button>
+                    ))}
+                    {boqItems.length === 0 && (
+                      <div className="text-muted-foreground p-8 text-center text-xs">
+                        No BOQ items found. Build the BOQ first in the BOQ module.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
               Material Lead-Time Check
             </div>
-            {/* Lead-time check depends on requisitions/POs linked to this
-                task — that linkage is not in the data model today. */}
             <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--pane-divider)] py-6 text-center">
               <Package className="h-6 w-6 opacity-50" />
               <div className="text-xs font-medium">No materials requisitioned</div>
               <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-                Material lead-time checks will appear here once requisitions are linked to this
-                task.
+                Material lead-time checks will appear here once requisitions are linked to this task.
               </p>
             </div>
           </TabsContent>

@@ -41,6 +41,10 @@ export interface Task {
   boqAllocated?: number
   // Not in Zod schema — stripped before POST, seed-only field. See above.
   boqTotal?: number
+  /** BOQ item code this task is linked to (e.g. "1.1.1"). Not in Zod schema —
+   *  stored locally only. When set, the BOQ tab shows the linked item's
+   *  description, qty, rate, and amount. */
+  boqItemId?: string
   children?: Task[]
   /**
    * Dependency links — this task depends on these predecessors.
