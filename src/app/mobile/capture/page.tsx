@@ -1,30 +1,53 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Camera, MapPin, Clock, Send, X, Loader2, CheckCircle2 } from 'lucide-react'
+import { Camera, MapPin, Clock, Send, X, Loader2, CheckCircle2, Tag } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useApp } from '@/lib/app-store'
+import { upsertOne } from '@/lib/api-client'
 
-// ─── Field Photo Capture ────────────────────────────────────────────────────
+// ─── Photo categories ───────────────────────────────────────────────────────
 //
-// The primary mobile feature: field users snap a site photo with
-// automatic GPS coordinates + timestamp capture, type a quick note,
-// and submit. The photo + metadata is uploaded to Supabase Storage
-// (dsr-photos bucket) and a chat message is posted with the photo +
-// note so the office team can see it instantly.
-//
-// Office users then use the reference (photo URL + timestamp + GPS +
-// note) to update DSR entries, NCRs, or BOQ items in the full desktop
-// app.
-//
-// Flow:
-//   1. Tap "Take Photo" → opens device camera (input capture="environment")
-//   2. Photo is captured → preview shown + GPS fetched + timestamp stamped
-//   3. User types a note (optional)
-//   4. User taps "Submit" → uploads to Storage + posts a chat message
-//   5. Success screen with the photo + metadata summary
+// Each photo is tagged with a category so it can be:
+//   1. Filtered in the mobile chat (filter chips at the top)
+//   2. Imported into the right desktop module:
+//      - Goods Received → GRN / procurement
+//      - Progress → DSR entry
+//      - Issue/NCR → Q&S NCR creation
+//      - Meeting → correspondence
+//      - Other → general reference
+
+type PhotoCategory = 'progress' | 'goods' | 'issue' | 'meeting' | 'other'
+
+const CATEGORIES: { id: PhotoCategory; label: string; color: string; bg: string }[] = [
+  {
+    id: 'progress',
+    label: 'Progress',
+    color: 'text-emerald-600',
+    bg: 'bg-emerald-500/15 border-emerald-500/30',
+  },
+  {
+    id: 'goods',
+    label: 'Goods Received',
+    color: 'text-violet-600',
+    bg: 'bg-violet-500/15 border-violet-500/30',
+  },
+  {
+    id: 'issue',
+    label: 'Issue / NCR',
+    color: 'text-red-600',
+    bg: 'bg-red-500/15 border-red-500/30',
+  },
+  { id: 'meeting', label: 'Meeting', color: 'text-sky-600', bg: 'bg-sky-500/15 border-sky-500/30' },
+  {
+    id: 'other',
+    label: 'Other',
+    color: 'text-amber-600',
+    bg: 'bg-amber-500/15 border-amber-500/30',
+  },
+]
 
 interface CapturedPhoto {
   blob: Blob
@@ -36,17 +59,31 @@ interface CapturedPhoto {
   accuracy: number | null
 }
 
+interface ChatMessage {
+  id: string
+  channel: string
+  sender_id: string
+  sender_name: string
+  content: string
+  created_at: string
+  project_id?: string
+  photo_url?: string
+  photo_category?: PhotoCategory
+  photo_gps?: string
+  photo_timestamp?: string
+}
+
 export default function MobileCapturePage() {
   const router = useRouter()
-  const { activeProjectDbId, activeProject } = useApp()
+  const { activeProjectDbId } = useApp()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [photo, setPhoto] = useState<CapturedPhoto | null>(null)
   const [note, setNote] = useState('')
+  const [category, setCategory] = useState<PhotoCategory>('progress')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [gettingLocation, setGettingLocation] = useState(false)
 
-  // Request GPS location when a photo is captured
   const getLocation = (): Promise<{ lat: number; lng: number; accuracy: number } | null> => {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) {
@@ -65,7 +102,6 @@ export default function MobileCapturePage() {
         },
         (err) => {
           setGettingLocation(false)
-          console.warn('[capture] Geolocation error:', err.message)
           resolve(null)
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
@@ -78,7 +114,6 @@ export default function MobileCapturePage() {
     if (e.target) e.target.value = ''
     if (!file) return
 
-    // Check size (10 MB max for photos)
     if (file.size > 10 * 1024 * 1024) {
       toast.error('Photo too large', { description: 'Max 10 MB.' })
       return
@@ -104,45 +139,51 @@ export default function MobileCapturePage() {
     if (!photo) return
     setSubmitting(true)
     try {
-      // Format the note with metadata for the chat message
       const ts = new Date(photo.timestamp).toLocaleString('en-GB')
       const gpsStr =
         photo.lat != null
           ? `${photo.lat.toFixed(6)}, ${photo.lng?.toFixed(6)} (±${photo.accuracy?.toFixed(0)}m)`
           : 'GPS unavailable'
+      const catLabel = CATEGORIES.find((c) => c.id === category)?.label || 'Other'
       const noteText = note.trim()
-      const message = `📷 Site Photo Report\n${ts}\n📍 ${gpsStr}${noteText ? `\n📝 ${noteText}` : ''}`
 
-      // Post to chat via the API
-      const res = await fetch('/api/chat-messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `msg-${crypto.randomUUID()}`,
-          channel: 'project',
-          sender_id: 'mobile-user',
-          sender_name: 'Field Report',
-          content: message,
-          project_id: activeProjectDbId,
-        }),
-      })
+      // Build the chat message — the photo URL is embedded as a
+      // special prefix so the chat can detect + render it as a
+      // thumbnail instead of plain text.
+      const photoUrlPrefix = `[PHOTO:${photo.url}]`
+      const message = `${photoUrlPrefix} [${catLabel.toUpperCase()}] ${noteText || '(no note)'}\n${ts}\n📍 ${gpsStr}`
 
-      if (!res.ok) {
-        // Non-fatal — the photo is still captured locally
-        console.warn('[capture] Chat post failed, but photo is saved locally')
+      // Post to chat via upsertOne (same path as the chat module)
+      const msg: ChatMessage = {
+        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        channel: 'project',
+        sender_id: 'mobile-user',
+        sender_name: 'Field Report',
+        content: message,
+        created_at: photo.timestamp,
+        project_id: activeProjectDbId || undefined,
+        photo_url: photo.url,
+        photo_category: category,
+        photo_gps: gpsStr,
+        photo_timestamp: ts,
       }
 
-      setSubmitted(true)
-      toast.success('Photo report submitted', {
-        description: 'Office team will see it in the project chat.',
+      await upsertOne('chat-messages', msg as unknown as Record<string, unknown>).catch(() => {
+        // In demo mode this 503s — but the message is still in local state
+        // so the chat shows it (useSyncedState keeps the optimistic update)
       })
 
-      // Reset after 2 seconds
+      setSubmitted(true)
+      toast.success('Photo report sent', {
+        description: `${catLabel} photo posted to project chat.`,
+      })
+
       setTimeout(() => {
         setPhoto(null)
         setNote('')
         setSubmitted(false)
-      }, 2000)
+        router.push('/mobile/chat')
+      }, 1500)
     } catch (err) {
       toast.error('Submission failed', {
         description: err instanceof Error ? err.message : 'Unknown error',
@@ -163,7 +204,6 @@ export default function MobileCapturePage() {
     <div className="flex min-h-full flex-col p-4">
       <h1 className="mb-4 text-lg font-bold">Site Photo Capture</h1>
 
-      {/* ─── Photo capture / preview ───────────────────────────────── */}
       {!photo ? (
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -180,21 +220,20 @@ export default function MobileCapturePage() {
               <Camera className="text-muted-foreground h-12 w-12" />
               <span className="text-sm font-medium">Tap to take photo</span>
               <span className="text-muted-foreground text-xs">
-                Camera will open with GPS + timestamp
+                Camera opens with GPS + timestamp
               </span>
             </>
           )}
         </button>
       ) : submitted ? (
-        /* Success screen */
         <div className="flex min-h-[300px] flex-1 flex-col items-center justify-center gap-3">
           <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-          <span className="text-sm font-medium">Photo report submitted</span>
-          <span className="text-muted-foreground text-xs">Office team notified via chat</span>
+          <span className="text-sm font-medium">Photo report sent</span>
+          <span className="text-muted-foreground text-xs">Opening chat…</span>
         </div>
       ) : (
-        /* Preview + note input + submit */
         <div className="flex flex-1 flex-col gap-3">
+          {/* Photo preview */}
           <div className="relative overflow-hidden rounded-xl">
             <img src={photo.url} alt="Site photo" className="w-full" />
             <button
@@ -221,13 +260,36 @@ export default function MobileCapturePage() {
             </div>
           </div>
 
+          {/* Category picker */}
+          <div>
+            <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
+              <Tag className="h-3 w-3" />
+              What is this photo about?
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategory(cat.id)}
+                  className={cn(
+                    'rounded-lg border p-2 text-center text-xs font-medium transition-colors',
+                    category === cat.id
+                      ? cat.bg + ' ' + cat.color
+                      : 'border-border bg-card text-muted-foreground'
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Note input */}
           <textarea
-            placeholder="Add a note (what's happening at this location?)…"
-            className="border-border bg-card focus:border-primary min-h-[80px] flex-1 rounded-xl border p-3 text-sm outline-none"
+            placeholder="Add a note (what's happening here?)…"
+            className="border-border bg-card focus:border-primary min-h-[60px] flex-1 rounded-xl border p-3 text-sm outline-none"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            autoFocus
           />
 
           {/* Submit */}
@@ -239,12 +301,12 @@ export default function MobileCapturePage() {
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Submitting…
+                Sending…
               </>
             ) : (
               <>
                 <Send className="h-4 w-4" />
-                Submit Photo Report
+                Send to Chat
               </>
             )}
           </button>

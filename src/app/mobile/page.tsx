@@ -35,14 +35,14 @@ export default function MobileHomePage() {
       label: 'Attendance',
       desc: 'Log worker hours for today',
       icon: Users,
-      route: '/mobile/more',
+      route: '/mobile/attendance',
       color: 'text-amber-500',
     },
     {
       label: 'Receive Material',
       desc: 'Create a GRN from a PO',
       icon: Package,
-      route: '/mobile/more',
+      route: '/mobile/grn',
       color: 'text-violet-500',
     },
   ]

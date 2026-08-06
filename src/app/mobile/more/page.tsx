@@ -16,14 +16,14 @@ export default function MobileMorePage() {
       desc: 'Log worker hours for today',
       icon: Users,
       color: 'text-amber-500',
-      action: () => router.push('/time-attendance'),
+      action: () => router.push('/mobile/attendance'),
     },
     {
       label: 'Receive Material (GRN)',
       desc: 'Create a GRN from a PO',
       icon: Package,
       color: 'text-violet-500',
-      action: () => router.push('/procurement'),
+      action: () => router.push('/mobile/grn'),
     },
     {
       label: 'Full Desktop App',
