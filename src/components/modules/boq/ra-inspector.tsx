@@ -17,6 +17,7 @@ import { computeRaCosts } from './ra-cost-calc'
 import { RaSection } from './ra-section'
 import { PctCostsSection, OpSection } from './ra-cost-sections'
 import { RaFinancialSummary } from './ra-financial-summary'
+import { convertUnit } from '@/lib/unit-conversion'
 
 // Re-export the PCC template constants + RaRow type so existing imports
 // from './ra-inspector' keep working. New code should import from
@@ -174,6 +175,21 @@ export function RaInspector({
     contractRate: item.rate,
   })
 
+  // ─── UOM conversion display ───────────────────────────────────────────
+  // When a material's UOM differs from the BOQ item's UOM (e.g. cement in
+  // 'bag' vs concrete in 'cum'), show the converted qty so the user can
+  // verify the coefficient is correct. Uses the convertUnit() service.
+  const uomConversionNote = useMemo(() => {
+    const mismatches = materials.filter((m) => m.uom && m.uom !== item.uom && m.qty > 0)
+    if (mismatches.length === 0) return null
+    return mismatches.map((m) => ({
+      name: m.name,
+      fromUom: m.uom,
+      toUom: item.uom,
+      qty: m.qty,
+    }))
+  }, [materials, item.uom])
+
   return (
     <>
       <PaneHeader title={`RA Inspector · ${item.code}`} />
@@ -245,6 +261,20 @@ export function RaInspector({
                 Fills 4 materials + 3 labour + 2 equipment rows with standard mix coefficients
               </span>
             </div>
+
+            {/* UOM conversion notice — shows when material UOM differs from BOQ item UOM */}
+            {uomConversionNote && uomConversionNote.length > 0 && (
+              <div className="border-b border-[var(--pane-divider)] bg-sky-500/5 px-4 py-2 text-[10px]">
+                <div className="text-muted-foreground mb-1 font-semibold tracking-wider uppercase">
+                  UOM Conversion
+                </div>
+                {uomConversionNote.map((m, i) => (
+                  <div key={i} className="text-muted-foreground">
+                    {m.name}: {m.qty} {m.fromUom} → {m.toUom} (use convertUnit service for exact factor)
+                  </div>
+                ))}
+              </div>
+            )}
 
             <RaSection
               title="Materials"
