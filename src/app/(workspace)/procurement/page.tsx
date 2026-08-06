@@ -5,7 +5,7 @@ import { ModuleLoadingFallback } from '@/components/modules/module-loading'
 
 const ProcurementModule = dynamic(
   () => import('@/components/modules/procurement').then((m) => m.ProcurementModule),
-  { loading: () => <ModuleLoadingFallback />, ssr: false }
+  { loading: () => <ModuleLoadingFallback />, ssr: true }
 )
 
 export default function Page() {

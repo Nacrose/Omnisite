@@ -5,7 +5,7 @@ import { ModuleLoadingFallback } from '@/components/modules/module-loading'
 
 const QsModule = dynamic(() => import('@/components/modules/qs').then((m) => m.QsModule), {
   loading: () => <ModuleLoadingFallback />,
-  ssr: false,
+  ssr: true,
 })
 
 export default function Page() {

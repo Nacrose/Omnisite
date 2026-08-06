@@ -5,7 +5,7 @@ import { ModuleLoadingFallback } from '@/components/modules/module-loading'
 
 const AdminModule = dynamic(() => import('@/components/modules/admin').then((m) => m.AdminModule), {
   loading: () => <ModuleLoadingFallback />,
-  ssr: false,
+  ssr: true,
 })
 
 export default function Page() {

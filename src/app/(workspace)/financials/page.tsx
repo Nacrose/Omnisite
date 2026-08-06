@@ -5,7 +5,7 @@ import { ModuleLoadingFallback } from '@/components/modules/module-loading'
 
 const FinancialsModule = dynamic(
   () => import('@/components/modules/financials').then((m) => m.FinancialsModule),
-  { loading: () => <ModuleLoadingFallback />, ssr: false }
+  { loading: () => <ModuleLoadingFallback />, ssr: true }
 )
 
 export default function Page() {

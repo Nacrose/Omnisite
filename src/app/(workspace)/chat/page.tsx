@@ -5,7 +5,7 @@ import { ModuleLoadingFallback } from '@/components/modules/module-loading'
 
 const ChatModule = dynamic(() => import('@/components/modules/chat').then((m) => m.ChatModule), {
   loading: () => <ModuleLoadingFallback />,
-  ssr: false,
+  ssr: true,
 })
 
 export default function Page() {
