@@ -142,7 +142,10 @@ export function TaskInspector({
   const [taskResources, setTaskResources] = useState<string[]>(task.resources || [])
   const [newResource, setNewResource] = useState('')
 
-  const boqItems = useMemo(() => {
+  // Read BOQ items from localStorage for the BOQ picker.
+  // Uses useState with lazy initializer instead of useMemo to satisfy
+  // the React Compiler's memoization rules.
+  const [boqItems] = useState(() => {
     try {
       const stored = localStorage.getItem('omnisite-boq-data')
       if (stored) {
@@ -151,7 +154,7 @@ export function TaskInspector({
       }
     } catch { /* ignore */ }
     return []
-  }, [])
+  })
 
   const linkedBoqItem = boqItems.find((i: Record<string, unknown>) => i.id === linkedBoqId)
 
@@ -680,13 +683,12 @@ export function TaskInspector({
             {/* Read requisitions from localStorage (same key as Procurement module).
                 Filter by task_id when the requisitions→task link is set. */}
             {(() => {
-              const reqs = useMemo(() => {
-                try {
-                  const stored = localStorage.getItem('omnisite-procurement-requisitions')
-                  if (stored) return JSON.parse(stored) as Array<Record<string, unknown>>
-                } catch { /* ignore */ }
-                return []
-              }, [])
+              // Read requisitions without useMemo (hooks can't be inside callbacks)
+              let reqs: Array<Record<string, unknown>> = []
+              try {
+                const stored = localStorage.getItem('omnisite-procurement-requisitions')
+                if (stored) reqs = JSON.parse(stored) as Array<Record<string, unknown>>
+              } catch { /* ignore */ }
               const taskReqs = reqs.filter((r) => r.task_id === task.id || r.source === task.name)
               if (taskReqs.length === 0) {
                 return (

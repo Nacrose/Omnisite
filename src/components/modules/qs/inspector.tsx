@@ -649,10 +649,11 @@ function BillingHoldNotice({
     if (ncrStatus !== 'Open' || holdCreated || holdReleased) return
     const key = `billing-hold-${ncrId}`
     if (localStorage.getItem(key)) {
-      setHoldCreated(true)
+      // Defer setState to avoid cascading renders (react-hooks/set-state-in-effect)
+      Promise.resolve().then(() => setHoldCreated(true))
       return
     }
-    setCreating(true)
+    Promise.resolve().then(() => setCreating(true))
     // Use a placeholder project ID — in production this comes from useApp()
     const projectId = '00000000-0000-0000-0000-000000000001'
     createBillingHoldForNCR(

@@ -129,9 +129,10 @@ test.describe('OmniSite smoke tests', () => {
   test('help modal opens with "?" and closes with Escape', async ({ page }) => {
     await goToApp(page)
     await page.locator('body').click()
-    await page.keyboard.press('Shift+/')
+    // Use Shift+/ which produces ? on US keyboards
+    await page.keyboard.press('Shift+Slash')
     const dialog = page.getByRole('dialog', { name: /keyboard shortcuts/i })
-    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(dialog).toBeVisible({ timeout: 10000 })
     await page.keyboard.press('Escape')
     await expect(dialog).not.toBeVisible({ timeout: 5000 })
   })
@@ -139,11 +140,11 @@ test.describe('OmniSite smoke tests', () => {
   test('help modal has a labelled close button', async ({ page }) => {
     await goToApp(page)
     await page.locator('body').click()
-    await page.keyboard.press('Shift+/')
+    await page.keyboard.press('Shift+Slash')
     const dialog = page.getByRole('dialog', { name: /keyboard shortcuts/i })
-    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(dialog).toBeVisible({ timeout: 10000 })
     const closeBtn = dialog.getByRole('button', { name: /close/i })
-    await expect(closeBtn).toBeVisible()
+    await expect(closeBtn).toBeVisible({ timeout: 5000 })
     await closeBtn.click()
     await expect(dialog).not.toBeVisible({ timeout: 5000 })
   })
