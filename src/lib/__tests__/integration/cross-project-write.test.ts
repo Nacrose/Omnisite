@@ -257,3 +257,124 @@ describe('cross-project-write attack (forged project_id in body)', () => {
     expect(mockUpsertWithAudit).not.toHaveBeenCalled()
   })
 })
+
+// ─── Cross-project UPDATE attack (project_id mutation) ─────────────────────
+//
+// Attack vector: a malicious user with read access to a row in Project A
+// re-POSTs the row back with project_id: <Project B>. Without the UPDATE
+// gate, the service-role upsertWithAudit (which bypasses RLS) would silently
+// move the row into Project B — a project the user has no assignment to.
+//
+// The fix rejects any project_id change on UPDATE; project transfer must
+// use a dedicated admin-only endpoint (not implemented yet).
+
+describe('cross-project UPDATE attack (project_id mutation on update)', () => {
+  const OWN_PROJECT = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01' // Project A
+  const FORGED_PROJECT = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99' // Project B
+  const ROW_ID = '1.1.1'
+
+  beforeEach(async () => {
+    // The pre-flight read returns the existing row (with project_id = OWN_PROJECT).
+    // This proves the user has RLS read access to the row in Project A.
+    // The subsequent user_projects query (for the INSERT path) is never
+    // reached on UPDATE — but we mock it anyway to make sure the test isn't
+    // accidentally passing because of the INSERT-path guard firing.
+    mockUserClient.from.mockImplementation(() => ({
+      select: () => ({
+        eq: () => ({
+          // .single() path — used by the pre-flight read in POST
+          single: async () => ({
+            data: {
+              id: ROW_ID,
+              code: ROW_ID,
+              description: 'existing row in Project A',
+              type: 'Priced',
+              qty: 1,
+              uom: 'cum',
+              rate: 100,
+              project_id: OWN_PROJECT,
+            },
+            error: null,
+          }),
+          eq: (col: string, val: string) => ({
+            limit: async () => {
+              if (col === 'project_id' && val === OWN_PROJECT) {
+                return { data: [{ project_id: OWN_PROJECT }], error: null }
+              }
+              return { data: [], error: null }
+            },
+          }),
+        }),
+        // .gt().order() path — used by GET, not relevant here
+        gt: () => ({
+          order: async () => ({ data: [], error: null }),
+        }),
+        order: async () => ({ data: [], error: null }),
+      }),
+    }))
+  })
+
+  it('blocks an UPDATE that changes project_id to a foreign project', async () => {
+    const { POST } = await import('@/app/api/boq/route')
+    // Body includes the existing PK so the route treats this as an UPDATE.
+    // The attacker sets project_id = FORGED_PROJECT to move the row out of
+    // their assigned project into one they have no access to.
+    const body = {
+      id: ROW_ID,
+      code: ROW_ID,
+      description: 'existing row, attempting project transfer',
+      type: 'Priced',
+      qty: 1,
+      uom: 'cum',
+      rate: 100,
+      project_id: FORGED_PROJECT, // ← attack: try to move the row
+    }
+    const res = await POST(makePostReq('http://localhost:3000/api/boq', body))
+
+    expect(res.status).toBe(403)
+    const bodyJson = (await res.json()) as { error: string }
+    expect(bodyJson.error).toMatch(/project_id|transfer/i)
+    // Verify upsertWithAudit was NOT called — the guard fired before it.
+    expect(mockUpsertWithAudit).not.toHaveBeenCalled()
+  })
+
+  it('allows an UPDATE that keeps the same project_id', async () => {
+    const { POST } = await import('@/app/api/boq/route')
+    const body = {
+      id: ROW_ID,
+      code: ROW_ID,
+      description: 'updated description',
+      type: 'Priced',
+      qty: 2,
+      uom: 'cum',
+      rate: 110,
+      project_id: OWN_PROJECT, // same project — legitimate update
+    }
+    const res = await POST(makePostReq('http://localhost:3000/api/boq', body))
+
+    expect(res.status).toBe(200)
+    expect(mockUpsertWithAudit).toHaveBeenCalledOnce()
+  })
+
+  it('restores the original project_id when body omits it on UPDATE', async () => {
+    const { POST } = await import('@/app/api/boq/route')
+    const body = {
+      id: ROW_ID,
+      code: ROW_ID,
+      description: 'updated description, no project_id in body',
+      type: 'Priced',
+      qty: 2,
+      uom: 'cum',
+      rate: 110,
+      // project_id intentionally omitted — should be restored from oldData
+    }
+    const res = await POST(makePostReq('http://localhost:3000/api/boq', body))
+
+    expect(res.status).toBe(200)
+    // Verify upsertWithAudit was called with the restored project_id
+    expect(mockUpsertWithAudit).toHaveBeenCalledOnce()
+    const callArgs = mockUpsertWithAudit.mock.calls[0]
+    const rowArg = callArgs[1] as Record<string, unknown>
+    expect(rowArg.project_id).toBe(OWN_PROJECT)
+  })
+})
