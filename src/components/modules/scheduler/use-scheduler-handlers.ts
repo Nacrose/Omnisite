@@ -138,6 +138,37 @@ export function useSchedulerHandlers(state: SchedulerState) {
     [commitTasks]
   )
 
+  /**
+   * Update a task's resources array (used by the Assign tab in TaskInspector).
+   *
+   * Previously the inspector's add/remove resource buttons called a no-op
+   * `localStorage.setItem("omnisite-scheduler-tasks", JSON.stringify(JSON.parse(localStorage.getItem("omnisite-scheduler-tasks") || "[]")))`
+   * that deep-cloned the existing value back without applying the new
+   * `taskResources`. UI showed the resource as added; refresh erased it.
+   *
+   * This handler is the proper fix — it walks the task tree and mutates the
+   * matched task's `resources` array via Immer, then `commitTasks` flattens
+   * + persists to Supabase (and localStorage as backup).
+   */
+  const updateTaskResources = useCallback(
+    (taskId: string, newResources: string[]) => {
+      commitTasks((prev) =>
+        produce(prev, (draft) => {
+          const walk = (items: Task[]) => {
+            for (const t of items) {
+              if (t.id === taskId) {
+                t.resources = newResources
+              }
+              if (t.children) walk(t.children)
+            }
+          }
+          walk(draft as Task[])
+        })
+      )
+    },
+    [commitTasks]
+  )
+
   // ─── Breach detection ──────────────────────────────────────────────────
   // Extracted into a reusable function so it can be called from both the
   // drag-end handler AND the inspector's constraint-update callback.
@@ -388,6 +419,7 @@ export function useSchedulerHandlers(state: SchedulerState) {
     updateTaskProgress,
     updateTaskLocation,
     updateTaskConstraint,
+    updateTaskResources,
     checkBreach,
     addTask,
     toggleExpand,

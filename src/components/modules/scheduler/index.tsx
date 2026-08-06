@@ -68,6 +68,7 @@ export function SchedulerModule() {
     updateTaskProgress,
     updateTaskLocation,
     updateTaskConstraint,
+    updateTaskResources,
     checkBreach,
     addTask,
     toggleExpand,
@@ -228,6 +229,21 @@ export function SchedulerModule() {
               const taskWithNewConstraint = { ...selectedTask, constraints: constraint }
               checkBreach(taskWithNewConstraint)
               updateTaskConstraint(selectedTask.id, constraint)
+            }}
+            onUpdateResources={(_id, newResources) => {
+              // Propagate the resources array (add/remove from the Assign tab)
+              // into the synced tasks store so it persists to Supabase
+              // (tasks.resources JSONB column) and is visible to resource
+              // leveling. Previously the inspector's add/remove handlers
+              // called a no-op localStorage.setItem — the change vanished on
+              // refresh.
+              //
+              // `_id` is the task id passed by the inspector; we use
+              // `selectedTask.id` instead because the inspector's local
+              // `task.id` mirror could briefly lag the parent's selected task
+              // during fast selection switches.
+              void _id
+              updateTaskResources(selectedTask.id, newResources)
             }}
           />
         }
