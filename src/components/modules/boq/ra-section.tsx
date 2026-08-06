@@ -2,7 +2,7 @@
 
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { RaRow } from './ra-types'
 
@@ -23,6 +23,7 @@ export function RaSection({
   onUpdate,
   onAdd,
   onDelete,
+  onAddFromLibrary,
 }: {
   title: string
   icon: React.ReactNode
@@ -34,11 +35,12 @@ export function RaSection({
    *  shouldn't inherit either of those. */
   itemUom: string
   onUpdate: (index: number, field: keyof RaRow, value: string | number) => void
-  /** Append a blank row to the section's array. The parent owns the array
-   *  state so the Add button just dispatches the action up. */
+  /** Append a blank row to the section's array. */
   onAdd: () => void
   /** Remove the row at the given index. */
   onDelete: (index: number) => void
+  /** Open the material library picker (materials section only). */
+  onAddFromLibrary?: () => void
 }) {
   const sectionTotal = rows.reduce((s, r) => s + r.qty * r.rate, 0)
   return (
@@ -48,10 +50,23 @@ export function RaSection({
           {icon}
           {title}
         </div>
-        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs" onClick={onAdd}>
-          <Plus className="h-3 w-3" />
-          Add
-        </Button>
+        <div className="flex items-center gap-1">
+          {onAddFromLibrary && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 text-xs"
+              onClick={onAddFromLibrary}
+            >
+              <Search className="h-3 w-3" />
+              Library
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs" onClick={onAdd}>
+            <Plus className="h-3 w-3" />
+            Add
+          </Button>
+        </div>
       </div>
       <div className="space-y-1.5">
         {rows.length === 0 && (

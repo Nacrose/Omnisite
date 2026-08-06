@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import { PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import type { BoqItem } from './types'
 import { LocationPicker } from '@/components/ui/location-picker'
 import { usePersistentState } from '@/lib/use-persistent-state'
 import type { RaRow, PctCosts, CustomPctCost } from './ra-types'
+import { PCC_TEMPLATE_MATERIALS, PCC_TEMPLATE_LABOUR, PCC_TEMPLATE_EQUIPMENT } from './ra-types'
 import { computeRaCosts } from './ra-cost-calc'
 import { RaSection } from './ra-section'
 import { PctCostsSection, OpSection } from './ra-cost-sections'
@@ -104,6 +106,61 @@ export function RaInspector({
     source: 'Manual',
   })
 
+  // ─── Material Library lookup ───────────────────────────────────────────
+  // When the user clicks "Add from Library", show a searchable dropdown of
+  // materials from the Admin Material Library. Picking one fills the row
+  // with code/name/uom/rate automatically — no manual typing required.
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState<
+    'materials' | 'labour' | 'equipment' | null
+  >(null)
+  const [libraryQuery, setLibraryQuery] = useState('')
+
+  // Import the material library (seed data — lightweight, ~30 items)
+  // In production this would fetch from /api/materials, but the seed data
+  // is sufficient for the RA builder's lookup.
+  const MATERIAL_LIBRARY = useMemo(() => {
+    // Lazy import to avoid pulling the seed data if the RA inspector isn't open
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { MATERIALS } = require('@/data/seed/admin') as typeof import('@/data/seed/admin')
+      return MATERIALS.filter((m) => !m.archived)
+    } catch {
+      return []
+    }
+  }, [])
+
+  // PCC template (cement/sand/aggregate/labour/equipment) — the standard
+  // DoR M15 concrete mix. Shown as a "Load PCC Template" shortcut so the
+  // user can populate a concrete item's RA in one click instead of adding
+  // 9 rows manually.
+  const loadPccTemplate = () => {
+    setMaterials(() => PCC_TEMPLATE_MATERIALS.map((m) => ({ ...m, id: crypto.randomUUID() })))
+    setLabour(() => PCC_TEMPLATE_LABOUR.map((m) => ({ ...m, id: crypto.randomUUID() })))
+    setEquipment(() => PCC_TEMPLATE_EQUIPMENT.map((m) => ({ ...m, id: crypto.randomUUID() })))
+    toast.success('PCC template loaded', {
+      description: 'Standard DoR M15 mix — 4 materials, 3 labour, 2 equipment rows added.',
+    })
+  }
+
+  // Add a row from the library (fills code/name/uom/rate automatically)
+  const addFromLibrary = (
+    setter: React.Dispatch<React.SetStateAction<RaRow[]>>,
+    item: { code: string; name: string; uom: string; rate: number; source: string }
+  ) => {
+    setter((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        code: item.code,
+        name: item.name,
+        uom: item.uom,
+        qty: 0,
+        rate: item.rate,
+        source: item.source,
+      },
+    ])
+  }
+
   // Compute the full cost breakdown via the extracted pure function.
   const costs = computeRaCosts({
     materials,
@@ -173,6 +230,22 @@ export function RaInspector({
           </div>
 
           <TabsContent value="builder" className="mt-0">
+            {/* PCC Template shortcut — one-click load for concrete items */}
+            <div className="border-b border-[var(--pane-divider)] px-4 py-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={loadPccTemplate}
+              >
+                <Layers className="h-3 w-3" />
+                Load PCC Template (DoR M15)
+              </Button>
+              <span className="text-muted-foreground ml-2 text-[10px]">
+                Fills 4 materials + 3 labour + 2 equipment rows with standard mix coefficients
+              </span>
+            </div>
+
             <RaSection
               title="Materials"
               icon={<Layers className="h-3.5 w-3.5" />}
@@ -181,6 +254,7 @@ export function RaInspector({
               onUpdate={(i, f, v) => updateRow(setMaterials, i, f, v)}
               onAdd={() => setMaterials((prev) => [...prev, blankRaRow()])}
               onDelete={(i) => deleteRow(setMaterials, i)}
+              onAddFromLibrary={() => setLibraryPickerOpen('materials')}
             />
             <RaSection
               title="Labour"
@@ -312,6 +386,82 @@ export function RaInspector({
           </Button>
         </div>
       </PaneBody>
+
+      {/* Material Library Picker */}
+      {libraryPickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setLibraryPickerOpen(null)}
+        >
+          <div
+            className="pane w-full max-w-lg overflow-hidden rounded-xl border border-[var(--pane-divider)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-12 items-center justify-between border-b border-[var(--pane-divider)] px-4">
+              <span className="text-sm font-semibold">Material Library</span>
+              <button
+                onClick={() => setLibraryPickerOpen(null)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-3">
+              <Input
+                className="h-8 text-xs"
+                placeholder="Search by code or name…"
+                value={libraryQuery}
+                onChange={(e) => setLibraryQuery(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {MATERIAL_LIBRARY.filter((m) => {
+                const q = libraryQuery.toLowerCase()
+                return !q || m.code.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+              }).map((m) => (
+                <button
+                  key={m.code}
+                  onClick={() => {
+                    addFromLibrary(setMaterials, {
+                      code: m.code,
+                      name: m.name,
+                      uom: m.uom,
+                      rate: m.projectRate || m.rate,
+                      source: m.org ? 'Org Master' : 'Project Library',
+                    })
+                    setLibraryPickerOpen(null)
+                    toast.success(`Added ${m.name}`, {
+                      description: `${m.uom} @ NPR ${m.projectRate || m.rate}`,
+                    })
+                  }}
+                  className="hover:bg-accent flex w-full items-center gap-3 border-b border-[var(--pane-divider)] px-4 py-2 text-left transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium">{m.name}</div>
+                    <div className="text-muted-foreground text-[10px]">
+                      {m.code} · {m.uom}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-xs font-semibold">
+                      NPR {m.projectRate || m.rate}
+                    </div>
+                    <div className="text-muted-foreground text-[9px]">
+                      {m.org ? 'Org' : 'Project'}
+                    </div>
+                  </div>
+                </button>
+              ))}
+              {MATERIAL_LIBRARY.length === 0 && (
+                <div className="text-muted-foreground p-8 text-center text-xs">
+                  No materials in the library yet. Add some in Admin → Materials.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

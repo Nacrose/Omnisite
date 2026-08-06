@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/lib/app-store'
-import { ChevronDown, Building2, Check, MapPin, Circle } from 'lucide-react'
+import { ChevronDown, Building2, Check, MapPin, Circle, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { NewProjectModal } from '@/components/modules/admin/new-project-modal'
 
 interface Project {
   id: string
@@ -85,6 +86,7 @@ export const PROJECTS: Project[] = [
 export function ProjectSwitcher() {
   const { activeProject, activeProjectId, setActiveProject } = useApp()
   const [open, setOpen] = useState(false)
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -207,9 +209,29 @@ export function ProjectSwitcher() {
             <span className="text-muted-foreground text-[10px]">
               Row-Level Security enforced per project
             </span>
-            <button className="text-primary text-[11px] hover:underline">+ New Project</button>
+            <button
+              className="text-primary flex items-center gap-1 text-[11px] hover:underline"
+              onClick={() => {
+                setOpen(false)
+                setNewProjectOpen(true)
+              }}
+            >
+              <Plus className="h-3 w-3" />
+              New Project
+            </button>
           </div>
         </div>
+      )}
+
+      {newProjectOpen && (
+        <NewProjectModal
+          onClose={() => setNewProjectOpen(false)}
+          onCreated={(projectId, projectName) => {
+            // Reload to pick up the new project in the PROJECTS list + switch to it
+            // (the project list comes from the DB, so a full reload is simplest)
+            window.location.href = '/dashboard'
+          }}
+        />
       )}
     </div>
   )

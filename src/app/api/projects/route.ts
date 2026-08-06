@@ -18,6 +18,7 @@ const projectSchema = z.object({
   value: z.number().min(0).default(0),
   progress: z.number().int().min(0).max(100).default(0),
   status: z.string().default('Active'),
+  start_date: z.string().optional(),
 })
 
 // GET /api/projects — fetch all projects the user has access to (RLS-scoped)
@@ -83,6 +84,33 @@ export async function POST(req: NextRequest) {
       userId: user.id,
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+
+  // If this is a NEW project (not an update), auto-assign the creator as PM.
+  // Without this, the creator would have no access to their own project
+  // (RLS requires a user_projects row).
+  if (!oldData && data.id) {
+    const { getServiceClient, isServiceClientConfigured } = await import('@/lib/supabase-server')
+    if (isServiceClientConfigured()) {
+      const sc = getServiceClient()
+      await sc
+        .from('user_projects')
+        .insert({
+          user_id: user.id,
+          project_id: data.id,
+          role: 'PM',
+        })
+        .then(({ error: assignError }) => {
+          if (assignError) {
+            // Non-fatal — the project is created, but the creator doesn't
+            // have access. Log so the admin can fix it manually.
+            logDbError('user_projects', 'AUTO_ASSIGN_PM', assignError, {
+              userId: user.id,
+              recordId: String(data.id),
+            })
+          }
+        })
+    }
   }
 
   return NextResponse.json(data)
