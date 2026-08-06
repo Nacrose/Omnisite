@@ -52,6 +52,11 @@ const TABLE_WRITE_ROLES: Record<string, Role[]> = {
   // answer/close them. Storekeeper and Foreman are read-only (they need
   // visibility but don't author RFIs). Matches migration 28 RLS.
   rfis: ['PM', 'SITE_ENGINEER'],
+  // Material Issue Notes (MINs). Storekeepers author them (they issue
+  // material from the store); site engineers also author (sometimes
+  // material is issued directly to a task without going through the store).
+  // PMs can do everything; Foremen are read-only. Matches migration 29 RLS.
+  material_issue_notes: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
 }
 
 /**
@@ -86,6 +91,7 @@ export const TABLE_PRIMARY_KEYS: Record<string, string> = {
   project_locations: 'id',
   drawing_annotations: 'id',
   rfis: 'id',
+  material_issue_notes: 'id',
 }
 
 /** Get the PK column for a table (defaults to 'id'). */
@@ -120,6 +126,7 @@ const PROJECT_SCOPED_TABLES = new Set([
   'project_locations',
   'drawing_annotations',
   'rfis',
+  'material_issue_notes',
 ])
 
 /**

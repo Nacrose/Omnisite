@@ -30,7 +30,6 @@ import {
 } from './types'
 import { INITIAL_POS, INITIAL_REQS, INITIAL_GRNS, INITIAL_STOCK } from './types'
 import { useSyncedState } from '@/lib/use-synced-state'
-import { usePersistentState } from '@/lib/use-persistent-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { useFocusTrap } from '@/lib/use-focus-trap'
 import { ReqCenterView } from './req-view'
@@ -89,20 +88,19 @@ export function ProcurementModule() {
     () => structuredClone(INITIAL_STOCK) as typeof INITIAL_STOCK,
     { fieldMap: { onHand: 'on_hand', avgCost: 'avg_cost' }, primaryKey: 'code' }
   )
-  // MINs (Material Issue Notes) are localStorage-only — there is currently
-  // no `material_issue_notes` API route or DB table. useSyncedState would
-  // try to POST to `/api/material_issue_notes` and fail in Supabase mode,
-  // polluting the console with upsert errors. Fall back to
-  // usePersistentState so MINs persist across refreshes without hitting
-  // the network. When a `material_issue_notes` table + route land,
-  // swap this back to useSyncedState('omnisite-procurement-mins',
-  // 'material_issue_notes', ...).
-  const [mins] = usePersistentState<MinNote[]>(
+  // MINs (Material Issue Notes) — now backed by the `material_issue_notes`
+  // DB table + /api/material-issue-notes route (migration 29). Previously
+  // this was a localStorage-only stopgap (usePersistentState) because the
+  // table didn't exist — switching to useSyncedState would have hit a 404
+  // and polluted the console with upsert errors. Now that the table + route
+  // are live, useSyncedState gives us cross-device sync + realtime updates.
+  // Falls back to localStorage in demo mode (no Supabase configured).
+  const [mins, _setMins, minsLoading] = useSyncedState<MinNote[]>(
     'omnisite-procurement-mins',
-    () => structuredClone(INITIAL_MINS) as typeof INITIAL_MINS
+    'material_issue_notes',
+    () => structuredClone(INITIAL_MINS) as typeof INITIAL_MINS,
+    { primaryKey: 'id' }
   )
-  // usePersistentState is synchronous, so MINs are never in a loading state.
-  const minsLoading = false
   // Override modal state
   const [overrideModal, setOverrideModal] = useState<{
     reqId: string

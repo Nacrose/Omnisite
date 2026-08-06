@@ -460,6 +460,21 @@ export const rfiSchema = z.object({
   location_id: z.string().nullable().optional(),
 })
 
+// Material Issue Notes (MINs) — moved from localStorage to DB in migration 29.
+// Mirrors the MinNote TypeScript interface in
+// src/components/modules/procurement/types.ts:74. Stock deduction stays an
+// app-level concern (material-reconciliation.ts); this table is the source of
+// truth for the MIN register only.
+export const materialIssueNoteSchema = z.object({
+  id: z.string().min(1),
+  project_id: z.string().uuid().optional(),
+  date: z.string().min(1),
+  task: z.string().min(1),
+  items: z.string().min(1),
+  issued: z.string().min(1),
+  status: z.enum(['Issued', 'N/A']).default('Issued'),
+})
+
 // ─── Helper: validate and return error response ─────────────────────────────
 
 import { NextResponse } from 'next/server'
