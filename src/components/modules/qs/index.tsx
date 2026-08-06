@@ -84,7 +84,7 @@ export function QsModule() {
     // (P1-7 in gap analysis.)
     if (next === 'CAP Submitted') {
       const cap = target.cap
-      if (!cap || !cap.rootCause.trim() || !cap.action.trim() || !cap.assignee.trim()) {
+      if (!cap || !cap.rootCause?.trim() || !cap.action?.trim() || !cap.assignee?.trim()) {
         toast.error('Cannot advance — CAP incomplete', {
           description:
             'Root cause, corrective action, and assignee are required before submitting the CAP to the consultant.',

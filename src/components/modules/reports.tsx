@@ -654,7 +654,15 @@ function SCurveWidget() {
   // Earned = sum of (duration * progress% / total_duration) up to each week.
   // This is a simplified S-curve — a proper one would use EVM BCWP/BCWS,
   // but for a printable report this gives the right shape.
-  const totalDuration = tasks.reduce((s, t) => s + (t.duration || 0), 0)
+  // Pass-2: guard against NaN — if any task has a non-finite progress
+  // or duration, skip it (don't let one bad row crash the whole chart).
+  const safeTasks = tasks.filter(
+    (t) =>
+      Number.isFinite(t.start_week || 0) &&
+      Number.isFinite(t.duration || 0) &&
+      Number.isFinite(t.progress || 0)
+  )
+  const totalDuration = safeTasks.reduce((s, t) => s + (t.duration || 0), 0)
   if (totalDuration === 0) {
     return (
       <div>
@@ -669,7 +677,7 @@ function SCurveWidget() {
   }
 
   // Walk weeks 0..maxWeek, accumulating planned + earned.
-  const maxWeek = Math.max(...tasks.map((t) => (t.start_week || 0) + (t.duration || 0)))
+  const maxWeek = Math.max(...safeTasks.map((t) => (t.start_week || 0) + (t.duration || 0)))
   const weeks: number[] = []
   const planned: number[] = []
   const earned: number[] = []
@@ -677,7 +685,7 @@ function SCurveWidget() {
     weeks.push(w)
     let p = 0
     let e = 0
-    for (const t of tasks) {
+    for (const t of safeTasks) {
       const start = t.start_week || 0
       const dur = t.duration || 0
       const finish = start + dur

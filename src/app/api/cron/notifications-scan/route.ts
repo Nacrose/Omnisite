@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient, isServiceClientConfigured } from '@/lib/supabase-server'
 import { sendNotification } from '@/lib/notifications'
+import { upsertWithAudit } from '@/lib/audit'
+import { timingSafeEqual } from 'crypto'
 
 /**
  * Cron-driven notifications scanner.
@@ -52,7 +54,12 @@ export async function POST(req: NextRequest) {
   if (cronSecret) {
     const authHeader = req.headers.get('authorization') || ''
     const token = authHeader.replace(/^Bearer\s+/i, '')
-    if (token !== cronSecret) {
+    // Timing-safe comparison to prevent secret extraction via timing
+    // attacks. Both strings must be the same length for timingSafeEqual;
+    // if they're different lengths, the secret is wrong anyway.
+    const tokenBuf = Buffer.from(token)
+    const secretBuf = Buffer.from(cronSecret)
+    if (tokenBuf.length !== secretBuf.length || !timingSafeEqual(tokenBuf, secretBuf)) {
       return NextResponse.json({ error: 'Unauthorized — invalid CRON_SECRET' }, { status: 401 })
     }
   } else {
@@ -186,27 +193,37 @@ export async function POST(req: NextRequest) {
             continue
           }
 
-          const { data: inserted, error: insertError } = await serviceClient
-            .from('notifications')
-            .insert({
-              user_id: pmId,
-              project_id: project.id,
-              type: 'rfi_overdue',
-              title: `Overdue: ${rfi.number}`,
-              message: `RFI ${rfi.number} (${rfi.subject}) is ${daysLate} day(s) overdue — consultant reply pending.`,
-              severity: 'critical',
-              module: 'daily-ops',
-              context: { rfiId: rfi.id, rfiNumber: rfi.number, daysLate },
-              dispatch_status: 'pending',
-            })
-            .select('id')
-            .single()
+          // Insert via upsertWithAudit so the notification creation is
+          // recorded in audit_log (pass-2 audit finding — previously
+          // used raw serviceClient.from().insert() which bypassed the
+          // audit trail, even though migration 30 added 'notifications'
+          // to the allowlist).
+          const notifData = {
+            user_id: pmId,
+            project_id: project.id,
+            type: 'rfi_overdue',
+            title: `Overdue: ${rfi.number}`,
+            message: `RFI ${rfi.number} (${rfi.subject}) is ${daysLate} day(s) overdue — consultant reply pending.`,
+            severity: 'critical',
+            module: 'daily-ops',
+            context: { rfiId: rfi.id, rfiNumber: rfi.number, daysLate },
+            dispatch_status: 'pending',
+          }
+          const { data: inserted, error: insertError } = await upsertWithAudit(
+            'notifications',
+            notifData as Record<string, unknown>,
+            'id',
+            pmId,
+            'INSERT',
+            null
+          )
 
           if (insertError) {
-            result.errors.push(`insert rfi_overdue failed: ${insertError.message}`)
+            result.errors.push(`insert rfi_overdue failed: ${insertError}`)
             continue
           }
           result.inserted++
+          const insertedId = (inserted as Record<string, unknown> | null)?.id as string | undefined
 
           // Dispatch via email/SMS if configured
           const email = pmEmails.get(pmId)
@@ -227,7 +244,7 @@ export async function POST(req: NextRequest) {
             await serviceClient
               .from('notifications')
               .update({ dispatch_status: status })
-              .eq('id', inserted?.id)
+              .eq('id', insertedId)
           }
         }
       }

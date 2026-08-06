@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getServiceClient, isServiceClientConfigured } from '@/lib/supabase-server'
-import { requireAuth } from '@/lib/api-auth'
+import { requireAuth, checkOrigin } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
 
@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // CSRF: reject cross-origin POSTs
+  const originError = checkOrigin(req)
+  if (originError) return originError
 
   // Demo mode check — refuse to run without Supabase configured.
   // (Demo mode has no DB to write to; the wizard shows a banner but

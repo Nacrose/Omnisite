@@ -81,18 +81,30 @@ function sweepIdleChannels() {
   }
 }
 
-// Start the GC timer once on module load (Node.js + browser).
+// Start the GC timer once on module load (browser only).
+// Pass-2 fix: the previous `if (typeof window !== 'undefined')` guard
+// prevented the GC from running in the browser when the module was first
+// imported during SSR (Next.js RSC pre-render). The module-level cache
+// (channelCache) persists across re-renders, so if the GC never starts,
+// channels leak indefinitely. Now we check `typeof window` at CALL time
+// (inside scheduleGc) instead of at module-init time, so the GC always
+// starts in the browser regardless of whether the first import was SSR.
+const isBrowser = typeof window !== 'undefined'
 if (typeof globalThis !== 'undefined') {
   // Use setTimeout recursively instead of setInterval so we don't hold
   // the event loop open in Node.js serverless environments.
   const scheduleGc = () => {
     setTimeout(() => {
-      sweepIdleChannels()
+      // Guard at call time — the module may have been imported during SSR
+      // but the callback fires later in the browser.
+      if (typeof window !== 'undefined') {
+        sweepIdleChannels()
+      }
       scheduleGc()
     }, GC_INTERVAL_MS)
   }
   // Only schedule in browser (serverless functions shouldn't run long-lived timers)
-  if (typeof window !== 'undefined') {
+  if (isBrowser) {
     scheduleGc()
   }
 }

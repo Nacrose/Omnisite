@@ -28,6 +28,8 @@ vi.mock('@/lib/api-auth', () => ({
   verifyProjectAccess: vi.fn(async () => true),
   isProjectScopedTable: vi.fn(() => true),
   getPrimaryKey: vi.fn(() => 'id'),
+  // CSRF check — always pass in demo-mode tests (same-origin)
+  checkOrigin: vi.fn(() => null),
 }))
 
 vi.mock('@/lib/rate-limit', () => ({

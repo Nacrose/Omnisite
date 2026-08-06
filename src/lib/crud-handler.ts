@@ -10,6 +10,7 @@ import {
   requireRole,
   verifyProjectAccess,
   isProjectScopedTable,
+  checkOrigin,
   type AuthenticatedUser,
 } from '@/lib/api-auth'
 import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
@@ -205,6 +206,10 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
     if (authError) return authError
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // CSRF: reject cross-origin POSTs (defense-in-depth on top of SameSite=Lax)
+    const originError = checkOrigin(req)
+    if (originError) return originError
+
     const roleError = requireRole(user, table)
     if (roleError) return roleError
 
@@ -385,6 +390,10 @@ export function createCrudHandler<T>(config: CrudConfig<T>): {
     const { user, error: authError } = await requireAuth(req)
     if (authError) return authError
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // CSRF: reject cross-origin DELETEs
+    const originError = checkOrigin(req)
+    if (originError) return originError
 
     const roleError = requireRole(user, table)
     if (roleError) return roleError

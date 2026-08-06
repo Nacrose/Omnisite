@@ -364,6 +364,59 @@ export function requireRole(user: AuthenticatedUser | null, table: string): Next
 }
 
 /**
+ * CSRF defense via Origin header check.
+ *
+ * Modern browsers send the `Origin` header on all cross-origin POST/DELETE
+ * requests. If the Origin doesn't match the request's Host, it's a CSRF
+ * attempt (or a misconfigured CORS setup). This is simpler and more secure
+ * than double-submit cookies — no token to manage, no cookie to leak.
+ *
+ * SameSite=Lax cookies already prevent cross-site POSTs from carrying the
+ * session cookie, but this is defense-in-depth:
+ *   - Catches the case where SameSite is accidentally disabled
+ *   - Catches subdomain-based attacks (subdomain.example.com → example.com)
+ *   - Catches older browsers that don't enforce SameSite=Lax
+ *
+ * Returns null if the check passes (or if there's no Origin header, which
+ * happens for same-origin requests in some browsers). Returns 403 if the
+ * Origin doesn't match the Host.
+ *
+ * Call this at the top of every POST/DELETE handler, after requireAuth().
+ */
+export function checkOrigin(req: NextRequest): NextResponse | null {
+  const origin = req.headers.get('origin')
+  if (!origin) {
+    // No Origin header — same-origin request (or non-browser client like curl).
+    // Same-origin requests don't need CSRF protection. Non-browser clients
+    // use Bearer tokens (which aren't vulnerable to CSRF).
+    return null
+  }
+
+  const host = req.headers.get('host')
+  if (!host) {
+    // No Host header — can't verify. Allow (the proxy would have rejected
+    // this before it got here anyway).
+    return null
+  }
+
+  try {
+    const originUrl = new URL(origin)
+    if (originUrl.host === host) {
+      return null // same-origin — safe
+    }
+
+    // Origin doesn't match Host — potential CSRF attempt
+    return NextResponse.json(
+      { error: 'Cross-origin request blocked (CSRF check failed)' },
+      { status: 403 }
+    )
+  } catch {
+    // Malformed Origin header — reject to be safe
+    return NextResponse.json({ error: 'Malformed Origin header' }, { status: 400 })
+  }
+}
+
+/**
  * Check if a user can read a table (for potential future use).
  * Currently all authenticated users with project access can read (enforced by RLS).
  */

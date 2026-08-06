@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getServiceClient, isServiceClientConfigured } from '@/lib/supabase-server'
-import { requireAuth } from '@/lib/api-auth'
+import { requireAuth, checkOrigin } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { logDbError } from '@/lib/safe-log'
 
@@ -50,6 +50,10 @@ export async function POST(req: NextRequest) {
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // CSRF: reject cross-origin POSTs
+  const originError = checkOrigin(req)
+  if (originError) return originError
 
   if (user.role !== 'PM') {
     return NextResponse.json(
