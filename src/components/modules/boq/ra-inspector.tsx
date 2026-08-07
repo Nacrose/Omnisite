@@ -57,35 +57,64 @@ export function RaInspector({
 
   const locationId = item.locationId
 
-  // RA state is persisted to localStorage keyed by BOQ item ID so it
-  // survives tab switches and page reloads. Previously this was pure
-  // useState — users could build a complete rate analysis and lose it
-  // by clicking a different BOQ item. Now each item has its own RA
-  // slot in localStorage. This is a stopgap — the proper solution is
-  // an ra_data JSONB column on boq_items + useSyncedState wiring.
+  // ─── RA state restoration ────────────────────────────────────────────────
+  // Read back saved RA data from the BOQ item's raData field (which was
+  // persisted via onSaveRaData → setBoqRows → useSyncedState → POST /api/boq
+  // with ra_data JSONB column, migration 27).
+  //
+  // Previously the RA builder started with EMPTY arrays every mount, even
+  // if the user had previously saved a rate analysis. The localStorage
+  // persistence (usePersistentState below) was a stopgap that only worked
+  // per-browser — a user on a different machine or after clearing cache
+  // would see empty RA state even though the data was in the DB.
+  //
+  // Now: if item.raData exists (loaded from Supabase or localStorage via
+  // the parent's useSyncedState), use it as the initial value. Fall back
+  // to the localStorage stopgap if raData is not present (demo mode).
+  const savedRaData = item.raData as
+    | {
+        materials?: RaRow[]
+        labour?: RaRow[]
+        equipment?: RaRow[]
+        pctCosts?: PctCosts
+        customPctCosts?: CustomPctCost[]
+        opOnDirect?: boolean
+        opOnPct?: boolean
+        opPct?: number
+        savedAt?: string
+      }
+    | undefined
+
   const raKey = `omnisite-boq-ra-${item.id}`
   const [materials, setMaterials] = usePersistentState<RaRow[]>(
     `${raKey}-materials`,
-    () => [] as RaRow[]
+    () => savedRaData?.materials ?? ([] as RaRow[])
   )
-  const [labour, setLabour] = usePersistentState<RaRow[]>(`${raKey}-labour`, () => [] as RaRow[])
+  const [labour, setLabour] = usePersistentState<RaRow[]>(
+    `${raKey}-labour`,
+    () => savedRaData?.labour ?? ([] as RaRow[])
+  )
   const [equipment, setEquipment] = usePersistentState<RaRow[]>(
     `${raKey}-equipment`,
-    () => [] as RaRow[]
+    () => savedRaData?.equipment ?? ([] as RaRow[])
   )
   const [pctCosts, setPctCosts] = usePersistentState<PctCosts>(`${raKey}-pctCosts`, () => ({
     labour: { on: true, pct: 2.5 },
     material: { on: true, pct: 1.5 },
     equipment: { on: true, pct: 3.5 },
     tp: { on: false, pct: 0 },
+    ...savedRaData?.pctCosts,
   }))
   const [customPctCosts, setCustomPctCosts] = usePersistentState<CustomPctCost[]>(
     `${raKey}-customPctCosts`,
-    () => []
+    () => savedRaData?.customPctCosts ?? []
   )
-  const [opOnDirect, setOpOnDirect] = usePersistentState(`${raKey}-opOnDirect`, true)
-  const [opOnPct, setOpOnPct] = usePersistentState(`${raKey}-opOnPct`, true)
-  const [opPct, setOpPct] = usePersistentState(`${raKey}-opPct`, 15)
+  const [opOnDirect, setOpOnDirect] = usePersistentState(
+    `${raKey}-opOnDirect`,
+    savedRaData?.opOnDirect ?? true
+  )
+  const [opOnPct, setOpOnPct] = usePersistentState(`${raKey}-opOnPct`, savedRaData?.opOnPct ?? true)
+  const [opPct, setOpPct] = usePersistentState(`${raKey}-opPct`, savedRaData?.opPct ?? 15)
 
   // Helper to update a single row's field. Field is any keyof RaRow so the
   // inline-editable inputs (code/name/uom) on user-added rows can write back

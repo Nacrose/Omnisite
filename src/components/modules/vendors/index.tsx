@@ -13,6 +13,7 @@ import { useSyncedState } from '@/lib/use-synced-state'
 import { LoadingState } from '@/components/ui/loading-state'
 import { toast } from 'sonner'
 import type { Subcontractor } from './types'
+import { BillingHoldsView } from '@/components/modules/billing-holds'
 import { INITIAL_VENDORS } from '@/data/seed/vendors'
 import type { Vendor, VendorCategory } from '@/lib/types/vendor'
 import type {
@@ -400,6 +401,7 @@ function VendorInspector({
         { value: 'material', label: 'Material' },
         { value: 'consumables', label: 'Consumables' },
         { value: 'bill', label: 'Bill' },
+        { value: 'holds', label: 'Holds' },
         { value: 'schedule', label: 'Schedule' },
         { value: 'performance', label: 'Performance' },
       ] as const)
@@ -518,6 +520,9 @@ function VendorInspector({
                     onChange({ ...vendor, advanceRecovered: newTotalRecovered })
                   }
                 />
+              </TabsContent>
+              <TabsContent value="holds" className="mt-0">
+                <BillingHoldsView />
               </TabsContent>
               <TabsContent value="schedule" className="mt-0">
                 <ScheduleTab sc={sc} />

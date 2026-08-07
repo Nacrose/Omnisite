@@ -1,13 +1,26 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 /**
  * A drop-in replacement for useState that persists to localStorage.
  * The value is JSON-serialized and saved on every change.
  * On first mount, the stored value is used if available; otherwise the initializer.
  *
- * SSR-safe: returns the initial value on the server, hydrates from localStorage on the client.
+ * SSR-safe: ALWAYS returns the initial value on the server AND on the
+ * first client render. The persisted value is loaded in a useEffect
+ * after hydration, which means:
+ *   - The server-rendered HTML matches the client's first paint (no
+ *     hydration mismatch warning).
+ *   - There's a one-frame flash to the initial value before the
+ *     persisted data loads. This is the standard tradeoff for SSR +
+ *     localStorage.
+ *
+ * Previously this hook read localStorage synchronously in the useState
+ * lazy initializer — which caused a hydration mismatch when modules
+ * were server-rendered (ssr: true). The server rendered the initial/
+ * default state; the client's first render read localStorage and
+ * produced different HTML → React flagged it as a mismatch.
  *
  * @param key   localStorage key
  * @param initial  initial value or initializer function (same as useState)
@@ -17,27 +30,37 @@ export function usePersistentState<T>(
   key: string,
   initial: T | (() => T)
 ): [T, (value: T | ((prev: T) => T)) => void] {
-  // Lazy initializer: on first render, try to read from localStorage, fall back to `initial`
-  const [state, setState] = useState<T>(() => {
-    if (typeof window === 'undefined') {
-      return typeof initial === 'function' ? (initial as () => T)() : initial
-    }
+  // Always start with the initial value — server AND client's first render.
+  // This ensures the server-rendered HTML matches the client's first paint.
+  const computeInitial = (): T => (typeof initial === 'function' ? (initial as () => T)() : initial)
+  const [state, setState] = useState<T>(computeInitial)
+
+  // Hydrate from localStorage AFTER the first paint (useEffect runs
+  // after hydration). This avoids the hydration mismatch but means
+  // there's a one-frame flash to the default value. For most use
+  // cases (admin tab selection, chart expanded state, etc.) this is
+  // invisible. For data-heavy hooks (chat messages, BOQ data), the
+  // parent useSyncedState hook handles its own loading state.
+  const hydratedRef = useRef(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (hydratedRef.current) return // only hydrate once
+    hydratedRef.current = true
     try {
       const stored = window.localStorage.getItem(key)
       if (stored !== null) {
-        return JSON.parse(stored) as T
+        const parsed = JSON.parse(stored) as T
+        // Defer setState to avoid cascading renders (react-hooks/set-state-in-effect)
+        Promise.resolve().then(() => setState(parsed))
       }
-    } catch (e) {
-      console.warn(`usePersistentState: failed to read "${key}" from localStorage`, e)
+    } catch {
+      // localStorage may be unavailable (SSR, privacy mode) — ignore.
     }
-    return typeof initial === 'function' ? (initial as () => T)() : initial
-  })
+  }, [key])
 
   // Write to localStorage whenever state changes — debounced by 500ms so
-  // rapid edits (e.g. dragging a column-width handle, typing in a cell)
-  // don't thrash the main thread with JSON.stringify + setItem on every
-  // keystroke. The latest state is always read from `stateRef.current`
-  // when the timer fires, so coalesced updates land as a single write.
+  // rapid edits don't thrash the main thread. The latest state is always
+  // read from `stateRef.current` when the timer fires.
   const stateRef = useRef(state)
   useEffect(() => {
     stateRef.current = state
@@ -47,8 +70,8 @@ export function usePersistentState<T>(
     const handle = window.setTimeout(() => {
       try {
         window.localStorage.setItem(key, JSON.stringify(stateRef.current))
-      } catch (e) {
-        console.warn(`usePersistentState: failed to write "${key}" to localStorage`, e)
+      } catch {
+        // Quota exceeded or localStorage unavailable — ignore.
       }
     }, 500)
     return () => window.clearTimeout(handle)

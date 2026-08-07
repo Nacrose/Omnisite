@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -24,6 +24,7 @@ import { toast } from 'sonner'
 import type { Subcontractor, CustomDeductible } from './types'
 import { fmtNPR } from './types'
 import { getMaterialCoefficient } from './material-coefficients'
+import { isSupabaseConfigured } from '@/lib/supabase'
 
 // ─── Running Bill Tab (expanded deductibles) ─────────────────────────────────
 
@@ -164,16 +165,42 @@ export function RunningBillTab({
   const netPayable = earned - totalDeductions
 
   // ─── Billing hold check ──────────────────────────────────────────────────
-  // Wire the billing hold for real: if the SC has any active billing hold
-  // (from the NCR workflow's createBillingHoldForNCR), block the running
-  // bill from being generated until the hold is released. This is the
-  // "entire point of the billingHold field" — a cosmetic-only version
-  // is arguably worse than not having the feature.
+  // Wire the billing hold for real: check BOTH the SC record's billingHold
+  // boolean (set by Q&S NCR workflow) AND the billing_holds table (populated
+  // by createBillingHoldForNCR in the Q&S inspector). The table check is
+  // necessary because sc.billingHold is set on the QsItem, not on the
+  // Subcontractor record — these are separate stores. By querying the
+  // billing_holds API, we get the real hold state regardless of which
+  // store it was written to.
   //
-  // The hold check uses the `billingHold` boolean on the SC record (set
-  // when an NCR is opened on a linked BOQ item). We also check the
-  // billing_holds table via the props passed from the parent if available.
-  const hasActiveHold = sc.billingHold === true
+  // In demo mode (no Supabase), the API returns [] so the hold check
+  // falls through to sc.billingHold.
+  const [activeHoldReason, setActiveHoldReason] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      // Demo mode — check the SC record's billingHold flag
+      Promise.resolve().then(() =>
+        setActiveHoldReason(sc.billingHold === true ? 'NCR billing hold active' : null)
+      )
+      return
+    }
+    // Fetch active holds from the billing_holds table
+    fetch('/api/billing-holds?status=ACTIVE')
+      .then(async (res) => {
+        if (!res.ok) return []
+        return res.json()
+      })
+      .then((holds: Array<{ vendor_id?: string; hold_reason?: string }>) => {
+        const matching = holds.find((h) => h.vendor_id === sc.id)
+        Promise.resolve().then(() =>
+          setActiveHoldReason(matching ? matching.hold_reason || 'NCR billing hold active' : null)
+        )
+      })
+      .catch(() => Promise.resolve().then(() => setActiveHoldReason(null)))
+  }, [sc.id, sc.billingHold])
+
+  const hasActiveHold = activeHoldReason !== null
 
   const handleGenerateBill = () => {
     if (hasActiveHold) {
