@@ -16,7 +16,9 @@ async function waitForApp(page: import('@playwright/test').Page) {
 }
 
 // Helper: navigate to the app and wait for the shell.
-async function goToApp(page: import('@playwright/test').Page, path = '/') {
+// Goes directly to /dashboard (not /) to avoid the User-Agent mobile
+// detection at the root path which may redirect to /mobile.
+async function goToApp(page: import('@playwright/test').Page, path = '/dashboard') {
   await page.goto(path)
   await waitForApp(page)
   // Dismiss the onboarding tour if visible.
@@ -45,7 +47,7 @@ async function clickDockButton(page: import('@playwright/test').Page, title: str
 
 test.describe('OmniSite smoke tests', () => {
   test('app loads and shows dashboard', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/dashboard')
     await expect(page).toHaveTitle(/OmniSite/)
   })
 
@@ -113,7 +115,10 @@ test.describe('OmniSite smoke tests', () => {
   test('mobile (375px) layout shows the bottom dock', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 375, height: 667 } })
     const page = await context.newPage()
-    await page.goto('/')
+    // Go directly to /dashboard — the mobile detection at / redirects
+    // to /mobile which has a different layout. We want to verify the
+    // desktop workspace shell still renders on a narrow viewport.
+    await page.goto('/dashboard')
     // Just verify the header renders on mobile — proves the shell mounted.
     await waitForApp(page)
     await context.close()

@@ -87,7 +87,7 @@
 -- transaction, so the audit trail can never diverge from the data state.
 --
 
--- LATEST VERSION: 00000000000013_drawing_annotations.sql
+-- LATEST VERSION: 00000000000031_add_worker_attendance_table.sql
 -- PREVIOUS VERSIONS: 00000000000007_transactional_audit.sql,
 -- 00000000000009_audit_project_id_indexes_constraints.sql,
 -- 00000000000011_add_vendors_locations_to_audit_allowlist.sql
@@ -99,7 +99,11 @@
 -- subcontractors, workers, chat_messages, projects,
 -- user_projects, grns, stock_items,
 -- vendors, project_locations, -- added in migration 11
--- drawing_annotations -- added in migration 13
+-- drawing_annotations, -- added in migration 13
+-- rfis, -- added in migration 28
+-- material_issue_notes, -- added in migration 29
+-- notifications, -- added in migration 30
+-- worker_attendance -- added in migration 31
 --
 
 -- Security invariants:
