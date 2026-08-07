@@ -231,8 +231,8 @@ export function EquipmentModule() {
             No items to display
           </PaneBody>
         }
-        leftPaneWidth="240px"
-        rightPaneWidth="380px"
+        leftPaneWidth="200px"
+        rightPaneWidth="420px"
       />
     )
   }
@@ -304,8 +304,8 @@ export function EquipmentModule() {
       rightPane={
         <EquipmentInspector equip={selected} equipList={equipList} setEquipList={setEquipList} />
       }
-      leftPaneWidth="240px"
-      rightPaneWidth="380px"
+      leftPaneWidth="200px"
+      rightPaneWidth="420px"
     />
   )
 }

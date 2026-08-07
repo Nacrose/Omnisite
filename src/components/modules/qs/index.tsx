@@ -231,8 +231,8 @@ export function QsModule() {
             No items match the current filter.
           </div>
         }
-        leftPaneWidth="240px"
-        rightPaneWidth="380px"
+        leftPaneWidth="220px"
+        rightPaneWidth="420px"
       />
     )
   }
@@ -258,8 +258,8 @@ export function QsModule() {
           onSetLocation={setLocation}
         />
       }
-      leftPaneWidth="240px"
-      rightPaneWidth="380px"
+      leftPaneWidth="220px"
+      rightPaneWidth="420px"
     />
   )
 }

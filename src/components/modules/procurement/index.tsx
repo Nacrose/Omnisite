@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Workspace2Pane, PaneHeader } from '@/components/workspace-3pane'
+import { Workspace2Pane, PaneHeader, PaneBody } from '@/components/workspace-3pane'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
@@ -275,6 +275,11 @@ export function ProcurementModule() {
     setOverrideReason('')
   }
 
+  // Compute snapshot stats for the left pane (previously inside an IIFE)
+  const stockValue = stock.reduce((s, x) => s + x.onHand * x.avgCost, 0)
+  const committed = pos.reduce((s, p) => s + p.value, 0)
+  const openPos = pos.filter((p) => p.status !== 'Delivered').length
+
   if (reqsLoading || posLoading || grnsLoading || stockLoading || minsLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -320,92 +325,62 @@ export function ProcurementModule() {
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             </PaneHeader>
-            <div className="py-2">
-              {/* Compute counts from real arrays so badges never lie. */}
-              {(() => {
-                const stockValue = stock.reduce((s, x) => s + x.onHand * x.avgCost, 0)
-                const committed = pos.reduce((s, p) => s + p.value, 0)
-                const openPos = pos.filter((p) => p.status !== 'Delivered').length
-                const tabs = [
-                  { id: 'req' as Tab, name: 'Requisitions', count: reqs.length, icon: FileText },
-                  { id: 'po' as Tab, name: 'Purchase Orders', count: pos.length, icon: Package },
-                  {
-                    id: 'grn' as Tab,
-                    name: 'GRN / 3-Way Match',
-                    count: grns.length,
-                    icon: CheckCircle2,
-                  },
-                  { id: 'stock' as Tab, name: 'Live Stock', count: stock.length, icon: Boxes },
-                  {
-                    id: 'min' as Tab,
-                    name: 'Material Issues (MIN)',
-                    count: mins.length,
-                    icon: ArrowRight,
-                  },
-                ]
-                return (
-                  <>
-                    {tabs.map((t) => {
-                      const Icon = t.icon
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => setTab(t.id)}
-                          className={cn(
-                            'flex h-9 w-full items-center gap-2.5 px-4 text-xs transition-colors',
-                            tab === t.id
-                              ? 'bg-accent border-primary border-l-2'
-                              : 'hover:bg-accent/50 border-l-2 border-transparent'
-                          )}
-                        >
-                          <Icon className="text-muted-foreground h-3.5 w-3.5" />
-                          <span className="flex-1 text-left">{t.name}</span>
-                          <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                            {t.count}
-                          </Badge>
-                        </button>
-                      )
-                    })}
-                    <div className="mt-auto space-y-1 border-t border-[var(--pane-divider)] p-3 text-xs">
-                      <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
-                        Procurement Snapshot
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Open POs</span>
-                        <span className="font-mono">{openPos}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Committed cost</span>
-                        <span className="font-mono">NPR {(committed / 1_000_000).toFixed(2)}M</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Stock value</span>
-                        <span className="font-mono">
-                          NPR {(stockValue / 1_000_000).toFixed(2)}M
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                )
-              })()}
-            </div>
+            <PaneBody className="py-2">
+              <div className="space-y-1 border-t border-[var(--pane-divider)] p-3 text-xs">
+                <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+                  Procurement Snapshot
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Open POs</span>
+                  <span className="font-mono">{openPos}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Committed cost</span>
+                  <span className="font-mono">NPR {(committed / 1_000_000).toFixed(2)}M</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Stock value</span>
+                  <span className="font-mono">NPR {(stockValue / 1_000_000).toFixed(2)}M</span>
+                </div>
+              </div>
+            </PaneBody>
           </>
         }
         centerPane={
           <>
-            <PaneHeader
-              title={
-                tab === 'req'
-                  ? 'Requisitions & Comparative Statement'
-                  : tab === 'po'
-                    ? 'Purchase Orders'
-                    : tab === 'grn'
-                      ? 'GRN & 3-Way Match'
-                      : tab === 'stock'
-                        ? 'Live Stock Dashboard'
-                        : 'Material Issue Notes'
-              }
-            >
+            {/* Horizontal tab bar */}
+            <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--pane-divider)] px-3 py-1.5">
+              {(() => {
+                const tabs = [
+                  { id: 'req' as Tab, name: 'Requisitions', count: reqs.length, icon: FileText },
+                  { id: 'po' as Tab, name: 'POs', count: pos.length, icon: Package },
+                  { id: 'grn' as Tab, name: 'GRN / 3-Way', count: grns.length, icon: CheckCircle2 },
+                  { id: 'stock' as Tab, name: 'Stock', count: stock.length, icon: Boxes },
+                  { id: 'min' as Tab, name: 'MINs', count: mins.length, icon: ArrowRight },
+                ]
+                return tabs.map((t) => {
+                  const Icon = t.icon
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setTab(t.id)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                        tab === t.id
+                          ? 'bg-accent text-foreground'
+                          : 'text-muted-foreground hover:bg-accent/50'
+                      )}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {t.name}
+                      <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                        {t.count}
+                      </Badge>
+                    </button>
+                  )
+                })
+              })()}
+              <div className="flex-1" />
               <Button
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
@@ -475,7 +450,7 @@ export function ProcurementModule() {
                         ? 'Material'
                         : 'MIN'}
               </Button>
-            </PaneHeader>
+            </div>
 
             {tab === 'req' && (
               <ReqCenterView
@@ -561,8 +536,8 @@ export function ProcurementModule() {
             }}
           />
         }
-        leftPaneWidth="260px"
-        rightPaneWidth="380px"
+        leftPaneWidth="200px"
+        rightPaneWidth="420px"
       />
 
       {/* Override Justification Modal */}

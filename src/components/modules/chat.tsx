@@ -603,7 +603,7 @@ export function ChatModule({ channels, teamMembers }: ChatModuleProps = {}) {
           </div>
         </>
       }
-      listPaneWidth="260px"
+      listPaneWidth="220px"
     />
   )
 }

@@ -391,7 +391,7 @@ export function FinancialsModule() {
       }
       rightPane={<FinancialsInspector node={selected} />}
       leftPaneWidth="240px"
-      rightPaneWidth="380px"
+      rightPaneWidth="440px"
     />
   )
 }

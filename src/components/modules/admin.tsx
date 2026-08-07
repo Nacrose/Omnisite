@@ -133,43 +133,32 @@ export function AdminModule() {
     <Workspace2Pane
       leftPane={
         <>
-          <PaneHeader title="Master Data">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7"
-              onClick={() =>
-                toast.info(
-                  `Use the New button in the center pane to create a new ${activeCatName} entry.`
-                )
-              }
-              title="Add entry (use center pane)"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </PaneHeader>
+          <PaneHeader title="Master Data" />
           <PaneBody className="py-2">
-            {CATS.map((c) => {
-              const Icon = c.icon
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setCat(c.id)}
-                  className={cn(
-                    'flex h-9 w-full items-center gap-2.5 px-3 text-xs',
-                    cat === c.id
-                      ? 'bg-accent border-primary border-l-2'
-                      : 'hover:bg-accent/50 border-l-2 border-transparent'
-                  )}
-                >
-                  <Icon className="text-muted-foreground h-3.5 w-3.5" />
-                  <span className="flex-1 text-left">{c.name}</span>
-                  <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                    {c.count}
-                  </Badge>
-                </button>
-              )
-            })}
+            {/* Horizontal tab bar (was vertical — design audit: CHANGE) */}
+            <div className="flex flex-wrap gap-1 px-2">
+              {CATS.map((c) => {
+                const Icon = c.icon
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setCat(c.id)}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                      cat === c.id
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground hover:bg-accent/50'
+                    )}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {c.name}
+                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                      {c.count}
+                    </Badge>
+                  </button>
+                )
+              })}
+            </div>
           </PaneBody>
         </>
       }
@@ -306,8 +295,8 @@ export function AdminModule() {
           <PresetInspector />
         )
       }
-      leftPaneWidth="240px"
-      rightPaneWidth="380px"
+      leftPaneWidth="280px"
+      rightPaneWidth="420px"
     />
   )
 }

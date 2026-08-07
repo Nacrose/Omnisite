@@ -264,14 +264,9 @@ export function TimeAttendanceModule() {
               onSearchChange={setSearchQuery}
             />
           </PaneBody>
-          {/* Mobile app preview — phone mockup */}
-          <div className="border-t border-[var(--pane-divider)] p-3">
-            <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
-              <Smartphone className="h-3 w-3" />
-              Mobile App · Foreman view
-            </div>
-            <PhoneMockup />
-          </div>
+          {/* Phone mockup removed — design audit OPTIMIZE. Workers list
+              now gets the full left pane height. The mobile experience
+              lives at /mobile/attendance. */}
           <div className="space-y-1.5 border-t border-[var(--pane-divider)] p-3 text-xs">
             <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
               Today&apos;s Snapshot

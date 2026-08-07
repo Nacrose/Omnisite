@@ -355,8 +355,8 @@ export function VendorsModule() {
               onChange={updateVendor}
             />
           }
-          leftPaneWidth="240px"
-          rightPaneWidth="440px"
+          leftPaneWidth="280px"
+          rightPaneWidth="500px"
         />
       </div>
     </div>
