@@ -18,9 +18,18 @@ async function waitForApp(page: import('@playwright/test').Page) {
 // Helper: navigate to the app and wait for the shell.
 // Goes directly to /dashboard (not /) to avoid the User-Agent mobile
 // detection at the root path which may redirect to /mobile.
+// Also waits for content to hydrate from localStorage (usePersistentState
+// now defers the localStorage read to a useEffect, so there's a one-frame
+// delay before persisted data is visible).
 async function goToApp(page: import('@playwright/test').Page, path = '/dashboard') {
   await page.goto(path)
   await waitForApp(page)
+  // Wait for content to hydrate from localStorage. usePersistentState
+  // now reads localStorage in a useEffect (not in the useState initializer)
+  // to avoid SSR hydration mismatches. This means the first render shows
+  // empty/default state, and persisted data appears ~1 frame later.
+  // Wait for a known dashboard text to appear before proceeding.
+  await expect(page.locator('body')).toContainText('OmniSite', { timeout: 10000 })
   // Dismiss the onboarding tour if visible.
   const skipTour = page.getByText('Skip tour')
   if (await skipTour.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -126,8 +135,10 @@ test.describe('OmniSite smoke tests', () => {
 
   test('status bar renders with mode indicator', async ({ page }) => {
     await goToApp(page)
+    // Status bar is hidden below md (768px). All desktop test projects
+    // use 1280x720, so it should be visible.
     const footer = page.locator('footer').first()
-    await expect(footer).toBeVisible()
+    await expect(footer).toBeVisible({ timeout: 10000 })
     await expect(footer).toContainText(/mode/i)
   })
 
@@ -155,7 +166,7 @@ test.describe('OmniSite smoke tests', () => {
   })
 
   test('skip-to-content link exists and is focusable', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/dashboard')
     await page.waitForLoadState('domcontentloaded')
     const skipLink = page.locator('a[href="#main-content"]')
     await expect(skipLink).toHaveAttribute('href', '#main-content')
