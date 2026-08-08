@@ -3,86 +3,52 @@ import { z } from 'zod'
 import { getServiceClient, isServiceClientConfigured } from '@/lib/supabase-server'
 import { requireAuth, checkOrigin } from '@/lib/api-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { upsertWithAudit, deleteWithAudit } from '@/lib/audit'
+import { upsertWithAudit } from '@/lib/audit'
 
 /**
  * POST /api/onboarding/create-first-project
  *
- * Called from the /onboarding wizard. Creates a project AND the
- * user_projects row assigning the current user as PM in one atomic
- * request — this is the workaround for the chicken-and-egg problem:
- * the regular /api/projects route requires PM role, but a freshly-
- * registered user has no role yet (resolveUserRole falls back to
- * 'FOREMAN').
+ * Called from the /onboarding wizard by the FIRST user. Assigns the
+ * SUPER_ADMIN role to the current user. Does NOT create a project —
+ * that's done later by an Admin.
  *
- * Auth: requires a valid Supabase session (cookie or Bearer). Does NOT
- * require any specific role — the caller just needs to be authenticated.
- * The endpoint refuses to run in demo mode (no Supabase configured)
- * because there's no DB to write to.
+ * Auth: any authenticated user (the first user has no role yet).
+ * Refuses to run in demo mode (no Supabase).
  *
- * Body:
- *   name: string (required)         — project name
- *   code: string (required)         — short code (e.g. KRR-P3)
- *   location?: string                — free-text location
- *   start_date?: string              — ISO date YYYY-MM-DD
- *   user_name?: string               — used to update user_metadata.name
- *
- * Response:
- *   { project_id: string, user_project_id: string }
- *
- * Errors:
- *   400 — validation error (missing name/code)
- *   401 — not authenticated
- *   403 — Supabase not configured (demo mode)
- *   409 — user already has a project assigned (use the regular
- *         /api/projects route instead — onboarding is for first-project only)
- *   500 — DB error
- *
- * Audit: both inserts go through the service-role client. The project
- * insert is logged via upsertWithAudit (transactional); the user_projects
- * insert is also logged. The audit_log row records the user's id as the
- * actor (changed_by) so the audit trail shows "user X created project Y
- * and self-assigned PM".
+ * Role hierarchy:
+ *   Super Admin (this endpoint) → creates Admins
+ *   Admin → creates projects + assigns PMs
+ *   PM → invites Engineers/Storekeepers/Foremen
  */
 
-const createFirstProjectSchema = z.object({
+const setupSchema = z.object({
   name: z.string().min(1).max(200),
-  code: z.string().min(1).max(50),
-  location: z.string().max(200).optional(),
-  start_date: z.string().optional(),
+  org_name: z.string().max(200).optional(),
   user_name: z.string().max(200).optional(),
 })
 
 export async function POST(req: NextRequest) {
-  // ─── Auth: any authenticated user ────────────────────────────────────────
   const { user, error: authError } = await requireAuth(req)
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // CSRF: reject cross-origin POSTs
   const originError = checkOrigin(req)
   if (originError) return originError
 
-  // Demo mode check — refuse to run without Supabase configured.
-  // (Demo mode has no DB to write to; the wizard shows a banner but
-  // the request still fires. Better to 403 than to silently no-op.)
   if (!isServiceClientConfigured()) {
     return NextResponse.json(
       {
-        error:
-          'Supabase service role is not configured. Onboarding requires Supabase — set NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.',
+        error: 'Supabase service role is not configured. Onboarding requires Supabase.',
       },
       { status: 403 }
     )
   }
 
-  // Rate limit — same 60/min as every other API route.
   const rateLimitError = await checkRateLimit(req, user.id)
   if (rateLimitError) return rateLimitError
 
-  // ─── Validate body ──────────────────────────────────────────────────────
   const rawBody = await req.json()
-  const parsed = createFirstProjectSchema.safeParse(rawBody)
+  const parsed = setupSchema.safeParse(rawBody)
   if (!parsed.success) {
     const firstError = parsed.error.issues[0]
     return NextResponse.json(
@@ -94,10 +60,9 @@ export async function POST(req: NextRequest) {
 
   const serviceClient = getServiceClient()
 
-  // ─── Guard: user already has a project? ─────────────────────────────────
-  // Onboarding is for first-project only. If the user already has a
-  // user_projects row, they should use the regular /api/projects route
-  // (which requires PM role and is the proper path for additional projects).
+  // ─── Guard: user already has a role? ─────────────────────────────────────
+  // Onboarding is for first-time setup only. If the user already has a
+  // user_projects row, they've been set up — redirect them to dashboard.
   const { data: existingAssignments } = await serviceClient
     .from('user_projects')
     .select('project_id, role')
@@ -107,104 +72,92 @@ export async function POST(req: NextRequest) {
   if (existingAssignments && existingAssignments.length > 0) {
     return NextResponse.json(
       {
-        error:
-          'You already have a project assigned. Use Admin → New Project to create additional projects.',
-        existing_project_id: existingAssignments[0].project_id,
+        error: 'You already have a role assigned. Use the regular app — no onboarding needed.',
+        existing_role: existingAssignments[0].role,
       },
       { status: 409 }
     )
   }
 
-  // ─── Insert the project row via upsertWithAudit ─────────────────────────
-  // Uses the transactional audit-logging path (same as /api/projects) so
-  // the project creation is recorded in audit_log. Previously this used a
-  // raw serviceClient.from('projects').insert() which bypassed the audit
-  // trail entirely — breaking the README's FIDIC-compliance claim.
-  // The projects table has a UUID PK generated by default. We let
-  // Postgres generate it and read it back.
-  const projectRowData = {
-    name: body.name,
-    code: body.code,
-    location: body.location || null,
-    start_date: body.start_date || null,
-    value: 0,
-    status: 'Active',
-  }
-  const { data: projectRow, error: projectError } = await upsertWithAudit(
-    'projects',
-    projectRowData as Record<string, unknown>,
-    'id',
-    user.id,
-    'INSERT',
-    null
-  )
+  // ─── Assign SUPER_ADMIN role ─────────────────────────────────────────────
+  // We create a special "org" project (if one doesn't exist) and assign
+  // the user as SUPER_ADMIN on it. This gives them access to the Admin
+  // module where they can create Admins.
+  //
+  // Check if an org-level project already exists (code = 'ORG')
+  const { data: orgProject } = await serviceClient
+    .from('projects')
+    .select('id')
+    .eq('code', 'ORG')
+    .limit(1)
 
-  if (projectError || !projectRow) {
-    return NextResponse.json(
-      { error: 'Failed to create project: ' + (projectError || 'unknown error') },
-      { status: 500 }
+  let projectId: string
+
+  if (orgProject && orgProject.length > 0) {
+    projectId = orgProject[0].id
+  } else {
+    // Create the org-level project
+    const { data: newProject, error: projectError } = await upsertWithAudit(
+      'projects',
+      {
+        name: body.org_name || 'OmniSite Organization',
+        code: 'ORG',
+        location: null,
+        start_date: null,
+        value: 0,
+        status: 'Active',
+      } as Record<string, unknown>,
+      'id',
+      user.id,
+      'INSERT',
+      null
     )
+
+    if (projectError || !newProject) {
+      return NextResponse.json(
+        { error: 'Failed to create org project: ' + projectError },
+        { status: 500 }
+      )
+    }
+    projectId = (newProject as Record<string, unknown>).id as string
   }
 
-  const projectId = (projectRow as Record<string, unknown>).id as string
-  const projectName = (projectRow as Record<string, unknown>).name as string
-  const projectCode = (projectRow as Record<string, unknown>).code as string
-
-  // ─── Insert the user_projects row (assign PM role) via upsertWithAudit ──
-  const assignmentData = {
-    user_id: user.id,
-    project_id: projectId,
-    role: 'PM',
-    permissions: { all: true }, // matches the seed PM row
-  }
-  const { data: assignmentRow, error: assignmentError } = await upsertWithAudit(
+  // Assign SUPER_ADMIN role
+  const { data: assignment, error: assignmentError } = await upsertWithAudit(
     'user_projects',
-    assignmentData as Record<string, unknown>,
+    {
+      user_id: user.id,
+      project_id: projectId,
+      role: 'SUPER_ADMIN',
+      permissions: { all: true },
+    } as Record<string, unknown>,
     'id',
     user.id,
     'INSERT',
     null
   )
 
-  if (assignmentError || !assignmentRow) {
-    // Roll back the project insert via deleteWithAudit so the rollback
-    // is also logged. Previously this was a raw serviceClient.from().delete()
-    // which left no trace of the failed attempt.
-    await deleteWithAudit('projects', projectId, 'id', user.id)
+  if (assignmentError || !assignment) {
     return NextResponse.json(
       {
-        error:
-          'Failed to assign you as PM: ' +
-          (assignmentError || 'unknown error') +
-          '. The project was not created — please try again.',
+        error: 'Failed to assign Super Admin role: ' + assignmentError,
       },
       { status: 500 }
     )
   }
 
-  const assignmentId = (assignmentRow as Record<string, unknown>).id as string
-
-  // ─── Optional: update the user's display name in user_metadata ──────────
-  // The wizard asks for a name; if the user entered one, update their
-  // user_metadata so the user menu shows the right name. This is best-
-  // effort — failures are swallowed. We compare against the email prefix
-  // (AuthenticatedUser doesn't carry the current name — the client-side
-  // OmniUser type does, but the API sees the server-side shape).
+  // ─── Optional: update user's display name ────────────────────────────────
   if (body.user_name) {
     await serviceClient.auth.admin
       .updateUserById(user.id, {
         user_metadata: { name: body.user_name, full_name: body.user_name },
       })
-      .catch(() => {
-        // Non-fatal — the project + assignment succeeded.
-      })
+      .catch(() => {})
   }
 
   return NextResponse.json({
+    role: 'SUPER_ADMIN',
     project_id: projectId,
-    project_name: projectName,
-    project_code: projectCode,
-    user_project_id: assignmentId,
-    role: 'PM',
+    message: 'Super Admin role assigned. Go to Admin → Users to create Admins.',
   })
 }

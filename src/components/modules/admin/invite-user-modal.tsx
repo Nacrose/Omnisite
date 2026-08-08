@@ -16,6 +16,11 @@ interface InviteUserModalProps {
 
 const ROLE_OPTIONS = [
   {
+    value: 'ADMIN',
+    label: 'Admin',
+    description: 'Creates projects, assigns PMs, manages users',
+  },
+  {
     value: 'PM',
     label: 'Project Manager',
     description: 'Full access — all modules, admin, financials',
@@ -37,7 +42,7 @@ export function InviteUserModal({ onClose, onInvited }: InviteUserModalProps) {
   const { activeProjectDbId, activeProject } = useApp()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [role, setRole] = useState<string>('SITE_ENGINEER')
+  const [role, setRole] = useState<string>('PM')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -142,7 +142,7 @@ describe('accessDeniedReason', () => {
 // ─── ROLE_TEMPLATES consistency ────────────────────────────────────────────
 
 describe('ROLE_TEMPLATES consistency', () => {
-  const roles: Role[] = ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN']
+  const roles: Role[] = ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN']
 
   it('every editable module is also visible', () => {
     // Invariant: a user can never edit a module they can't see. If we ever

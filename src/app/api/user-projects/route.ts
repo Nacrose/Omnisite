@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   if (rateLimitError) return rateLimitError
 
   // Only Project Managers may assign users to projects.
-  if (user.role !== 'PM') {
+  if (!['SUPER_ADMIN', 'ADMIN', 'PM'].includes(user.role)) {
     return NextResponse.json(
       { error: 'Forbidden — PM role required to manage user-project assignments' },
       { status: 403 }
@@ -133,7 +133,7 @@ export async function DELETE(req: NextRequest) {
   if (rateLimitError) return rateLimitError
 
   // Only Project Managers may remove user-project assignments.
-  if (user.role !== 'PM') {
+  if (!['SUPER_ADMIN', 'ADMIN', 'PM'].includes(user.role)) {
     return NextResponse.json(
       { error: 'Forbidden — PM role required to manage user-project assignments' },
       { status: 403 }

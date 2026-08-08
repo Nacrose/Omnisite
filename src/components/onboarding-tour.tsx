@@ -19,8 +19,14 @@ const STEPS: TourStep[] = [
   {
     title: 'Welcome to OmniSite',
     description:
-      'Your construction management platform — 14 modules covering pre-construction, site execution, project controls, and documents. Built for Nepali construction realities.',
+      'Your construction management platform — 15 modules covering pre-construction, site execution, project controls, and documents. Built for Nepali construction realities.',
     icon: '🏗️',
+  },
+  {
+    title: 'Role Hierarchy',
+    description:
+      'Super Admin → creates Admins. Admin → creates projects + assigns PMs. PM → invites Engineers/Storekeepers/Foremen. Go to Admin → Users to manage roles.',
+    icon: '👥',
   },
   {
     title: 'Navigate with the Dock',

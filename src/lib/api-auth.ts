@@ -18,54 +18,54 @@ export interface AuthenticatedUser {
 // Read access is controlled by RLS (any authenticated user with project access
 // can read). Write access is enforced here, server-side.
 const TABLE_WRITE_ROLES: Record<string, Role[]> = {
-  boq_items: ['PM', 'SITE_ENGINEER'],
-  tasks: ['PM', 'SITE_ENGINEER'],
-  dsr_entries: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
-  cbs_nodes: ['PM'],
-  requisitions: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
-  purchase_orders: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
-  drawings: ['PM', 'SITE_ENGINEER'],
-  letters: ['PM', 'SITE_ENGINEER'],
-  qs_items: ['PM', 'SITE_ENGINEER'],
-  equipment: ['PM', 'SITE_ENGINEER'],
-  subcontractors: ['PM'],
-  workers: ['PM', 'SITE_ENGINEER', 'FOREMAN'],
-  chat_messages: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
-  projects: ['PM'],
-  user_projects: ['PM'],
-  grns: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
-  stock_items: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  boq_items: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
+  tasks: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
+  dsr_entries: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
+  cbs_nodes: ['SUPER_ADMIN', 'ADMIN', 'PM'],
+  requisitions: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  purchase_orders: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  drawings: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
+  letters: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
+  qs_items: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
+  equipment: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
+  subcontractors: ['SUPER_ADMIN', 'ADMIN', 'PM'],
+  workers: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'FOREMAN'],
+  chat_messages: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
+  projects: ['SUPER_ADMIN', 'ADMIN', 'PM'],
+  user_projects: ['SUPER_ADMIN', 'ADMIN', 'PM'],
+  grns: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  stock_items: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER'],
   // Unified vendor master (supersedes `subcontractors`). PM-only at the API
   // layer — the RLS policies in migration 00000000000010 §8 also allow
   // SITE_ENGINEER for supplier-category rows. Both layers must agree for a
   // write to go through; the stricter (intersection) wins. Keeping this
   // PM-only matches the financial-commitment stance of `subcontractors`.
-  vendors: ['PM'],
+  vendors: ['SUPER_ADMIN', 'ADMIN', 'PM'],
   // Project locations (work-face / asset setup). SITE_ENGINEER can write
   // because field engineers set up locations on site, not just PMs.
-  project_locations: ['PM', 'SITE_ENGINEER'],
+  project_locations: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
   // Drawing annotations (markups / redlines on PDF pages). PM + Site Engineer
   // can author redlines; field teams (foremen, storekeepers) can read but not
   // annotate. Matches the RLS policy in migration 00000000000013 §3.
-  drawing_annotations: ['PM', 'SITE_ENGINEER'],
+  drawing_annotations: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
   // RFIs (Requests For Information). Site engineers raise them, PMs
   // answer/close them. Storekeeper and Foreman are read-only (they need
   // visibility but don't author RFIs). Matches migration 28 RLS.
-  rfis: ['PM', 'SITE_ENGINEER'],
+  rfis: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER'],
   // Material Issue Notes (MINs). Storekeepers author them (they issue
   // material from the store); site engineers also author (sometimes
   // material is issued directly to a task without going through the store).
   // PMs can do everything; Foremen are read-only. Matches migration 29 RLS.
-  material_issue_notes: ['PM', 'SITE_ENGINEER', 'STOREKEEPER'],
+  material_issue_notes: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER'],
   // Notifications. Users can UPDATE their own read_at (RLS gates to
   // user_id = auth.uid()). PMs can DELETE for admin cleanup. INSERTs only
   // happen via the service-role cron route. All authenticated roles need
   // write so the bell's mark-as-read works for everyone.
-  notifications: ['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
+  notifications: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'],
   // Per-day attendance records. Foremen log hours per worker per day;
   // site engineers can also author; PM can delete for cleanup.
   // Storekeeper is read-only. Matches migration 31 RLS.
-  worker_attendance: ['PM', 'SITE_ENGINEER', 'FOREMAN'],
+  worker_attendance: ['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'FOREMAN'],
 }
 
 /**

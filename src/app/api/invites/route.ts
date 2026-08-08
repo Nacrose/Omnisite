@@ -17,7 +17,9 @@ import { logDbError } from '@/lib/safe-log'
 const inviteSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).optional(),
-  role: z.enum(['PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN']).default('FOREMAN'),
+  role: z
+    .enum(['SUPER_ADMIN', 'ADMIN', 'PM', 'SITE_ENGINEER', 'STOREKEEPER', 'FOREMAN'])
+    .default('FOREMAN'),
   projectId: z.string().uuid(),
 })
 
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
   const originError = checkOrigin(req)
   if (originError) return originError
 
-  if (user.role !== 'PM') {
+  if (!['SUPER_ADMIN', 'ADMIN', 'PM'].includes(user.role)) {
     return NextResponse.json(
       { error: 'Forbidden — only Project Managers can invite users' },
       { status: 403 }
@@ -245,7 +247,7 @@ export async function GET(req: NextRequest) {
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (user.role !== 'PM') {
+  if (!['SUPER_ADMIN', 'ADMIN', 'PM'].includes(user.role)) {
     return NextResponse.json(
       { error: 'Forbidden — only Project Managers can list project users' },
       { status: 403 }
@@ -310,7 +312,7 @@ export async function DELETE(req: NextRequest) {
   if (authError) return authError
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (user.role !== 'PM') {
+  if (!['SUPER_ADMIN', 'ADMIN', 'PM'].includes(user.role)) {
     return NextResponse.json(
       { error: 'Forbidden — only Project Managers can remove users' },
       { status: 403 }

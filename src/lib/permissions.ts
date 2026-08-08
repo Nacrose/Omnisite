@@ -1,19 +1,26 @@
 /**
  * Role-based permission system for OmniSite.
  *
- * Roles (Nepali construction project hierarchy):
- *  - PM              : Project Manager — full access, all edits (admin/financials included)
- *  - SITE_ENGINEER   : Site Engineer — full read access; cannot edit Admin or Financials
- *  - STOREKEEPER     : Storekeeper — Procurement + DSR only (read-only elsewhere)
- *  - FOREMAN         : Foreman — DSR + Time & Attendance only (read-only elsewhere)
+ * Role hierarchy (top-down):
+ *  - SUPER_ADMIN      : Organization owner — full control, creates Admins, manages org
+ *  - ADMIN            : Organization admin — creates projects, assigns PMs, manages users
+ *  - PM               : Project Manager — full access to assigned project (all modules)
+ *  - SITE_ENGINEER    : Site Engineer — all modules except Admin & Financials (read-only there)
+ *  - STOREKEEPER      : Storekeeper — Procurement + DSR only
+ *  - FOREMAN          : Foreman — DSR + Time & Attendance only
  *
- * The matrix below is the source of truth. Modules not listed for a role
- * are still VISIBLE (so the foreman can read the schedule) but not EDITABLE.
+ * Assignment chain:
+ *   Super Admin → creates Admins
+ *   Admin → creates projects + assigns PMs
+ *   PM → invites Site Engineers / Storekeepers / Foremen to their project
+ *
+ * The first user to sign up becomes Super Admin via the /onboarding wizard.
+ * Subsequent users are created/invited by the appropriate role above.
  */
 
 import type { ModuleId } from '@/lib/app-store'
 
-export type Role = 'PM' | 'SITE_ENGINEER' | 'STOREKEEPER' | 'FOREMAN'
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'PM' | 'SITE_ENGINEER' | 'STOREKEEPER' | 'FOREMAN'
 
 export interface RoleTemplate {
   id: Role
@@ -26,10 +33,56 @@ export interface RoleTemplate {
 }
 
 export const ROLE_TEMPLATES: Record<Role, RoleTemplate> = {
+  SUPER_ADMIN: {
+    id: 'SUPER_ADMIN',
+    label: 'Super Admin',
+    description: 'Organization owner — full control, creates Admins, manages org settings.',
+    visibleModules: 'ALL',
+    editableModules: [
+      'dashboard',
+      'boq',
+      'scheduler',
+      'daily-ops',
+      'equipment',
+      'procurement',
+      'financials',
+      'vendors',
+      'drawings',
+      'correspondence',
+      'admin',
+      'reports',
+      'qs',
+      'time-attendance',
+      'chat',
+    ],
+  },
+  ADMIN: {
+    id: 'ADMIN',
+    label: 'Admin',
+    description: 'Creates projects, assigns PMs, manages users. Full module access.',
+    visibleModules: 'ALL',
+    editableModules: [
+      'dashboard',
+      'boq',
+      'scheduler',
+      'daily-ops',
+      'equipment',
+      'procurement',
+      'financials',
+      'vendors',
+      'drawings',
+      'correspondence',
+      'admin',
+      'reports',
+      'qs',
+      'time-attendance',
+      'chat',
+    ],
+  },
   PM: {
     id: 'PM',
     label: 'Project Manager',
-    description: 'Full access — all modules, all edits, admin & financials included.',
+    description: 'Full access to assigned project — all modules, all edits.',
     visibleModules: 'ALL',
     editableModules: [
       'dashboard',
@@ -88,7 +141,8 @@ export const ROLE_TEMPLATES: Record<Role, RoleTemplate> = {
 
 /**
  * Whether a user with the given role can ACCESS (open / view) a module.
- * Returns true for PM/SITE_ENGINEER on any module; for others, checks the matrix.
+ * Returns true for SUPER_ADMIN/ADMIN/PM/SITE_ENGINEER on any module;
+ * for others, checks the matrix.
  */
 export function canAccess(module: ModuleId, role: Role): boolean {
   const tpl = ROLE_TEMPLATES[role]
